@@ -1,0 +1,9 @@
+id: rust-no-unwrap
+valid:
+  - "fn f() -> Result<(), E> { let x = g()?; Ok(()) }"
+  - "fn f() { match g() { Ok(v) => v, Err(_) => return } }"
+  - "#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() { let x = g().unwrap(); }\n}"
+  - "#[test]\nfn t() { let x = g().expect(\"seed\"); }"
+invalid:
+  - "fn f() { let x = g().unwrap(); }"
+  - "fn f() { let x = g().expect(\"must exist\"); }"

@@ -1,0 +1,12 @@
+id: rust-no-dbg-macro
+snapshots:
+  fn f() { dbg!(x); }:
+    labels:
+    - source: dbg!(x)
+      style: primary
+      start: 9
+      end: 16
+    - source: dbg
+      style: secondary
+      start: 9
+      end: 12

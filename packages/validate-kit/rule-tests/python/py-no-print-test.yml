@@ -1,0 +1,6 @@
+id: py-no-print
+valid:
+  - "logging.info('x')"
+invalid:
+  - "print('x')"
+  - "print(a, b)"

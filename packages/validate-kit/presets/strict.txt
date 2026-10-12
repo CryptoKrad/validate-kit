@@ -1,0 +1,35 @@
+# strict — every rule (recommended + opinionated style/perf/maintainability).
+# tsx-/js- ids are grammar variants of the matching ts- rule (tsx covers .tsx;
+# javascript covers .js AND .jsx). No js-no-explicit-any: `any` is TS-only.
+ts-no-console
+tsx-no-console
+js-no-console
+mjs-no-console
+ts-no-loose-equality
+tsx-no-loose-equality
+js-no-loose-equality
+ts-no-loose-inequality
+tsx-no-loose-inequality
+js-no-loose-inequality
+ts-no-eval
+tsx-no-eval
+js-no-eval
+ts-no-explicit-any
+tsx-no-explicit-any
+ts-no-await-in-loop
+tsx-no-await-in-loop
+js-no-await-in-loop
+py-no-eq-none
+py-no-neq-none
+py-no-eval-exec
+py-no-bare-except
+py-no-mutable-default-arg
+py-no-print
+go-no-panic
+go-no-fmt-println
+go-no-context-todo
+rust-no-panic-macros
+rust-no-unwrap
+rust-no-dbg-macro
+rust-flag-unsafe-block
+rust-flag-transmute

@@ -1,0 +1,8 @@
+id: tsx-no-loose-inequality
+valid:
+  - "if (x != undefined) {}"
+  - "if (undefined != y) {}"
+  - "if (a !== b) {}"
+  - "if (x != null) {}"
+invalid:
+  - "if (a != b) {}"

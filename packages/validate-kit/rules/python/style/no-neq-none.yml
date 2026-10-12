@@ -1,0 +1,11 @@
+id: py-no-neq-none
+language: python
+severity: warning
+message: "Use 'is not None' instead of '!= None'."
+rule:
+  pattern: $X != None
+fix: "$X is not None"
+metadata:
+  category: style
+  autofix: safe
+  since: "0.1.0"

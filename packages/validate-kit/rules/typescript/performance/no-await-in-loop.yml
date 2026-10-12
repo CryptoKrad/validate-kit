@@ -1,0 +1,84 @@
+id: ts-no-await-in-loop
+language: typescript
+severity: warning
+message: "await inside a loop serializes async work — collect promises and use Promise.all."
+note: |
+  Intentionally-sequential loops (rate limits) are a valid exception; suppress per-line.
+rule:
+  kind: await_expression
+  inside:
+    any:
+      - kind: for_in_statement
+      - kind: for_statement
+      - kind: while_statement
+    # Stop at function boundaries: an await inside a nested async fn/arrow
+    # that is merely lexically within a loop does NOT serialize the loop —
+    # that's exactly the Promise.all batching pattern this rule recommends.
+    stopBy:
+      any:
+        - kind: function_declaration
+        - kind: function_expression
+        - kind: arrow_function
+        - kind: method_definition
+        - kind: generator_function_declaration
+metadata:
+  category: performance
+  autofix: none
+  since: "0.1.0"
+---
+# tsx/js variants (keep rule bodies in sync with ts-no-await-in-loop above).
+id: tsx-no-await-in-loop
+language: tsx
+severity: warning
+message: "await inside a loop serializes async work — collect promises and use Promise.all."
+note: |
+  Intentionally-sequential loops (rate limits) are a valid exception; suppress per-line.
+rule:
+  kind: await_expression
+  inside:
+    any:
+      - kind: for_in_statement
+      - kind: for_statement
+      - kind: while_statement
+    # Stop at function boundaries: an await inside a nested async fn/arrow
+    # that is merely lexically within a loop does NOT serialize the loop —
+    # that's exactly the Promise.all batching pattern this rule recommends.
+    stopBy:
+      any:
+        - kind: function_declaration
+        - kind: function_expression
+        - kind: arrow_function
+        - kind: method_definition
+        - kind: generator_function_declaration
+metadata:
+  category: performance
+  autofix: none
+  since: "0.1.0"
+---
+id: js-no-await-in-loop
+language: javascript
+severity: warning
+message: "await inside a loop serializes async work — collect promises and use Promise.all."
+note: |
+  Intentionally-sequential loops (rate limits) are a valid exception; suppress per-line.
+rule:
+  kind: await_expression
+  inside:
+    any:
+      - kind: for_in_statement
+      - kind: for_statement
+      - kind: while_statement
+    # Stop at function boundaries: an await inside a nested async fn/arrow
+    # that is merely lexically within a loop does NOT serialize the loop —
+    # that's exactly the Promise.all batching pattern this rule recommends.
+    stopBy:
+      any:
+        - kind: function_declaration
+        - kind: function_expression
+        - kind: arrow_function
+        - kind: method_definition
+        - kind: generator_function_declaration
+metadata:
+  category: performance
+  autofix: none
+  since: "0.1.0"

@@ -1,0 +1,5 @@
+id: py-no-eq-none
+valid:
+  - "if x is None: pass"
+invalid:
+  - "if x == None: pass"

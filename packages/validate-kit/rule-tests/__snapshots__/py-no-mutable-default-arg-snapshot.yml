@@ -1,0 +1,78 @@
+id: py-no-mutable-default-arg
+snapshots:
+  'def f(x=[]): pass':
+    labels:
+    - source: x=[]
+      style: primary
+      start: 6
+      end: 10
+    - source: '[]'
+      style: secondary
+      start: 8
+      end: 10
+  'def f(x=collections.OrderedDict()): pass':
+    labels:
+    - source: x=collections.OrderedDict()
+      style: primary
+      start: 6
+      end: 33
+    - source: collections.OrderedDict
+      style: secondary
+      start: 8
+      end: 31
+    - source: collections.OrderedDict()
+      style: secondary
+      start: 8
+      end: 33
+  'def f(x=dict()): pass':
+    labels:
+    - source: x=dict()
+      style: primary
+      start: 6
+      end: 14
+    - source: dict
+      style: secondary
+      start: 8
+      end: 12
+    - source: dict()
+      style: secondary
+      start: 8
+      end: 14
+  'def f(x=list()): pass':
+    labels:
+    - source: x=list()
+      style: primary
+      start: 6
+      end: 14
+    - source: list
+      style: secondary
+      start: 8
+      end: 12
+    - source: list()
+      style: secondary
+      start: 8
+      end: 14
+  'def f(x=set()): pass':
+    labels:
+    - source: x=set()
+      style: primary
+      start: 6
+      end: 13
+    - source: set
+      style: secondary
+      start: 8
+      end: 11
+    - source: set()
+      style: secondary
+      start: 8
+      end: 13
+  'def f(x={}): pass':
+    labels:
+    - source: x={}
+      style: primary
+      start: 6
+      end: 10
+    - source: '{}'
+      style: secondary
+      start: 8
+      end: 10

@@ -1,0 +1,10 @@
+id: go-no-panic
+snapshots:
+  ? |-
+    package p
+    func f() { panic("boom") }
+  : labels:
+    - source: panic("boom")
+      style: primary
+      start: 21
+      end: 34

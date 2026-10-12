@@ -1,0 +1,57 @@
+name: poly
+
+# Proves the framework drives every polyglot linter on real code: installs the
+# Rust/Go/Python toolchains + ast-grep and runs the polyglot behavioral test
+# (clippy, golangci-lint, ruff, rustfmt, gofumpt must run clean; custom rules fire).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: poly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  polyglot-framework:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.23.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable @ 2026-03-27
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.25"
+      - name: Install Go tools
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+          go install mvdan.cc/gofumpt@v0.10.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
+        with:
+          version: "0.9.30"
+      - name: Install ruff + ast-grep
+        run: |
+          uv tool install ruff==0.15.6
+          uv tool update-shell || true # soft-pass-ok: shell-profile convenience only; PATH is set explicitly on the next line
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          npm install -g @ast-grep/cli@0.45.3
+      - name: Build validate-kit
+        run: cd packages/validate-kit && ./node_modules/.bin/tsup
+      - name: Polyglot behavioral test (clippy/golangci/ruff/fmt + custom rules)
+        run: pnpm --fail-if-no-match --filter validate-kit run test:polyglot

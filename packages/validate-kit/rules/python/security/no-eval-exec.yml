@@ -1,0 +1,22 @@
+id: py-no-eval-exec
+language: python
+severity: error
+message: "eval/exec run arbitrary code — a code-injection risk."
+note: |
+  A call whose own line the repository already suppressed for ruff or bandit is skipped: `# noqa`,
+  `# noqa: S307` (eval) or `S102` (exec), `# nosec`, `# nosec B307`/`B102`. The same check,
+  reviewed once.
+rule:
+  any:
+    - pattern: eval($$$A)
+    - pattern: exec($$$A)
+metadata:
+  category: security
+  cwe: "CWE-95"
+  owasp: "A03:2021-Injection"
+  autofix: none
+  since: "0.1.0"
+  # Read by the kit's ast-grep adapter against the match's first line, from
+  # where the match starts: an ast-grep rule cannot tell which line a comment
+  # is on. Anchored, so each call answers only to its own code.
+  suppressedBy: '^(eval\(.*#\s*(noqa\s*$|noqa\s*:[^#]*\b(S307|PGH001)\b|nosec\s*$|nosec\b[^#]*\bB307\b)|exec\(.*#\s*(noqa\s*$|noqa\s*:[^#]*\bS102\b|nosec\s*$|nosec\b[^#]*\bB102\b))'

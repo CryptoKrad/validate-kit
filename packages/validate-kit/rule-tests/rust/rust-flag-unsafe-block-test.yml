@@ -1,0 +1,8 @@
+id: rust-flag-unsafe-block
+valid:
+  - "fn f() { let x = 1; }"
+invalid:
+  - "fn f() { unsafe { g() } }"
+  - "unsafe fn f() { g(); }"
+  - "unsafe impl Send for T {}"
+  - "unsafe trait Zeroable {}"

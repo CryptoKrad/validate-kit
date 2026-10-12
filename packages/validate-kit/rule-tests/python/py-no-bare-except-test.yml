@@ -1,0 +1,13 @@
+id: py-no-bare-except
+valid:
+  - |
+    try:
+        f()
+    except ValueError:
+        pass
+invalid:
+  - |
+    try:
+        f()
+    except:
+        pass

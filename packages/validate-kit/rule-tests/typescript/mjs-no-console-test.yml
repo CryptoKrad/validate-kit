@@ -1,0 +1,10 @@
+id: mjs-no-console
+valid:
+  - "try { f() } catch (e) { console.error(e) }"
+  - "import { chromium } from 'playwright';\nconsole.log('run');"
+  - "const fs = require('fs');\nconsole.log(fs.readFileSync(0, 'utf8'));"
+  - "if (import.meta.main) console.log('run'); export const x = 1;"
+invalid:
+  - "console.log('hi')"
+  - "import { a } from './a.js';\nconsole.log(a);\nexport const b = a;"
+  - "const a = require('./a');\nconsole.log(a);\nmodule.exports = a;"

@@ -1,0 +1,13 @@
+id: py-no-mutable-default-arg
+valid:
+  - "def f(x=None): pass"
+  - "def f(x=()): pass"
+  - "def f(x=frozenset()): pass"
+  - "def f(x=tuple()): pass"
+invalid:
+  - "def f(x=[]): pass"
+  - "def f(x={}): pass"
+  - "def f(x=list()): pass"
+  - "def f(x=dict()): pass"
+  - "def f(x=set()): pass"
+  - "def f(x=collections.OrderedDict()): pass"

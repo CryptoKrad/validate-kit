@@ -1,0 +1,10 @@
+id: go-no-fmt-println
+valid:
+  - "package p\nfunc f() { log.Info(\"ok\") }"
+  - "package p\nfunc f() { fmt.Sprintf(\"%d\", 1) }"
+invalid:
+  - "package p\nfunc f() { fmt.Println(\"debug\") }"
+  - "package p\nfunc f() { fmt.Print(\"debug\") }"
+  - "package p\nfunc f() { fmt.Printf(\"%v\", x) }"
+  - "package p\nfunc f() { println(\"debug\") }"
+  - "package p\nfunc f() { print(\"debug\") }"

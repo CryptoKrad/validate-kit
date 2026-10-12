@@ -1,0 +1,12 @@
+id: js-no-console
+valid:
+  - "try { f() } catch (e) { console.error(e) }"
+  - "logger.log('hi')"
+  - "if (import.meta.main) console.log('run'); export const x = 1;"
+  - "if (require.main === module) console.log('run');"
+invalid:
+  - "console.log('hi')"
+  - "function Widget() { console.log('x'); return <span />; }"
+  - "console.debug(x, y)"
+  - "import { render } from 'react-dom';\nrender(app);\nconsole.log('mounted');"
+  - "export function verbose(argv = process.argv) { return argv; }\nconsole.log('x');"

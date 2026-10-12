@@ -1,0 +1,38 @@
+id: mjs-no-console
+snapshots:
+  console.log('hi'):
+    labels:
+    - source: console.log('hi')
+      style: primary
+      start: 0
+      end: 17
+    - source: console.log('hi')
+      style: secondary
+      start: 0
+      end: 17
+  ? |-
+    const a = require('./a');
+    console.log(a);
+    module.exports = a;
+  : labels:
+    - source: console.log(a);
+      style: primary
+      start: 26
+      end: 41
+    - source: console.log(a)
+      style: secondary
+      start: 26
+      end: 40
+  ? |-
+    import { a } from './a.js';
+    console.log(a);
+    export const b = a;
+  : labels:
+    - source: console.log(a);
+      style: primary
+      start: 28
+      end: 43
+    - source: console.log(a)
+      style: secondary
+      start: 28
+      end: 42

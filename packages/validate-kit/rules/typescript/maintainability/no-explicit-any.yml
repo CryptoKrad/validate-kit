@@ -1,0 +1,29 @@
+id: ts-no-explicit-any
+language: typescript
+severity: warning
+message: "Avoid the 'any' type — use 'unknown' or a precise type."
+note: |
+  'any' disables type checking for the value and everything derived from it.
+rule:
+  kind: predefined_type
+  regex: "^any$"
+metadata:
+  category: maintainability
+  autofix: none
+  since: "0.1.0"
+---
+# tsx variant (keep rule body in sync with ts-no-explicit-any above).
+# No js variant: `any` is TypeScript-only syntax.
+id: tsx-no-explicit-any
+language: tsx
+severity: warning
+message: "Avoid the 'any' type — use 'unknown' or a precise type."
+note: |
+  'any' disables type checking for the value and everything derived from it.
+rule:
+  kind: predefined_type
+  regex: "^any$"
+metadata:
+  category: maintainability
+  autofix: none
+  since: "0.1.0"

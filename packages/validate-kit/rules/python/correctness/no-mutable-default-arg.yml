@@ -1,0 +1,27 @@
+id: py-no-mutable-default-arg
+language: python
+severity: error
+message: "Mutable default argument — the same object persists across calls. Use None and create inside."
+note: |
+  def f(x=[]) shares one list across every call. Idiom:
+  def f(x=None): x = [] if x is None else x
+rule:
+  kind: default_parameter
+  has:
+    field: value
+    any:
+      - kind: list
+      - kind: dictionary
+      - kind: set
+      # Constructor-call forms are just as mutable: list(), dict(), set(),
+      # bytearray(), collections.OrderedDict(), defaultdict(), Counter(),
+      # deque(). Anchored regex so frozenset()/tuple() stay valid.
+      - kind: call
+        has:
+          field: function
+          regex: '(^|\.)(list|dict|set|bytearray|OrderedDict|defaultdict|Counter|deque)$'
+metadata:
+  category: correctness
+  cwe: "CWE-665"
+  autofix: none
+  since: "0.1.0"

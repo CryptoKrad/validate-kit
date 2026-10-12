@@ -1,0 +1,9 @@
+id: js-no-loose-inequality
+snapshots:
+  if (a != b) {}:
+    fixed: if (a !== b) {}
+    labels:
+    - source: a != b
+      style: primary
+      start: 4
+      end: 10

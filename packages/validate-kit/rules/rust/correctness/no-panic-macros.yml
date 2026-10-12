@@ -1,0 +1,36 @@
+id: rust-no-panic-macros
+language: rust
+severity: warning
+message: "Avoid panic!/todo!/unimplemented!/unreachable! in shipped code — return a Result error."
+note: |
+  These abort the process. unreachable! is only acceptable with a proof comment.
+rule:
+  kind: macro_invocation
+  has:
+    field: macro
+    regex: "^(panic|todo|unimplemented|unreachable)$"
+  # Test code is exempt: panicking in a `#[cfg(test)]` mod or `#[test]` fn is
+  # idiomatic. `follows` is immediate-sibling only — conservative on purpose
+  # (see rust-no-unwrap).
+  not:
+    any:
+      - inside:
+          kind: mod_item
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: "cfg\\(test\\)"
+      - inside:
+          kind: function_item
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: "\\btest\\b"
+ignores:
+  - "**/tests/**"
+  - "**/benches/**"
+  - "**/examples/**"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.1.0"

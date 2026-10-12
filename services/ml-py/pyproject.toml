@@ -1,0 +1,16 @@
+[project]
+name = "ml-py"
+version = "0.1.0"
+description = "Tiny scoring module — dogfood fixture for validate-kit's Python layer."
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+# The fixture formats with ruff too, so the kit's Python format layer runs here.
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

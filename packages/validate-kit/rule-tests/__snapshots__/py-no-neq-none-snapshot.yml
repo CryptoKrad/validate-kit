@@ -1,0 +1,9 @@
+id: py-no-neq-none
+snapshots:
+  'if x != None: pass':
+    fixed: 'if x is not None: pass'
+    labels:
+    - source: x != None
+      style: primary
+      start: 3
+      end: 12

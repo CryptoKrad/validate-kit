@@ -1,0 +1,4 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+  # services/ are Rust/Go/Python — no package.json, intentionally not pnpm members

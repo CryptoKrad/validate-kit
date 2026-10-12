@@ -1,0 +1,7 @@
+name = "quiet"
+version = "0.1.0"
+defaultTargets = ["Quiet"]
+
+[[lean_lib]]
+name = "Quiet"
+moreLeanArgs = ["-Dwarn.sorry=false"]

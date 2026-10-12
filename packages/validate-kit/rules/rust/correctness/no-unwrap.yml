@@ -1,0 +1,41 @@
+id: rust-no-unwrap
+language: rust
+severity: warning
+message: "Avoid .unwrap()/.expect() in library code — propagate with ? or handle the error."
+note: |
+  .unwrap()/.expect() panic on None/Err. Prefer ?, match, or .context(...).
+  Acceptable in tests, examples and prototypes.
+rule:
+  any:
+    - pattern: $RECV.unwrap()
+    - pattern: $RECV.expect($MSG)
+  # Test code is exempt (matches the note): matches inside a `#[cfg(test)]`
+  # mod or a `#[test]`/`#[tokio::test]`-attributed fn are idiomatic. `follows`
+  # is immediate-sibling only — deliberately conservative so a stray earlier
+  # attribute can't exempt unrelated production items (missing a real finding
+  # is worse than flagging a stacked-attribute test fn).
+  not:
+    any:
+      - inside:
+          kind: mod_item
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: "cfg\\(test\\)"
+      - inside:
+          kind: function_item
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: "\\btest\\b"
+ignores:
+  - "**/tests/**"
+  - "**/benches/**"
+  - "**/examples/**"
+metadata:
+  category: correctness
+  # No `fix:` key exists — declaring "suggestion" would misrepresent the rule
+  # as fixable in docs/listings (a real ?-propagation fix needs Result-return
+  # context ast-grep can't see).
+  autofix: none
+  since: "0.1.0"

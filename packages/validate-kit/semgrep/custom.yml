@@ -1,0 +1,24 @@
+rules:
+  - id: vk-hardcoded-credential
+    languages: [generic]
+    severity: WARNING
+    message: >-
+      Possible hardcoded credential. Move secrets to environment variables or a
+      secret store; never commit them.
+    options:
+      generic_ellipsis_max_span: 0
+    patterns:
+      - pattern-regex: '(?i)(password|passwd|pwd|api_key|apikey|api_token|secret|secret_key|access_token|auth_token|bearer_token|client_secret|private_key|db_password|database_url|connection_string|aws_secret_access_key)\s*[:=]\s*["''][^"''\n]{6,}["'']'
+    paths:
+      include:
+        - "*.py"
+        - "*.ts"
+        - "*.tsx"
+        - "*.js"
+        - "*.go"
+        - "*.rs"
+      exclude:
+        - "*.test.*"
+        - "*.spec.*"
+        - "*_test.*"
+        - "test_*"

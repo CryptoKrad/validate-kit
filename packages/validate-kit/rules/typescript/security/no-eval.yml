@@ -1,0 +1,45 @@
+id: ts-no-eval
+language: typescript
+severity: error
+message: "eval / new Function execute arbitrary code — a code-injection vector."
+rule:
+  any:
+    - pattern: eval($$$ARGS)
+    - pattern: new Function($$$ARGS)
+metadata:
+  category: security
+  cwe: "CWE-95"
+  owasp: "A03:2021-Injection"
+  autofix: none
+  since: "0.1.0"
+---
+# tsx/js variants (keep rule bodies in sync with ts-no-eval above).
+id: tsx-no-eval
+language: tsx
+severity: error
+message: "eval / new Function execute arbitrary code — a code-injection vector."
+rule:
+  any:
+    - pattern: eval($$$ARGS)
+    - pattern: new Function($$$ARGS)
+metadata:
+  category: security
+  cwe: "CWE-95"
+  owasp: "A03:2021-Injection"
+  autofix: none
+  since: "0.1.0"
+---
+id: js-no-eval
+language: javascript
+severity: error
+message: "eval / new Function execute arbitrary code — a code-injection vector."
+rule:
+  any:
+    - pattern: eval($$$ARGS)
+    - pattern: new Function($$$ARGS)
+metadata:
+  category: security
+  cwe: "CWE-95"
+  owasp: "A03:2021-Injection"
+  autofix: none
+  since: "0.1.0"

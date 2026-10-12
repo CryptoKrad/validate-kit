@@ -1,0 +1,124 @@
+name: validate
+
+# The `check` gate: format · lint (oxlint) · type-check · custom ast-grep rules,
+# plus the kit's own behavioral test suite and the rule snapshot tests.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.23.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.25"
+      - run: pnpm install --frozen-lockfile
+      - name: Build validate-kit
+        run: cd packages/validate-kit && ./node_modules/.bin/tsup
+      # The smoke runs the tlc adapter against real TLC; the jar is the
+      # release whose output was recorded (docs/research/formal-adapters).
+      - name: Install TLC (TLA+ tools 1.7.4, checksum-pinned)
+        run: |
+          JAR="$HOME/.local/share/tlaplus/tla2tools.jar"
+          mkdir -p "$(dirname "$JAR")" "$HOME/.local/bin"
+          curl -fsSL -o "$JAR" https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
+          echo "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88  $JAR" | sha256sum -c -
+          printf '#!/bin/sh\nexec java -XX:+UseParallelGC -cp "%s" tlc2.TLC "$@"\n' "$JAR" > "$HOME/.local/bin/tlc"
+          chmod +x "$HOME/.local/bin/tlc"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The smoke runs the lean adapter against real Lean: elan is the pinned
+      # release (checksum from GitHub), and installs the toolchain whose output
+      # was recorded (docs/research/formal-adapters/ci-install.md).
+      - name: Install Lean (elan 4.2.4 checksum-pinned, Lean 4.34.1)
+        run: |
+          ELAN="$RUNNER_TEMP/elan.tar.gz"
+          curl -fsSL -o "$ELAN" https://github.com/leanprover/elan/releases/download/v4.2.4/elan-x86_64-unknown-linux-gnu.tar.gz
+          echo "42b94d4244e8353142c456ec0e4ca6528fd898a6c604d4059f494e706e431f63  $ELAN" | sha256sum -c -
+          tar -xzf "$ELAN" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/elan-init" -y --no-modify-path --default-toolchain leanprover/lean4:v4.34.1
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      # The smoke runs the quint adapter against real Quint, the release whose
+      # output was recorded (docs/research/formal-adapters/quint-cli.md); npm
+      # checks the package against the integrity hash the registry publishes.
+      - name: Install Quint 0.32.0
+        run: npm install --global @informalsystems/quint@0.32.0
+      # `check --profile ci` is strict: semgrep is a planned tool, so it must
+      # be installed before doctor and check, or both report incomplete
+      # coverage (exit 3).
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Install semgrep (pinned, same as security.yml and mise.toml)
+        env:
+          SEMGREP_VERSION: "1.163.0"
+        run: python -m pip install "semgrep==${SEMGREP_VERSION}"
+      - name: Doctor (every tool the strict gate plans is installed)
+        run: pnpm exec check doctor --profile ci
+      - name: ast-grep rule snapshot tests
+        run: cd packages/validate-kit && ./node_modules/.bin/ast-grep test
+      - name: validate-kit core behavioral tests
+        run: pnpm --fail-if-no-match --filter validate-kit run test:core
+      - name: External package tarball smoke
+        env:
+          # A formal case that would be skipped locally is a failure here.
+          SMOKE_REQUIRE_FORMAL: "1"
+        run: pnpm run smoke:external-package
+      - name: Validate workflow definitions
+        run: pnpm run workflow:check
+      - name: Validate application and package code (hard gate)
+        run: pnpm run check
+      - name: API contract — OpenAPI spec current + breaking-change gate (oasdiff)
+        env:
+          # The event's base: on a push, origin/main is this commit itself.
+          OPENAPI_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          go install github.com/oasdiff/oasdiff@v1.20.0
+          GOPATH_BIN="$(go env GOPATH)/bin"
+          export PATH="$GOPATH_BIN:$PATH"
+          git fetch --no-tags --depth=1 origin main || true # soft-pass-ok: tolerate missing origin/main on forks/first push; openapi:check still gates the spec (fetch-flake hardening tracked as S-M2)
+          pnpm run openapi:check
+
+  # R18 (docs/architecture/engine-generalisation.md): on Windows the engine
+  # finds the system git through PATHEXT and never runs a git the project puts
+  # in its own folder. The core tests run here too.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.23.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build validate-kit
+        run: pnpm run build
+      - name: Windows smoke (system git lookup)
+        run: node scripts/smoke-windows.mjs
+      - name: validate-kit core behavioral tests
+        run: pnpm --fail-if-no-match --filter validate-kit run test:core

@@ -1,0 +1,11 @@
+id: tsx-no-console
+valid:
+  - "try { f() } catch (e) { console.error(e) }"
+  - "logger.log('hi')"
+  - "if (import.meta.main) console.log('run'); export const x = 1;"
+invalid:
+  - "export function verbose(argv = process.argv) { return argv; }\nconsole.log('x');"
+  - "import { a } from './a';\nconsole.log(a);"
+  - "console.log('hi')"
+  - "function App() { console.log('x'); return <div />; }"
+  - "console.debug(x, y)"

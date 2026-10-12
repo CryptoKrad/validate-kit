@@ -1,0 +1,28 @@
+# Git hooks for the validation framework.
+# NOTE: hooks invoke the built local CLI through `node .../dist/cli.js` so they
+# exercise the same artifact as the just recipes and avoid shell PATH surprises.
+# `pnpm exec check` is also supported from a normal checkout.
+
+# Only a failing job prints (its own output and exit status): a passing hook
+# costs nothing to read. For the full report, run the job's command without
+# --quiet.
+output:
+  - failure
+
+pre-commit:
+  parallel: true
+  commands:
+    validate:
+      glob: "*.{ts,tsx,js,jsx,mjs,cjs,rs,go,py}"
+      run: node packages/validate-kit/dist/cli.js --profile dev --staged --fix --quiet
+      stage_fixed: true
+
+# The preflight: on a clean copy of each commit being pushed, the done gate
+# and every command CI's push jobs run that this machine can run
+# (scripts/verify-clean.sh --ci), so a push reaches CI already judged. A
+# commit that passed it once is not run again.
+pre-push:
+  commands:
+    preflight:
+      run: scripts/verify-clean.sh --pushed
+      use_stdin: true

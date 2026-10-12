@@ -1,0 +1,14 @@
+id: tsx-no-explicit-any
+snapshots:
+  'const x: any = y;':
+    labels:
+    - source: any
+      style: primary
+      start: 9
+      end: 12
+  'function f(a: any) {}':
+    labels:
+    - source: any
+      style: primary
+      start: 14
+      end: 17

@@ -1,0 +1,33 @@
+id: py-no-print
+language: python
+severity: warning
+message: "Remove leftover print(...) — use the logging module (CLI entry files are allowed)."
+note: |
+  CLI entry files print by design and are skipped: bin/, scripts/, __main__.py, a shebang on the
+  first line, or an `if __name__ == "__main__":` guard.
+rule:
+  pattern: print($$$A)
+  not:
+    inside:
+      kind: module
+      stopBy: end
+      any:
+        - has:
+            kind: comment
+            regex: "^#!"
+            nthChild: 1
+        - has:
+            kind: if_statement
+            has:
+              field: condition
+              regex: "^__name__\\s*==\\s*[\"']__main__[\"']$"
+ignores:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/bin/**"
+  - "**/scripts/**"
+  - "**/__main__.py"
+metadata:
+  category: style
+  autofix: none
+  since: "0.1.0"

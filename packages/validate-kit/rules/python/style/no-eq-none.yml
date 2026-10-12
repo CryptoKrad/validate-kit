@@ -1,0 +1,11 @@
+id: py-no-eq-none
+language: python
+severity: warning
+message: "Use 'is None' instead of '== None'."
+rule:
+  pattern: $X == None
+fix: "$X is None"
+metadata:
+  category: style
+  autofix: safe
+  since: "0.1.0"

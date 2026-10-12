@@ -1,0 +1,14 @@
+id: py-no-bare-except
+snapshots:
+  ? |
+    try:
+        f()
+    except:
+        pass
+  : labels:
+    - source: |-
+        except:
+            pass
+      style: primary
+      start: 13
+      end: 29

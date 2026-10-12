@@ -1,0 +1,9 @@
+# security — only the security-category rules (across all languages).
+# tsx-/js- ids are grammar variants of ts-no-eval (tsx covers .tsx;
+# javascript covers .js AND .jsx).
+ts-no-eval
+tsx-no-eval
+js-no-eval
+py-no-eval-exec
+rust-flag-unsafe-block
+rust-flag-transmute

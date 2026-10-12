@@ -1,0 +1,14 @@
+id: rust-no-unwrap
+snapshots:
+  fn f() { let x = g().expect("must exist"); }:
+    labels:
+    - source: g().expect("must exist")
+      style: primary
+      start: 17
+      end: 41
+  fn f() { let x = g().unwrap(); }:
+    labels:
+    - source: g().unwrap()
+      style: primary
+      start: 17
+      end: 29

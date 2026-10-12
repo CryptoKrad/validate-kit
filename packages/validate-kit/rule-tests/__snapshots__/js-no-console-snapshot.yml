@@ -1,0 +1,83 @@
+id: js-no-console
+snapshots:
+  console.debug(x, y):
+    labels:
+    - source: console.debug(x, y)
+      style: primary
+      start: 0
+      end: 19
+    - source: console.debug(x, y)
+      style: secondary
+      start: 0
+      end: 19
+  console.log('hi'):
+    labels:
+    - source: console.log('hi')
+      style: primary
+      start: 0
+      end: 17
+    - source: console.log('hi')
+      style: secondary
+      start: 0
+      end: 17
+  ? |-
+    const a = require('./a');
+    console.log(a);
+    module.exports = a;
+  : labels:
+    - source: console.log(a);
+      style: primary
+      start: 26
+      end: 41
+    - source: console.log(a)
+      style: secondary
+      start: 26
+      end: 40
+  ? |-
+    export function verbose(argv = process.argv) { return argv; }
+    console.log('x');
+  : labels:
+    - source: console.log('x');
+      style: primary
+      start: 62
+      end: 79
+    - source: console.log('x')
+      style: secondary
+      start: 62
+      end: 78
+  function Widget() { console.log('x'); return <span />; }:
+    labels:
+    - source: console.log('x');
+      style: primary
+      start: 20
+      end: 37
+    - source: console.log('x')
+      style: secondary
+      start: 20
+      end: 36
+  ? |-
+    import { a } from './a.js';
+    console.log(a);
+    export const b = a;
+  : labels:
+    - source: console.log(a);
+      style: primary
+      start: 28
+      end: 43
+    - source: console.log(a)
+      style: secondary
+      start: 28
+      end: 42
+  ? |-
+    import { render } from 'react-dom';
+    render(app);
+    console.log('mounted');
+  : labels:
+    - source: console.log('mounted');
+      style: primary
+      start: 49
+      end: 72
+    - source: console.log('mounted')
+      style: secondary
+      start: 49
+      end: 71

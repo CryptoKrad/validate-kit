@@ -1,0 +1,12 @@
+id: ts-no-await-in-loop
+snapshots:
+  async function f(xs) { for (const x of xs) { await g(x); } }:
+    labels:
+    - source: await g(x)
+      style: primary
+      start: 45
+      end: 55
+    - source: for (const x of xs) { await g(x); }
+      style: secondary
+      start: 23
+      end: 58

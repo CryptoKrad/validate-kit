@@ -1,0 +1,12 @@
+id: py-no-bare-except
+language: python
+severity: warning
+message: "Bare 'except:' catches everything (incl. KeyboardInterrupt/SystemExit) — catch a specific exception."
+rule:
+  kind: except_clause
+  regex: "^except\\s*:"
+metadata:
+  category: correctness
+  cwe: "CWE-396"
+  autofix: none
+  since: "0.1.0"

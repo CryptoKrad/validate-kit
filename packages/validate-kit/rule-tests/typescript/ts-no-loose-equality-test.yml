@@ -1,0 +1,10 @@
+id: ts-no-loose-equality
+valid:
+  - "if (a === b) {}"
+  - "if (x == null) {}"
+  - "if (null == y) {}"
+  - "if (x == undefined) {}"
+  - "if (undefined == y) {}"
+invalid:
+  - "if (a == b) {}"
+  - "const c = x == 1;"

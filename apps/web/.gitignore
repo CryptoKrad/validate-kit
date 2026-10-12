@@ -1,0 +1,9 @@
+# Next.js build output
+.next/
+next-env.d.ts
+
+# Playwright visual-regression transient artifacts (commit the baselines, not these)
+**/*-actual.png
+**/*-diff.png
+test-results/
+playwright-report/

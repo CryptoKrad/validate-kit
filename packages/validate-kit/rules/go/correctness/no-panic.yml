@@ -1,0 +1,18 @@
+id: go-no-panic
+language: go
+severity: warning
+message: "Avoid panic(...) in library code — return an error instead."
+note: |
+  panic crashes the process. Reserve it for truly unrecoverable invariant
+  violations. Excluded in tests and package main.
+rule:
+  pattern:
+    context: "func _t() { panic($$$A) }"
+    selector: call_expression
+ignores:
+  - "**/*_test.go"
+  - "**/main.go"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.1.0"

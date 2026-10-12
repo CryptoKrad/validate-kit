@@ -1,0 +1,5 @@
+id: go-no-panic
+valid:
+  - "package p\nfunc f() error { return nil }"
+invalid:
+  - "package p\nfunc f() { panic(\"boom\") }"

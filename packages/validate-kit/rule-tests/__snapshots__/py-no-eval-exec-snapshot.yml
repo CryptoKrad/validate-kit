@@ -1,0 +1,14 @@
+id: py-no-eval-exec
+snapshots:
+  eval('1 + 1'):
+    labels:
+    - source: eval('1 + 1')
+      style: primary
+      start: 0
+      end: 13
+  exec(code):
+    labels:
+    - source: exec(code)
+      style: primary
+      start: 0
+      end: 10

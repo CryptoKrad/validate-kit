@@ -1,0 +1,69 @@
+id: ts-no-loose-equality
+language: typescript
+severity: error
+message: "Use strict equality === instead of == (avoids type coercion)."
+note: |
+  Loose equality triggers implicit type coercion. The idiomatic `== null`
+  null/undefined check is excluded.
+rule:
+  pattern: $L == $R
+  not:
+    any:
+      - pattern: $L == null
+      - pattern: null == $R
+      # `== undefined` is excluded too: the loose form also matches null, so
+      # the "safe" autofix `$L === $R` would silently change semantics.
+      - pattern: $L == undefined
+      - pattern: undefined == $R
+fix: "$L === $R"
+metadata:
+  category: correctness
+  autofix: safe
+  since: "0.1.0"
+---
+# tsx/js variants (keep rule bodies in sync with ts-no-loose-equality above).
+id: tsx-no-loose-equality
+language: tsx
+severity: error
+message: "Use strict equality === instead of == (avoids type coercion)."
+note: |
+  Loose equality triggers implicit type coercion. The idiomatic `== null`
+  null/undefined check is excluded.
+rule:
+  pattern: $L == $R
+  not:
+    any:
+      - pattern: $L == null
+      - pattern: null == $R
+      # `== undefined` is excluded too: the loose form also matches null, so
+      # the "safe" autofix `$L === $R` would silently change semantics.
+      - pattern: $L == undefined
+      - pattern: undefined == $R
+fix: "$L === $R"
+metadata:
+  category: correctness
+  autofix: safe
+  since: "0.1.0"
+---
+id: js-no-loose-equality
+language: javascript
+severity: error
+message: "Use strict equality === instead of == (avoids type coercion)."
+note: |
+  Loose equality triggers implicit type coercion. The idiomatic `== null`
+  null/undefined check is excluded.
+rule:
+  pattern: $L == $R
+  not:
+    any:
+      - pattern: $L == null
+      - pattern: null == $R
+      # `== undefined` is excluded too: the loose form also matches null, so
+      # the "safe" autofix `$L === $R` would silently change semantics.
+      - pattern: $L == undefined
+      - pattern: undefined == $R
+fix: "$L === $R"
+metadata:
+  category: correctness
+  autofix: safe
+  since: "0.1.0"

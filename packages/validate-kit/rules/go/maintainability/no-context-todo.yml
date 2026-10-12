@@ -1,0 +1,14 @@
+id: go-no-context-todo
+language: go
+severity: info
+message: "context.TODO() is a placeholder — thread a real context.Context through."
+rule:
+  pattern:
+    context: "func _t() { context.TODO() }"
+    selector: call_expression
+ignores:
+  - "**/*_test.go"
+metadata:
+  category: maintainability
+  autofix: none
+  since: "0.1.0"

@@ -1,0 +1,9 @@
+{ "diagnostics": [{"message": "Expected === and instead saw ==","code": "eslint(eqeqeq)","severity": "error","causes": [],"url": "https://oxc.rs/docs/guide/usage/linter/rules/eslint/eqeqeq.html","help": "Prefer === operator","filename": "err.js","labels": [{"span": {"offset": 19,"length": 2,"line": 2,"column": 7}}],"related": []},
+{"message": "Variable 'y' is declared but never used. Unused variables should start with a '_'.","code": "eslint(no-unused-vars)","severity": "warning","causes": [],"url": "https://oxc.rs/docs/guide/usage/linter/rules/eslint/no-unused-vars.html","help": "Consider removing this declaration.","filename": "err.js","labels": [{"label": "'y' is declared here","span": {"offset": 48,"length": 1,"line": 3,"column": 5}}],"related": []},
+{"message": "Unexpected var, use let or const instead.","code": "eslint(no-var)","severity": "error","causes": [],"url": "https://oxc.rs/docs/guide/usage/linter/rules/eslint/no-var.html","help": "Replace var with let or const","filename": "err.js","labels": [{"span": {"offset": 44,"length": 3,"line": 3,"column": 1}}],"related": []}],
+              "number_of_files": 1,
+              "number_of_rules": 97,
+              "threads_count": 16,
+              "start_time": 0.006637125
+            }
+            

@@ -1,0 +1,6 @@
+name = "proj"
+version = "0.1.0"
+defaultTargets = ["Proj"]
+
+[[lean_lib]]
+name = "Proj"

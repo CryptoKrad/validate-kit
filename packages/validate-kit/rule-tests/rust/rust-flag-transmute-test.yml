@@ -1,0 +1,6 @@
+id: rust-flag-transmute
+valid:
+  - "fn f() { let y = x as u64; }"
+invalid:
+  - "fn f() { let y = unsafe { mem::transmute(x) }; }"
+  - "fn f() { let y = unsafe { std::mem::transmute(x) }; }"

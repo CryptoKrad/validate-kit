@@ -1,0 +1,10 @@
+id: rust-no-panic-macros
+valid:
+  - "fn f() -> Result<(), E> { Err(E::Bad) }"
+  - "fn f() { println!(\"ok\"); }"
+  - "#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() { panic!(\"expected in test\"); }\n}"
+  - "#[test]\nfn t() { unreachable!() }"
+invalid:
+  - "fn f() { todo!() }"
+  - "fn f() { panic!(\"boom\") }"
+  - "fn f() { unimplemented!() }"

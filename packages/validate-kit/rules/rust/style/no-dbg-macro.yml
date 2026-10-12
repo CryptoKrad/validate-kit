@@ -1,0 +1,16 @@
+id: rust-no-dbg-macro
+language: rust
+severity: warning
+message: "Remove leftover dbg!(...) debug macro."
+note: |
+  dbg! writes to stderr and returns its argument; it is a debugging aid, never shipped.
+  No autofix: dbg!(x) returns x, so a blind delete can change semantics.
+rule:
+  kind: macro_invocation
+  has:
+    field: macro
+    regex: "^dbg$"
+metadata:
+  category: style
+  autofix: none
+  since: "0.1.0"

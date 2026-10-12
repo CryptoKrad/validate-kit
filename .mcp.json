@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "Tester.MCP": {
+      "command": "node",
+      "args": ["packages/validate-kit/dist/cli.js", "mcp"]
+    }
+  }
+}

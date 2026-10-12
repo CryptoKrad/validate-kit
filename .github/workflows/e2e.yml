@@ -1,0 +1,52 @@
+name: e2e
+
+# Layers 10-11: Playwright E2E + visual regression. HARD gate on PRs and main
+# (the soft-pass policy forbids continue-on-error outside perf, so informational-
+# on-PR is intentionally not implemented).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    # Render inside the SAME pinned Playwright container the visual baseline was
+    # generated in (apps/web/e2e/visual.spec.ts-snapshots/login.png), so font/AA
+    # rendering matches byte-for-byte. Must track @playwright/test in apps/web.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.0-noble@sha256:57b65fdc9ceabe0ef613124c7bbe2babcf9362c4d85e382fe3b03604e84b428a
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.23.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm --fail-if-no-match --filter web exec playwright install --with-deps chromium
+      - name: E2E + visual
+        run: pnpm --fail-if-no-match --filter web run e2e
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          if-no-files-found: error
+          retention-days: 7

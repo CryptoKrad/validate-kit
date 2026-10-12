@@ -1,0 +1,7 @@
+id: ts-no-explicit-any
+valid:
+  - "const x: unknown = y;"
+  - "function f(a: string) {}"
+invalid:
+  - "const x: any = y;"
+  - "function f(a: any) {}"

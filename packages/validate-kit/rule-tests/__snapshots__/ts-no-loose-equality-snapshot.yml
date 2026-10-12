@@ -1,0 +1,16 @@
+id: ts-no-loose-equality
+snapshots:
+  const c = x == 1;:
+    fixed: const c = x === 1;
+    labels:
+    - source: x == 1
+      style: primary
+      start: 10
+      end: 16
+  if (a == b) {}:
+    fixed: if (a === b) {}
+    labels:
+    - source: a == b
+      style: primary
+      start: 4
+      end: 10

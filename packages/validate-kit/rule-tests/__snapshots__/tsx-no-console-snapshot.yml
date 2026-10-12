@@ -1,0 +1,56 @@
+id: tsx-no-console
+snapshots:
+  console.debug(x, y):
+    labels:
+    - source: console.debug(x, y)
+      style: primary
+      start: 0
+      end: 19
+    - source: console.debug(x, y)
+      style: secondary
+      start: 0
+      end: 19
+  console.log('hi'):
+    labels:
+    - source: console.log('hi')
+      style: primary
+      start: 0
+      end: 17
+    - source: console.log('hi')
+      style: secondary
+      start: 0
+      end: 17
+  ? |-
+    export function verbose(argv = process.argv) { return argv; }
+    console.log('x');
+  : labels:
+    - source: console.log('x');
+      style: primary
+      start: 62
+      end: 79
+    - source: console.log('x')
+      style: secondary
+      start: 62
+      end: 78
+  function App() { console.log('x'); return <div />; }:
+    labels:
+    - source: console.log('x');
+      style: primary
+      start: 17
+      end: 34
+    - source: console.log('x')
+      style: secondary
+      start: 17
+      end: 33
+  ? |-
+    import { a } from './a';
+    console.log(a);
+  : labels:
+    - source: console.log(a);
+      style: primary
+      start: 25
+      end: 40
+    - source: console.log(a)
+      style: secondary
+      start: 25
+      end: 39

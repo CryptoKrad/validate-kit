@@ -1,0 +1,30 @@
+id: rust-flag-unsafe-block
+snapshots:
+  fn f() { unsafe { g() } }:
+    labels:
+    - source: unsafe { g() }
+      style: primary
+      start: 9
+      end: 23
+  unsafe fn f() { g(); }:
+    labels:
+    - source: unsafe fn f() { g(); }
+      style: primary
+      start: 0
+      end: 22
+    - source: unsafe
+      style: secondary
+      start: 0
+      end: 6
+  unsafe impl Send for T {}:
+    labels:
+    - source: unsafe impl Send for T {}
+      style: primary
+      start: 0
+      end: 25
+  unsafe trait Zeroable {}:
+    labels:
+    - source: unsafe trait Zeroable {}
+      style: primary
+      start: 0
+      end: 24

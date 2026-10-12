@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+.next/
+out/
+
+# Rust
+target/
+**/target/
+
+# Go
+# (binaries built ad-hoc; keep go.sum committed)
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
+
+# Test / tooling output
+coverage/
+test-results/
+playwright-report/
+**/__screenshots__/*-actual.png
+**/__screenshots__/*-diff.png
+# pacts/ are COMMITTED contract artifacts (no broker): the consumer test writes
+# pacts/WebApp-UsersApi.json deterministically and the provider verifies it from
+# a fresh checkout. Do not ignore them.
+*.sarif
+
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+*.log
+.idea/
+.vscode/*
+!.vscode/extensions.json

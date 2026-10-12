@@ -1,0 +1,61 @@
+{
+  "name": "validate-kit-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.23.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@ast-grep/cli",
+      "unrs-resolver"
+    ],
+    "overrides": {
+      "esbuild": "^0.28.2"
+    }
+  },
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "scripts": {
+    "build": "pnpm --filter validate-kit run build",
+    "check": "check --profile ci",
+    "check:dev": "check --profile dev",
+    "check:fixtures": "check --profile fixtures --only ast-grep",
+    "fix": "check --profile dev --fix",
+    "doctor": "check doctor",
+    "baseline:update": "bash scripts/update-visual-baseline.sh",
+    "openapi:emit": "tsx scripts/emit-openapi.ts > apps/api/openapi.json",
+    "pact:check": "node scripts/check-pact.mjs",
+    "openapi:check": "node scripts/check-openapi.mjs",
+    "smoke:external-package": "node scripts/smoke-external-package.mjs",
+    "smoke:external-package:cleanup-probe": "node scripts/smoke-external-package-cleanup-probe.mjs",
+    "format:check": "prettier \".github/workflows/*.{yml,yaml}\" \"apps/**/*.{ts,tsx,css,md}\" \"packages/validate-kit/{src,test}/**/*.ts\" \"packages/validate-kit/*.config.ts\" \"packages/validate-kit/*.md\" \"perf/**/*.{js,ts,md}\" \"scripts/**/*.mjs\" \"*.{ts,mjs,md,json,yml}\" \"pnpm-workspace.yaml\" --check",
+    "lint:self": "check --profile ci --lang ts js --only prettier oxlint eslint ast-grep",
+    "workflow:check": "go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 && node scripts/validate-workflows.mjs",
+    "workflow:e2e-local": "node scripts/run-e2e-workflow-local.mjs",
+    "workflow:perf-local": "node scripts/run-perf-workflow-local.mjs",
+    "workflow:poly-local": "node scripts/run-poly-workflow-local.mjs",
+    "workflow:security-local": "node scripts/run-security-workflow-local.mjs",
+    "workflow:test-ts-local": "node scripts/run-test-ts-workflow-local.mjs",
+    "workflow:validate-local": "node scripts/run-validate-workflow-local.mjs",
+    "quality": "pnpm run build && pnpm run check && pnpm run workflow:check && pnpm run openapi:check && pnpm -r run typecheck && pnpm -r run test && pnpm run smoke:external-package",
+    "test": "pnpm -r run test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "^22.20.5",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "contracts": "workspace:*",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
+    "lefthook": "^2.1.16",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-eslint": "^8.71.0",
+    "validate-kit": "workspace:*",
+    "yaml": "2.9.0",
+    "zod": "^4.6.5"
+  }
+}

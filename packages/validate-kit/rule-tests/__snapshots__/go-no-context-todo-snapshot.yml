@@ -1,0 +1,10 @@
+id: go-no-context-todo
+snapshots:
+  ? |-
+    package p
+    func f() { g(context.TODO()) }
+  : labels:
+    - source: context.TODO()
+      style: primary
+      start: 23
+      end: 37

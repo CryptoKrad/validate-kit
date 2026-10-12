@@ -1,0 +1,32 @@
+id: rust-no-panic-macros
+snapshots:
+  fn f() { panic!("boom") }:
+    labels:
+    - source: panic!("boom")
+      style: primary
+      start: 9
+      end: 23
+    - source: panic
+      style: secondary
+      start: 9
+      end: 14
+  fn f() { todo!() }:
+    labels:
+    - source: todo!()
+      style: primary
+      start: 9
+      end: 16
+    - source: todo
+      style: secondary
+      start: 9
+      end: 13
+  fn f() { unimplemented!() }:
+    labels:
+    - source: unimplemented!()
+      style: primary
+      start: 9
+      end: 25
+    - source: unimplemented
+      style: secondary
+      start: 9
+      end: 22

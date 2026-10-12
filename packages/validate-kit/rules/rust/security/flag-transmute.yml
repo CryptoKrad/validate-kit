@@ -1,0 +1,14 @@
+id: rust-flag-transmute
+language: rust
+severity: warning
+message: "mem::transmute is extremely error-prone — prefer safe conversions (From/as/bytemuck)."
+rule:
+  any:
+    - pattern: std::mem::transmute($$$A)
+    - pattern: mem::transmute($$$A)
+    - pattern: core::mem::transmute($$$A)
+metadata:
+  category: security
+  cwe: "CWE-704"
+  autofix: none
+  since: "0.1.0"

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Keep every GitHub Action pinned to a full commit SHA (with synced # vX.Y.Z comment). validate-workflows.mjs hard-fails any non-SHA uses:.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-action digests",
+      "pinDigests": true
+    },
+    {
+      "description": "Linter/formatter binaries whose machine output validate-kit parses. A bump can silently reshape JSON and zero findings, so isolate each one and gate it on regenerated golden fixtures (see scripts/regen-goldens.mjs). Mirror the new version into mise.toml.",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["oxlint", "@ast-grep/cli", "prettier"],
+      "matchDepTypes": ["dependencies"],
+      "groupName": "validate-kit linter binaries",
+      "addLabels": ["regen-goldens"],
+      "rangeStrategy": "pin"
+    },
+    {
+      "description": "Digest-pin container images (workflow container:/services: and helper scripts). validate-workflows.mjs hard-fails any workflow image: without @sha256.",
+      "matchDatasources": ["docker"],
+      "groupName": "container image digests",
+      "pinDigests": true
+    }
+  ]
+}

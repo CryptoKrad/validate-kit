@@ -1,0 +1,219 @@
+id: ts-no-console
+language: typescript
+severity: warning
+message: "Remove leftover console.$METHOD (console.error inside a catch, and CLI entry files, are allowed)."
+note: |
+  Debug logging should not ship. Use a structured logger for intentional output.
+  CLI entry files (bin/, scripts/, a shebang on the first line, an entry-point
+  check) print by design and are skipped.
+rule:
+  kind: expression_statement
+  has:
+    pattern: console.$METHOD($$$ARGS)
+  not:
+    any:
+      - inside:
+          kind: catch_clause
+          stopBy: end
+      # A file starting with a shebang is a program: its output is its product.
+      - inside:
+          kind: program
+          has:
+            kind: hash_bang_line
+          stopBy: end
+      # So is a file that asks whether it is the entry point.
+      - inside:
+          kind: program
+          has:
+            stopBy: end
+            any:
+              - pattern: import.meta.main
+              - pattern: require.main
+          stopBy: end
+constraints:
+  METHOD:
+    regex: "^(log|debug|info|trace|warn)$"
+ignores:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/bin/**"
+  - "**/scripts/**"
+# Report-only: a blanket `fix: ""` deletes the whole expression_statement
+# (incl. its `;`). For a braceless body — `if (c) console.log(x); doThing();` —
+# that leaves the header dangling and silently makes the NEXT statement
+# conditional. Auto-deleting statements is also unsafe when an arg has side
+# effects. Flag every console.* but leave removal to a human / the review agent.
+metadata:
+  category: style
+  autofix: none
+  since: "0.1.0"
+---
+# tsx/js variants (keep rule bodies in sync with ts-no-console above):
+# ast-grep languages are grammar-scoped — `typescript` never matches .tsx, and
+# neither matches .js/.jsx. `javascript` covers BOTH .js and .jsx (its grammar
+# includes JSX), so two variants give full coverage.
+id: tsx-no-console
+language: tsx
+severity: warning
+message: "Remove leftover console.$METHOD (console.error inside a catch, and CLI entry files, are allowed)."
+note: |
+  Debug logging should not ship. Use a structured logger for intentional output.
+  CLI entry files (bin/, scripts/, a shebang on the first line, an entry-point
+  check) print by design and are skipped.
+rule:
+  kind: expression_statement
+  has:
+    pattern: console.$METHOD($$$ARGS)
+  not:
+    any:
+      - inside:
+          kind: catch_clause
+          stopBy: end
+      # A file starting with a shebang is a program: its output is its product.
+      - inside:
+          kind: program
+          has:
+            kind: hash_bang_line
+          stopBy: end
+      # So is a file that asks whether it is the entry point.
+      - inside:
+          kind: program
+          has:
+            stopBy: end
+            any:
+              - pattern: import.meta.main
+              - pattern: require.main
+          stopBy: end
+constraints:
+  METHOD:
+    regex: "^(log|debug|info|trace|warn)$"
+ignores:
+  - "**/*.test.tsx"
+  - "**/*.spec.tsx"
+  - "**/bin/**"
+  - "**/scripts/**"
+metadata:
+  category: style
+  autofix: none
+  since: "0.1.0"
+---
+id: js-no-console
+language: javascript
+files:
+  - "**/*.js"
+  - "**/*.jsx"
+severity: warning
+message: "Remove leftover console.$METHOD (console.error inside a catch, and CLI entry files, are allowed)."
+note: |
+  Debug logging should not ship. Use a structured logger for intentional output.
+  CLI entry files (bin/, scripts/, a shebang on the first line, an entry-point check) print by
+  design and are skipped. .mjs and .cjs files are mjs-no-console's.
+rule:
+  kind: expression_statement
+  has:
+    pattern: console.$METHOD($$$ARGS)
+  not:
+    any:
+      - inside:
+          kind: catch_clause
+          stopBy: end
+      # A file starting with a shebang is a program: its output is its product.
+      - inside:
+          kind: program
+          has:
+            kind: hash_bang_line
+          stopBy: end
+      # So is a file that asks whether it is the entry point.
+      - inside:
+          kind: program
+          has:
+            stopBy: end
+            any:
+              - pattern: import.meta.main
+              - pattern: require.main
+          stopBy: end
+constraints:
+  METHOD:
+    regex: "^(log|debug|info|trace|warn)$"
+ignores:
+  - "**/*.test.js"
+  - "**/*.test.jsx"
+  - "**/*.spec.js"
+  - "**/bin/**"
+  - "**/scripts/**"
+metadata:
+  category: style
+  autofix: none
+  since: "0.1.0"
+---
+id: mjs-no-console
+language: javascript
+files:
+  - "**/*.mjs"
+  - "**/*.cjs"
+severity: warning
+message: "Remove leftover console.$METHOD (console.error inside a catch, and CLI entry files, are allowed)."
+note: |
+  Debug logging should not ship. Use a structured logger for intentional output.
+  CLI entry files (bin/, scripts/, a shebang on the first line, an entry-point check, a module
+  that imports and exports nothing) print by design and are skipped.
+rule:
+  kind: expression_statement
+  has:
+    pattern: console.$METHOD($$$ARGS)
+  not:
+    any:
+      - inside:
+          kind: catch_clause
+          stopBy: end
+      # A file starting with a shebang is a program: its output is its product.
+      - inside:
+          kind: program
+          has:
+            kind: hash_bang_line
+          stopBy: end
+      # So is a file that asks whether it is the entry point.
+      - inside:
+          kind: program
+          has:
+            stopBy: end
+            any:
+              - pattern: import.meta.main
+              - pattern: require.main
+          stopBy: end
+      # A Node module (.mjs, .cjs) that imports and exports nothing is run,
+      # not imported (`node li-login.mjs`). A browser app's entry (.js, .jsx,
+      # .ts, .tsx) is imported by its bundler, so js-no-console has no such
+      # exemption.
+      - inside:
+          kind: program
+          stopBy: end
+          all:
+            - has:
+                stopBy: end
+                any:
+                  - kind: import_statement
+                  - pattern: require($MODULE)
+            - not:
+                has:
+                  kind: export_statement
+            - not:
+                has:
+                  stopBy: end
+                  any:
+                    - pattern: module.exports
+                    - pattern: exports.$NAME
+constraints:
+  METHOD:
+    regex: "^(log|debug|info|trace|warn)$"
+ignores:
+  - "**/*.test.mjs"
+  - "**/*.test.cjs"
+  - "**/*.spec.mjs"
+  - "**/bin/**"
+  - "**/scripts/**"
+metadata:
+  category: style
+  autofix: none
+  since: "0.1.0"

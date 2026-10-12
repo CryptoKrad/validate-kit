@@ -1,0 +1,93 @@
+{
+  "name": "validate-kit",
+  "version": "0.2.2",
+  "description": "Polyglot bug-finder: one CLI for format/lint/type-check/custom ast-grep rules/security across TS/JS, Rust, Go, Python — with SARIF, AI-assist JSON, and an MCP server for coding agents.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "check": "./bin/validate-kit.mjs",
+    "validate-kit": "./bin/validate-kit.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "bin",
+    "dist",
+    "rules",
+    "presets",
+    "sgconfig.yml",
+    "semgrep",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:core": "vitest run test/commands.test.ts test/config.test.ts test/engine.test.ts test/report.test.ts test/runner.test.ts test/scope.test.ts",
+    "test:polyglot": "vitest run test/polyglot.test.ts",
+    "test:watch": "vitest",
+    "prepack": "tsup"
+  },
+  "dependencies": {
+    "@ast-grep/cli": "0.45.3",
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "commander": "^15.0.0",
+    "execa": "^10.0.1",
+    "jiti": "^2.7.0",
+    "oxlint": "1.86.0",
+    "p-limit": "^7.3.3",
+    "picocolors": "^1.1.1",
+    "picomatch": "^4.0.7",
+    "prettier": "^3.9.9",
+    "semver": "7.8.5",
+    "smol-toml": "1.9.0",
+    "tinyglobby": "^0.2.17",
+    "yaml": "2.9.0",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/picomatch": "^4.0.3",
+    "@types/semver": "^7.8.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "tsup": "^8.5.1",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CryptoKrad/validate-kit.git",
+    "directory": "packages/validate-kit"
+  },
+  "keywords": [
+    "lint",
+    "polyglot",
+    "ast-grep",
+    "sarif",
+    "mcp",
+    "code-quality",
+    "security",
+    "osv"
+  ]
+}

@@ -1,0 +1,5 @@
+id: go-no-context-todo
+valid:
+  - "package p\nfunc f(ctx context.Context) { g(ctx) }"
+invalid:
+  - "package p\nfunc f() { g(context.TODO()) }"

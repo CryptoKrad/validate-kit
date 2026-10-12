@@ -1,0 +1,6 @@
+id: py-no-eval-exec
+valid:
+  - "x = json.loads(s)"
+invalid:
+  - "eval('1 + 1')"
+  - "exec(code)"

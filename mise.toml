@@ -1,0 +1,18 @@
+# Runtimes only. The validation tools (ruff, golangci-lint, gofumpt, semgrep,
+# shellcheck, gitleaks, k6, lefthook) are installed one by one from the
+# Brewfile, and oxlint, prettier and ast-grep come with validate-kit itself:
+# a tool pinned here makes mise's shim install that version instead of
+# running the installed one, and a hung mise then blocked the pre-push hook
+# (2026-10-10). CI installs each tool itself at the versions its workflows pin.
+# `check doctor` verifies every tool independently of mise.
+[tools]
+node = "22"
+pnpm = "10.23.0"
+rust = "stable"          # cargo, clippy, rustfmt
+go = "1.25.11"
+python = "3.12"
+uv = "0.9.30"
+
+[env]
+# Keep tool caches inside the repo-local dir tree where practical.
+_.path = ["{{config_root}}/node_modules/.bin"]

@@ -1,0 +1,11 @@
+name = "srcdir"
+version = "0.1.0"
+defaultTargets = ["Srcdir", "Slash"]
+
+[[lean_lib]]
+name = "Srcdir"
+srcDir = "./src"
+
+[[lean_lib]]
+name = "Slash"
+srcDir = "lib/"

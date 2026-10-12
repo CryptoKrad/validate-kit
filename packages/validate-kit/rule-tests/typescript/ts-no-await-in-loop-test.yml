@@ -1,0 +1,6 @@
+id: ts-no-await-in-loop
+valid:
+  - "async function f(xs) { await Promise.all(xs.map(g)); }"
+  - "async function f(xs) { const ps = []; for (const x of xs) { ps.push((async () => { await g(x); })()); } await Promise.all(ps); }"
+invalid:
+  - "async function f(xs) { for (const x of xs) { await g(x); } }"

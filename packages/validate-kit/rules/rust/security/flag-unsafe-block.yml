@@ -1,0 +1,26 @@
+id: rust-flag-unsafe-block
+language: rust
+severity: info
+message: "unsafe code — ensure a // SAFETY: comment documents the upheld invariants."
+note: |
+  Not a bug per se; an audit gate. Pair with clippy::undocumented_unsafe_blocks.
+rule:
+  any:
+    - kind: unsafe_block
+    # `unsafe fn` / `unsafe impl` / `unsafe trait` carry the same audit
+    # obligation as a block. fn modifiers live in a function_modifiers child;
+    # impl/trait carry a leading `unsafe` token (matched on node-text prefix so
+    # a safe fn merely CONTAINING an unsafe block isn't double-flagged).
+    - kind: function_item
+      has:
+        kind: function_modifiers
+        regex: unsafe
+    - kind: impl_item
+      regex: '^unsafe\s'
+    - kind: trait_item
+      regex: '^unsafe\s'
+metadata:
+  category: security
+  cwe: "CWE-119"
+  autofix: none
+  since: "0.1.0"

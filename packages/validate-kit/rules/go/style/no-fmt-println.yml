@@ -1,0 +1,36 @@
+id: go-no-fmt-println
+language: go
+severity: warning
+message: "Remove leftover fmt.Print/Println/Printf or builtin print/println debug output — use a structured logger (package main is allowed)."
+note: |
+  A program (package main) prints by design and is skipped; library packages keep the rule.
+rule:
+  not:
+    inside:
+      kind: source_file
+      has:
+        kind: package_clause
+        regex: "^package\\s+main$"
+      stopBy: end
+  any:
+    - pattern:
+        context: "func _t() { fmt.Println($$$A) }"
+        selector: call_expression
+    - pattern:
+        context: "func _t() { fmt.Print($$$A) }"
+        selector: call_expression
+    - pattern:
+        context: "func _t() { fmt.Printf($$$A) }"
+        selector: call_expression
+    - pattern:
+        context: "func _t() { println($$$A) }"
+        selector: call_expression
+    - pattern:
+        context: "func _t() { print($$$A) }"
+        selector: call_expression
+ignores:
+  - "**/*_test.go"
+metadata:
+  category: style
+  autofix: none
+  since: "0.1.0"

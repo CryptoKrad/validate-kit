@@ -1,0 +1,42 @@
+id: go-no-fmt-println
+snapshots:
+  ? |-
+    package p
+    func f() { fmt.Print("debug") }
+  : labels:
+    - source: fmt.Print("debug")
+      style: primary
+      start: 21
+      end: 39
+  ? |-
+    package p
+    func f() { fmt.Printf("%v", x) }
+  : labels:
+    - source: fmt.Printf("%v", x)
+      style: primary
+      start: 21
+      end: 40
+  ? |-
+    package p
+    func f() { fmt.Println("debug") }
+  : labels:
+    - source: fmt.Println("debug")
+      style: primary
+      start: 21
+      end: 41
+  ? |-
+    package p
+    func f() { print("debug") }
+  : labels:
+    - source: print("debug")
+      style: primary
+      start: 21
+      end: 35
+  ? |-
+    package p
+    func f() { println("debug") }
+  : labels:
+    - source: println("debug")
+      style: primary
+      start: 21
+      end: 37

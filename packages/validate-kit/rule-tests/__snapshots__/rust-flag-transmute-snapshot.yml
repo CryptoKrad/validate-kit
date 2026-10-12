@@ -1,0 +1,14 @@
+id: rust-flag-transmute
+snapshots:
+  fn f() { let y = unsafe { mem::transmute(x) }; }:
+    labels:
+    - source: mem::transmute(x)
+      style: primary
+      start: 26
+      end: 43
+  fn f() { let y = unsafe { std::mem::transmute(x) }; }:
+    labels:
+    - source: std::mem::transmute(x)
+      style: primary
+      start: 26
+      end: 48

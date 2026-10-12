@@ -1,0 +1,28 @@
+# recommended — safe, low-false-positive rules (autofix-leaning).
+# One rule id per line. Used to filter the ast-grep run and document intent.
+# tsx-/js- ids are grammar variants of the matching ts- rule (tsx covers .tsx;
+# javascript covers .js AND .jsx — its grammar includes JSX).
+ts-no-console
+tsx-no-console
+js-no-console
+mjs-no-console
+ts-no-loose-equality
+tsx-no-loose-equality
+js-no-loose-equality
+ts-no-loose-inequality
+tsx-no-loose-inequality
+js-no-loose-inequality
+ts-no-eval
+tsx-no-eval
+js-no-eval
+py-no-eq-none
+py-no-neq-none
+py-no-eval-exec
+py-no-bare-except
+py-no-mutable-default-arg
+py-no-print
+go-no-panic
+go-no-fmt-println
+rust-no-panic-macros
+rust-no-unwrap
+rust-flag-transmute

@@ -1,0 +1,5 @@
+id: rust-no-dbg-macro
+valid:
+  - "fn f() { println!(\"{}\", x); }"
+invalid:
+  - "fn f() { dbg!(x); }"

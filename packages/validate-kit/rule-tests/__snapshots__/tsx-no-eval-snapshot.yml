@@ -1,0 +1,14 @@
+id: tsx-no-eval
+snapshots:
+  const f = new Function('a', 'return a');:
+    labels:
+    - source: new Function('a', 'return a')
+      style: primary
+      start: 10
+      end: 39
+  eval('1 + 1'):
+    labels:
+    - source: eval('1 + 1')
+      style: primary
+      start: 0
+      end: 13

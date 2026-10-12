@@ -1,0 +1,60 @@
+name: test-ts
+
+# Layers 4-8: unit · component · API mocking · integration · API tests.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-ts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-component-api:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.23.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: api — unit + API (Supertest)
+        run: pnpm --fail-if-no-match --filter api run test
+      - name: web — unit + component + MSW
+        run: pnpm --fail-if-no-match --filter web run test
+      # The provider must verify what the consumer expects now: regenerate the
+      # pact from nothing, verify it, and fail if it differs from the
+      # committed one (scripts/check-pact.mjs).
+      - name: Pact freshness (consumer -> provider -> committed file)
+        run: pnpm run pact:check
+
+  integration:
+    # Testcontainers-based integration. Docker is available on ubuntu-latest.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 10.23.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: api — integration (Testcontainers Postgres)
+        run: pnpm --fail-if-no-match --filter api run test:integration:docker

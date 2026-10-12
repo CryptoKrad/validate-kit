@@ -1,0 +1,9 @@
+id: py-no-eq-none
+snapshots:
+  'if x == None: pass':
+    fixed: 'if x is None: pass'
+    labels:
+    - source: x == None
+      style: primary
+      start: 3
+      end: 12

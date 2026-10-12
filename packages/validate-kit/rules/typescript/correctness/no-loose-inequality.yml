@@ -1,0 +1,60 @@
+id: ts-no-loose-inequality
+language: typescript
+severity: error
+message: "Use strict inequality !== instead of != (avoids type coercion)."
+rule:
+  pattern: $L != $R
+  not:
+    any:
+      - pattern: $L != null
+      - pattern: null != $R
+      # `!= undefined` is excluded too: the loose form also matches null, so
+      # the "safe" autofix `$L !== $R` would silently change semantics.
+      - pattern: $L != undefined
+      - pattern: undefined != $R
+fix: "$L !== $R"
+metadata:
+  category: correctness
+  autofix: safe
+  since: "0.1.0"
+---
+# tsx/js variants (keep rule bodies in sync with ts-no-loose-inequality above).
+id: tsx-no-loose-inequality
+language: tsx
+severity: error
+message: "Use strict inequality !== instead of != (avoids type coercion)."
+rule:
+  pattern: $L != $R
+  not:
+    any:
+      - pattern: $L != null
+      - pattern: null != $R
+      # `!= undefined` is excluded too: the loose form also matches null, so
+      # the "safe" autofix `$L !== $R` would silently change semantics.
+      - pattern: $L != undefined
+      - pattern: undefined != $R
+fix: "$L !== $R"
+metadata:
+  category: correctness
+  autofix: safe
+  since: "0.1.0"
+---
+id: js-no-loose-inequality
+language: javascript
+severity: error
+message: "Use strict inequality !== instead of != (avoids type coercion)."
+rule:
+  pattern: $L != $R
+  not:
+    any:
+      - pattern: $L != null
+      - pattern: null != $R
+      # `!= undefined` is excluded too: the loose form also matches null, so
+      # the "safe" autofix `$L !== $R` would silently change semantics.
+      - pattern: $L != undefined
+      - pattern: undefined != $R
+fix: "$L !== $R"
+metadata:
+  category: correctness
+  autofix: safe
+  since: "0.1.0"

@@ -1,0 +1,6 @@
+id: tsx-no-eval
+valid:
+  - "const x = JSON.parse(s);"
+invalid:
+  - "eval('1 + 1')"
+  - "const f = new Function('a', 'return a');"
