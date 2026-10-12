@@ -79,7 +79,7 @@ scratch="$(mktemp -d)" || exit 2
 work="$scratch/verify-clean-$sha"
 logs="$scratch/logs"
 
-# shellcheck disable=SC2329 # run by the EXIT trap below
+# shellcheck disable=SC2317,SC2329 # run by the EXIT trap below (0.9 says SC2317)
 cleanup() {
   git -C "$top" worktree remove --force "$work" >/dev/null 2>&1
   [ "$fail" -eq 0 ] && rm -rf "$logs"
