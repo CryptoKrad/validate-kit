@@ -264,7 +264,12 @@ describe("runner", () => {
 
   it("runs a pythonEnv tool from the project's .venv, where its probe found it", async () => {
     const cwd = toPosix(mkdtempSync(resolve(tmpdir(), "vk-venv-run-")));
-    const binDir = resolve(cwd, ".venv", "bin");
+    // A Windows venv keeps its scripts in Scripts\, as the lookup expects.
+    const binDir = resolve(
+      cwd,
+      ".venv",
+      process.platform === "win32" ? "Scripts" : "bin",
+    );
     mkdirSync(binDir, { recursive: true });
     // Only in .venv: not on PATH, not in any node_modules.
     fakeTool(
