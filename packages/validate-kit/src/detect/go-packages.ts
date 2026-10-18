@@ -39,7 +39,7 @@ const TEMPLATE = [
 ].join("\t");
 
 /** A folder `go list ./...` skips (`go help packages`), `""` the root. */
-function hiddenFolder(rel: string): boolean {
+export function hiddenFolder(rel: string): boolean {
   return rel
     .split("/")
     .some(

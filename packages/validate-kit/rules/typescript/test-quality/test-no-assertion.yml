@@ -1,0 +1,530 @@
+id: ts-test-no-assertion
+language: typescript
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result with expect(...)."
+note: |
+  A test whose callback calls no expect/assert/should/verify-style function
+  (expect.soft, assert.equal, expectTypeOf and helpers named expect*/assert*
+  count) only proves the code did not throw. Agents write these when asked
+  for "a test". Assert what the call returns or changes. A call to a
+  function or method of the same file that asserts counts as asserting.
+files:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/__tests__/**"
+utils:
+  # A body that asserts, the test's own or a helper's (in a test file a
+  # helper is test code).
+  asserts:
+    has:
+      stopBy: end
+      kind: call_expression
+      has:
+        field: function
+        regex: "(^|\\.)(expect|assert|should|verify)\\w*"
+  # A call made as a statement (`helper(x);`, `await helper(x);`, or an
+  # arrow function's whole body), not a value.
+  statement-call:
+    kind: call_expression
+    any:
+      - inside:
+          kind: expression_statement
+      - inside:
+          kind: await_expression
+          inside:
+            kind: expression_statement
+      - inside:
+          kind: arrow_function
+          field: body
+  # A function or arrow-function variable, and a method, class field or
+  # object property.
+  function:
+    any:
+      - kind: function_declaration
+      - kind: variable_declarator
+        has: &function-value
+          field: value
+          any:
+            - kind: arrow_function
+            - kind: function_expression
+  method:
+    any:
+      - kind: method_definition
+      - kind: public_field_definition
+        has: *function-value
+      - kind: pair
+        has: *function-value
+  # The callback's last statement, comments aside.
+  last-statement:
+    kind: expression_statement
+    nthChild:
+      position: 1
+      reverse: true
+      ofRule:
+        not:
+          kind: comment
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        regex: "^(it|test)(\\.(only|concurrent|sequential))?$"
+    - has:
+        field: arguments
+        has:
+          any:
+            - kind: arrow_function
+            - kind: function_expression
+          not:
+            any:
+              - matches: asserts
+              # A function of this file that asserts, called as a statement:
+              # the first such call, or the callback's last statement. A plain
+              # call names a function, a method call a method. (ast-grep binds
+              # a name to its first match and does not try the others.)
+              - all:
+                  - has:
+                      stopBy: end
+                      matches: statement-call
+                      has:
+                        field: function
+                        kind: identifier
+                        pattern: $FREE
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: function
+                          - has:
+                              field: name
+                              pattern: $FREE
+                          - matches: asserts
+              - all:
+                  - has:
+                      stopBy: end
+                      matches: statement-call
+                      pattern: $OBJ.$METHOD($$$OBJARGS)
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: method
+                          - any:
+                              - has:
+                                  field: name
+                                  pattern: $METHOD
+                              - has:
+                                  field: key
+                                  pattern: $METHOD
+                          - matches: asserts
+              - all:
+                  - has:
+                      field: body
+                      has:
+                        matches: last-statement
+                        has:
+                          stopBy: end
+                          matches: statement-call
+                          has:
+                            field: function
+                            kind: identifier
+                            pattern: $LFREE
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: function
+                          - has:
+                              field: name
+                              pattern: $LFREE
+                          - matches: asserts
+              - all:
+                  - has:
+                      field: body
+                      has:
+                        matches: last-statement
+                        has:
+                          stopBy: end
+                          matches: statement-call
+                          pattern: $LOBJ.$LMETHOD($$$LOBJARGS)
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: method
+                          - any:
+                              - has:
+                                  field: name
+                                  pattern: $LMETHOD
+                              - has:
+                                  field: key
+                                  pattern: $LMETHOD
+                          - matches: asserts
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+---
+id: tsx-test-no-assertion
+language: tsx
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result with expect(...)."
+note: |
+  A test whose callback calls no expect/assert/should/verify-style function
+  (expect.soft, assert.equal, expectTypeOf and helpers named expect*/assert*
+  count) only proves the code did not throw. Agents write these when asked
+  for "a test". Assert what the call returns or changes. A call to a
+  function or method of the same file that asserts counts as asserting.
+files:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/__tests__/**"
+utils:
+  # A body that asserts, the test's own or a helper's (in a test file a
+  # helper is test code).
+  asserts:
+    has:
+      stopBy: end
+      kind: call_expression
+      has:
+        field: function
+        regex: "(^|\\.)(expect|assert|should|verify)\\w*"
+  # A call made as a statement (`helper(x);`, `await helper(x);`, or an
+  # arrow function's whole body), not a value.
+  statement-call:
+    kind: call_expression
+    any:
+      - inside:
+          kind: expression_statement
+      - inside:
+          kind: await_expression
+          inside:
+            kind: expression_statement
+      - inside:
+          kind: arrow_function
+          field: body
+  # A function or arrow-function variable, and a method, class field or
+  # object property.
+  function:
+    any:
+      - kind: function_declaration
+      - kind: variable_declarator
+        has: &function-value
+          field: value
+          any:
+            - kind: arrow_function
+            - kind: function_expression
+  method:
+    any:
+      - kind: method_definition
+      - kind: public_field_definition
+        has: *function-value
+      - kind: pair
+        has: *function-value
+  # The callback's last statement, comments aside.
+  last-statement:
+    kind: expression_statement
+    nthChild:
+      position: 1
+      reverse: true
+      ofRule:
+        not:
+          kind: comment
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        regex: "^(it|test)(\\.(only|concurrent|sequential))?$"
+    - has:
+        field: arguments
+        has:
+          any:
+            - kind: arrow_function
+            - kind: function_expression
+          not:
+            any:
+              - matches: asserts
+              # A function of this file that asserts, called as a statement:
+              # the first such call, or the callback's last statement. A plain
+              # call names a function, a method call a method. (ast-grep binds
+              # a name to its first match and does not try the others.)
+              - all:
+                  - has:
+                      stopBy: end
+                      matches: statement-call
+                      has:
+                        field: function
+                        kind: identifier
+                        pattern: $FREE
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: function
+                          - has:
+                              field: name
+                              pattern: $FREE
+                          - matches: asserts
+              - all:
+                  - has:
+                      stopBy: end
+                      matches: statement-call
+                      pattern: $OBJ.$METHOD($$$OBJARGS)
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: method
+                          - any:
+                              - has:
+                                  field: name
+                                  pattern: $METHOD
+                              - has:
+                                  field: key
+                                  pattern: $METHOD
+                          - matches: asserts
+              - all:
+                  - has:
+                      field: body
+                      has:
+                        matches: last-statement
+                        has:
+                          stopBy: end
+                          matches: statement-call
+                          has:
+                            field: function
+                            kind: identifier
+                            pattern: $LFREE
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: function
+                          - has:
+                              field: name
+                              pattern: $LFREE
+                          - matches: asserts
+              - all:
+                  - has:
+                      field: body
+                      has:
+                        matches: last-statement
+                        has:
+                          stopBy: end
+                          matches: statement-call
+                          pattern: $LOBJ.$LMETHOD($$$LOBJARGS)
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: method
+                          - any:
+                              - has:
+                                  field: name
+                                  pattern: $LMETHOD
+                              - has:
+                                  field: key
+                                  pattern: $LMETHOD
+                          - matches: asserts
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+---
+id: js-test-no-assertion
+language: javascript
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result with expect(...)."
+note: |
+  A test whose callback calls no expect/assert/should/verify-style function
+  (expect.soft, assert.equal, expectTypeOf and helpers named expect*/assert*
+  count) only proves the code did not throw. Agents write these when asked
+  for "a test". Assert what the call returns or changes. A call to a
+  function or method of the same file that asserts counts as asserting.
+files:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/__tests__/**"
+utils:
+  # A body that asserts, the test's own or a helper's (in a test file a
+  # helper is test code).
+  asserts:
+    has:
+      stopBy: end
+      kind: call_expression
+      has:
+        field: function
+        regex: "(^|\\.)(expect|assert|should|verify)\\w*"
+  # A call made as a statement (`helper(x);`, `await helper(x);`, or an
+  # arrow function's whole body), not a value.
+  statement-call:
+    kind: call_expression
+    any:
+      - inside:
+          kind: expression_statement
+      - inside:
+          kind: await_expression
+          inside:
+            kind: expression_statement
+      - inside:
+          kind: arrow_function
+          field: body
+  # A function or arrow-function variable, and a method, class field or
+  # object property.
+  function:
+    any:
+      - kind: function_declaration
+      - kind: variable_declarator
+        has: &function-value
+          field: value
+          any:
+            - kind: arrow_function
+            - kind: function_expression
+  method:
+    any:
+      - kind: method_definition
+      - kind: field_definition
+        has: *function-value
+      - kind: pair
+        has: *function-value
+  # The callback's last statement, comments aside.
+  last-statement:
+    kind: expression_statement
+    nthChild:
+      position: 1
+      reverse: true
+      ofRule:
+        not:
+          kind: comment
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        regex: "^(it|test)(\\.(only|concurrent|sequential))?$"
+    - has:
+        field: arguments
+        has:
+          any:
+            - kind: arrow_function
+            - kind: function_expression
+          not:
+            any:
+              - matches: asserts
+              # A function of this file that asserts, called as a statement:
+              # the first such call, or the callback's last statement. A plain
+              # call names a function, a method call a method. (ast-grep binds
+              # a name to its first match and does not try the others.)
+              - all:
+                  - has:
+                      stopBy: end
+                      matches: statement-call
+                      has:
+                        field: function
+                        kind: identifier
+                        pattern: $FREE
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: function
+                          - has:
+                              field: name
+                              pattern: $FREE
+                          - matches: asserts
+              - all:
+                  - has:
+                      stopBy: end
+                      matches: statement-call
+                      pattern: $OBJ.$METHOD($$$OBJARGS)
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: method
+                          - any:
+                              - has:
+                                  field: name
+                                  pattern: $METHOD
+                              - has:
+                                  field: key
+                                  pattern: $METHOD
+                              - has:
+                                  field: property
+                                  pattern: $METHOD
+                          - matches: asserts
+              - all:
+                  - has:
+                      field: body
+                      has:
+                        matches: last-statement
+                        has:
+                          stopBy: end
+                          matches: statement-call
+                          has:
+                            field: function
+                            kind: identifier
+                            pattern: $LFREE
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: function
+                          - has:
+                              field: name
+                              pattern: $LFREE
+                          - matches: asserts
+              - all:
+                  - has:
+                      field: body
+                      has:
+                        matches: last-statement
+                        has:
+                          stopBy: end
+                          matches: statement-call
+                          pattern: $LOBJ.$LMETHOD($$$LOBJARGS)
+                  - inside:
+                      kind: program
+                      stopBy: end
+                      has:
+                        stopBy: end
+                        all:
+                          - matches: method
+                          - any:
+                              - has:
+                                  field: name
+                                  pattern: $LMETHOD
+                              - has:
+                                  field: key
+                                  pattern: $LMETHOD
+                              - has:
+                                  field: property
+                                  pattern: $LMETHOD
+                          - matches: asserts
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

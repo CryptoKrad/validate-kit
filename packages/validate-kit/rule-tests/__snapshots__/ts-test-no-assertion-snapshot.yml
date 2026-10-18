@@ -1,0 +1,194 @@
+id: ts-test-no-assertion
+snapshots:
+  ? |
+    const fetchUser = (): never => {
+      throw new Error("offline");
+    };
+    it("mock that throws", async () => {
+      await fetchUser();
+    });
+  : labels:
+    - source: |-
+        it("mock that throws", async () => {
+          await fetchUser();
+        })
+      style: primary
+      start: 66
+      end: 126
+    - source: it
+      style: secondary
+      start: 66
+      end: 68
+    - source: |-
+        async () => {
+          await fetchUser();
+        }
+      style: secondary
+      start: 89
+      end: 125
+    - source: |-
+        async () => {
+          await fetchUser();
+        }
+      style: secondary
+      start: 89
+      end: 125
+  ? |
+    const setup = (): number => 1;
+    it("helper that checks nothing", () => {
+      setup();
+    });
+  : labels:
+    - source: |-
+        it("helper that checks nothing", () => {
+          setup();
+        })
+      style: primary
+      start: 31
+      end: 85
+    - source: it
+      style: secondary
+      start: 31
+      end: 33
+    - source: |-
+        () => {
+          setup();
+        }
+      style: secondary
+      start: 64
+      end: 84
+    - source: |-
+        () => {
+          setup();
+        }
+      style: secondary
+      start: 64
+      end: 84
+  ? |
+    const token = verifyToken("abc");
+    it("uses a value, not a helper", () => {
+      token();
+    });
+  : labels:
+    - source: |-
+        it("uses a value, not a helper", () => {
+          token();
+        })
+      style: primary
+      start: 34
+      end: 88
+    - source: it
+      style: secondary
+      start: 34
+      end: 36
+    - source: |-
+        () => {
+          token();
+        }
+      style: secondary
+      start: 67
+      end: 87
+    - source: |-
+        () => {
+          token();
+        }
+      style: secondary
+      start: 67
+      end: 87
+  ? |
+    function login(u: string): void {
+      expect(u).toBeTruthy();
+    }
+    it("method, not the function", async () => {
+      const api = makeApi();
+      await api.login();
+    });
+  : labels:
+    - source: |-
+        it("method, not the function", async () => {
+          const api = makeApi();
+          await api.login();
+        })
+      style: primary
+      start: 62
+      end: 155
+    - source: it
+      style: secondary
+      start: 62
+      end: 64
+    - source: |-
+        async () => {
+          const api = makeApi();
+          await api.login();
+        }
+      style: secondary
+      start: 93
+      end: 154
+    - source: |-
+        async () => {
+          const api = makeApi();
+          await api.login();
+        }
+      style: secondary
+      start: 93
+      end: 154
+  ? |
+    it("discounts", () => {
+      discount(150);
+    });
+  : labels:
+    - source: |-
+        it("discounts", () => {
+          discount(150);
+        })
+      style: primary
+      start: 0
+      end: 43
+    - source: it
+      style: secondary
+      start: 0
+      end: 2
+    - source: |-
+        () => {
+          discount(150);
+        }
+      style: secondary
+      start: 16
+      end: 42
+    - source: |-
+        () => {
+          discount(150);
+        }
+      style: secondary
+      start: 16
+      end: 42
+  ? |
+    test.concurrent("calls it", async function () {
+      await fetchUser(1);
+    });
+  : labels:
+    - source: |-
+        test.concurrent("calls it", async function () {
+          await fetchUser(1);
+        })
+      style: primary
+      start: 0
+      end: 72
+    - source: test.concurrent
+      style: secondary
+      start: 0
+      end: 15
+    - source: |-
+        async function () {
+          await fetchUser(1);
+        }
+      style: secondary
+      start: 28
+      end: 71
+    - source: |-
+        async function () {
+          await fetchUser(1);
+        }
+      style: secondary
+      start: 28
+      end: 71

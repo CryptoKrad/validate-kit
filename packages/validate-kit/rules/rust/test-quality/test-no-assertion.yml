@@ -1,0 +1,245 @@
+id: rust-test-no-assertion
+language: rust
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result with assert!/assert_eq!."
+note: |
+  A #[test] function with no assert*! (insta's assert_snapshot!, approx's,
+  path-qualified ones too) or panic! macro, no unwrap()/expect(), no `?`, no
+  Result to return and no #[should_panic] only proves the code did not panic.
+  A call to a helper named assert_ counts as asserting, as does a call to a
+  function of the same file that asserts: a helper beside the test as a test
+  body would, any other function or method with an assert macro.
+files:
+  - "**/*.rs"
+utils:
+  # A helper beside the test (in its test module, or a test file) is test
+  # code: it asserts the way a test body does.
+  asserts-beside:
+    has:
+      stopBy: end
+      any:
+        - kind: macro_invocation
+          regex: "^([\\w:]+::)?(assert\\w*|debug_assert\\w*|prop_assert\\w*|panic|unreachable)!"
+        - kind: call_expression
+          has:
+            field: function
+            regex: "\\.(unwrap|expect|unwrap_err|expect_err)$|(^|::|\\.)assert_\\w*(::<.*>)?$"
+  # A helper beside the test that asserts, or calls as a statement another
+  # helper beside it that does (one level down).
+  test-asserts:
+    any:
+      - matches: asserts-beside
+      - all:
+          - has:
+              stopBy: end
+              matches: statement-call
+              has:
+                field: function
+                kind: identifier
+                pattern: $INNER
+          - any:
+              - follows: &inner
+                  stopBy: end
+                  kind: function_item
+                  all:
+                    - has:
+                        field: name
+                        pattern: $INNER
+                    - matches: asserts-beside
+              - precedes: *inner
+  # Elsewhere in the file it may be the code under test, which unwraps and
+  # panics: there only an assert-family macro or an assert_ helper counts.
+  asserts:
+    has:
+      stopBy: end
+      any:
+        - kind: macro_invocation
+          regex: "^([\\w:]+::)?(assert\\w*|prop_assert\\w*)!"
+        - kind: call_expression
+          has:
+            field: function
+            regex: "(^|::|\\.)assert_\\w*(::<.*>)?$"
+  # A call made as a statement (`helper(x);`, `helper(x).await;`), not a
+  # value assigned in setup.
+  statement-call:
+    kind: call_expression
+    any:
+      - inside:
+          kind: expression_statement
+      - inside:
+          kind: await_expression
+          inside:
+            kind: expression_statement
+  method:
+    inside:
+      stopBy: end
+      any:
+        - kind: impl_item
+        - kind: trait_item
+  # The body's last statement, comments aside.
+  last-statement:
+    kind: expression_statement
+    nthChild:
+      position: 1
+      reverse: true
+      ofRule:
+        not:
+          any:
+            - kind: line_comment
+            - kind: block_comment
+rule:
+  kind: function_item
+  follows:
+    kind: attribute_item
+    regex: "^#\\[(tokio::)?test"
+    stopBy:
+      not:
+        any:
+          - kind: attribute_item
+          - kind: line_comment
+          - kind: block_comment
+  not:
+    any:
+      # A test that returns a Result fails when it returns an Err.
+      - has:
+          field: return_type
+          not:
+            kind: unit_type
+      - follows:
+          kind: attribute_item
+          regex: "should_panic"
+          stopBy:
+            not:
+              any:
+                - kind: attribute_item
+                - kind: line_comment
+                - kind: block_comment
+      - has:
+          stopBy: end
+          any:
+            - kind: macro_invocation
+              regex: "^([\\w:]+::)?(assert\\w*|debug_assert\\w*|prop_assert\\w*|panic|unreachable)!"
+            - kind: try_expression
+            - kind: call_expression
+              has:
+                field: function
+                regex: "\\.(unwrap|expect|unwrap_err|expect_err)$"
+      # A helper named assert_, wherever it is defined.
+      - has:
+          stopBy: end
+          kind: call_expression
+          has:
+            field: function
+            regex: "(^|::|\\.)assert_\\w*(::<.*>)?$"
+      # A function of this file that asserts, called as a statement: the
+      # first such call, or the body's last statement. A plain call names a
+      # free function, a method call a method. (ast-grep binds a name to its
+      # first match and does not try the others.)
+      - all:
+          - has:
+              stopBy: end
+              matches: statement-call
+              has:
+                field: function
+                kind: identifier
+                pattern: $FREE
+          - any:
+              - inside:
+                  kind: source_file
+                  stopBy: end
+                  has:
+                    stopBy: end
+                    kind: function_item
+                    all:
+                      - has:
+                          field: name
+                          pattern: $FREE
+                      - not:
+                          matches: method
+                      - matches: asserts
+              - follows: &free
+                  stopBy: end
+                  kind: function_item
+                  all:
+                    - has:
+                        field: name
+                        pattern: $FREE
+                    - matches: test-asserts
+              - precedes: *free
+      - all:
+          - has:
+              stopBy: end
+              matches: statement-call
+              pattern: $RMETHOD.$METHOD($$$AMETHOD)
+          - inside:
+              kind: source_file
+              stopBy: end
+              has:
+                stopBy: end
+                kind: function_item
+                all:
+                  - has:
+                      field: name
+                      pattern: $METHOD
+                  - matches: method
+                  - matches: asserts
+      - all:
+          - has:
+              field: body
+              has:
+                matches: last-statement
+                has:
+                  stopBy: end
+                  matches: statement-call
+                  has:
+                    field: function
+                    kind: identifier
+                    pattern: $LFREE
+          - any:
+              - inside:
+                  kind: source_file
+                  stopBy: end
+                  has:
+                    stopBy: end
+                    kind: function_item
+                    all:
+                      - has:
+                          field: name
+                          pattern: $LFREE
+                      - not:
+                          matches: method
+                      - matches: asserts
+              - follows: &lfree
+                  stopBy: end
+                  kind: function_item
+                  all:
+                    - has:
+                        field: name
+                        pattern: $LFREE
+                    - matches: test-asserts
+              - precedes: *lfree
+      - all:
+          - has:
+              field: body
+              has:
+                matches: last-statement
+                has:
+                  stopBy: end
+                  matches: statement-call
+                  pattern: $RLMETHOD.$LMETHOD($$$ALMETHOD)
+          - inside:
+              kind: source_file
+              stopBy: end
+              has:
+                stopBy: end
+                kind: function_item
+                all:
+                  - has:
+                      field: name
+                      pattern: $LMETHOD
+                  - matches: method
+                  - matches: asserts
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

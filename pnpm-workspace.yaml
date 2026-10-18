@@ -2,3 +2,14 @@ packages:
   - "packages/*"
   - "apps/*"
   # services/ are Rust/Go/Python — no package.json, intentionally not pnpm members
+
+# Supply chain (docs/research/tool-gaps/2026-10-14/findings.md):
+# a version published in the last day is not installed yet,
+minimumReleaseAge: 1440
+# and a package whose releases lost the provenance or trusted publishing
+# their earlier ones had fails the install.
+trustPolicy: no-downgrade
+# Only releases from the last 30 days are judged: older ones were published
+# before their package adopted provenance (undici-types@6.21.0 in 2024, a
+# tsup dependency) and would block every `pnpm add`. pnpm 10.27.0+.
+trustPolicyIgnoreAfter: 43200

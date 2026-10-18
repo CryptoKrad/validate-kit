@@ -1,0 +1,65 @@
+id: ts-float-money
+language: typescript
+severity: warning
+message: "Money held in a float: `number` rounds (0.1 + 0.2 !== 0.3). Keep integer minor units (priceCents) or use a decimal type."
+note: |
+  Money in a binary float drifts: 0.1 + 0.2 is 0.30000000000000004. A
+  declaration named like money (price, amount, cost, balance, fee, ...)
+  typed number is reported; priceCents, taxRate or quantity are not.
+  Strict preset only: a cost in a graph algorithm is a number too.
+rule:
+  any:
+    - kind: variable_declarator
+    - kind: property_signature
+    - kind: required_parameter
+    - kind: optional_parameter
+    - kind: public_field_definition
+  has:
+    field: type
+    # `: number`, `: number[]`, `: number | null`, `: readonly number[]`
+    regex: "^:\\s*(readonly\\s+)?number(\\[\\])?(\\s*\\|\\s*(null|undefined))*$"
+  all:
+    - any:
+        - has:
+            field: name
+            regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+        - has:
+            field: pattern
+            regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"
+---
+id: tsx-float-money
+language: tsx
+severity: warning
+message: "Money held in a float: `number` rounds (0.1 + 0.2 !== 0.3). Keep integer minor units (priceCents) or use a decimal type."
+note: |
+  Money in a binary float drifts: 0.1 + 0.2 is 0.30000000000000004. A
+  declaration named like money (price, amount, cost, balance, fee, ...)
+  typed number is reported; priceCents, taxRate or quantity are not.
+  Strict preset only: a cost in a graph algorithm is a number too.
+rule:
+  any:
+    - kind: variable_declarator
+    - kind: property_signature
+    - kind: required_parameter
+    - kind: optional_parameter
+    - kind: public_field_definition
+  has:
+    field: type
+    # `: number`, `: number[]`, `: number | null`, `: readonly number[]`
+    regex: "^:\\s*(readonly\\s+)?number(\\[\\])?(\\s*\\|\\s*(null|undefined))*$"
+  all:
+    - any:
+        - has:
+            field: name
+            regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+        - has:
+            field: pattern
+            regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"

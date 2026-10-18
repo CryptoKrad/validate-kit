@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import picomatch from "picomatch";
 import { parse as parseToml } from "smol-toml";
-import { run } from "../core/exec.js";
+import { hookIndex, run } from "../core/exec.js";
 import type {
   BuiltCommand,
   PlanEnv,
@@ -272,8 +272,13 @@ export const gitleaks: ToolAdapter = {
       bin: this.bin,
       args,
       okExitCodes: [0, 3],
-      // A config named by the environment would replace the project's.
-      env: { GITLEAKS_CONFIG: "", GITLEAKS_CONFIG_TOML: "" },
+      // A config named by the environment would replace the project's; a
+      // staged scan reads the index the hook's commit is made from.
+      env: {
+        GITLEAKS_CONFIG: "",
+        GITLEAKS_CONFIG_TOML: "",
+        ...(task.staged ? hookIndex() : {}),
+      },
     };
   },
 

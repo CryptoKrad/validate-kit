@@ -1,0 +1,32 @@
+id: go-test-no-assertion
+language: go
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result with t.Errorf/t.Fatalf or assert/require."
+note: |
+  A TestXxx function that calls none of t.Error/Errorf/Fatal/Fatalf/Fail/
+  FailNow/Run/Skip, no assert.*/require.* (testify), and passes t to no helper
+  only proves the code did not panic.
+files:
+  - "**/*_test.go"
+rule:
+  kind: function_declaration
+  has:
+    field: name
+    regex: "^Test([A-Z_0-9]|$)"
+  not:
+    has:
+      stopBy: end
+      kind: call_expression
+      any:
+        - has:
+            field: function
+            regex: "(\\.(Error|Errorf|Fatal|Fatalf|Fail|FailNow|Run|Skip|Skipf|SkipNow)$)|(^(assert|require|is|qt)\\.)"
+        - has:
+            field: arguments
+            has:
+              kind: identifier
+              regex: "^t$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

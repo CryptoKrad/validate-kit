@@ -38,8 +38,8 @@ pnpm exec validate-kit check
 Never install it by name from npm: the unscoped name there belongs to an unrelated package.
 
 `init` wires two git hooks: `check --staged` before a commit and `check --profile ci` before a
-push, both with `--quiet`. A passing hook prints an empty line; a failing one prints one line per
-finding and the exit code.
+push, both with `--quiet`. A passing hook prints nothing; a failing one prints one line per finding
+and the exit code.
 
 ## Work on this repository
 

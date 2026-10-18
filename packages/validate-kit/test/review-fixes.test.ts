@@ -39,6 +39,7 @@ function config(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
       security: { enabled: true },
       formal: { enabled: true },
       behavior: { enabled: true },
+      mutation: { enabled: true },
     },
     include: [],
     ignore: [],

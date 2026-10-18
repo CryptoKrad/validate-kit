@@ -159,6 +159,21 @@ export function renderPretty(
   return out.join("\n");
 }
 
+/** One line per tool that crashed or could not run, with why. */
+export function toolProblems(summary: RunSummary): string[] {
+  return [
+    ...summary.crashed.map(
+      (cr) =>
+        `${cr.id}: crashed: ${cr.stderr.split("\n").find(Boolean) ?? "no output"}`,
+    ),
+    ...summary.incomplete.map((inc) =>
+      inc.problem
+        ? `${inc.id}: cannot run: ${inc.problem}`
+        : `${inc.id}: not found; install: ${inc.hint}`,
+    ),
+  ];
+}
+
 /** Above this many, the rest are counted: `--ai-json -` lists them all. */
 const QUIET_FINDINGS = 50;
 
@@ -190,26 +205,19 @@ export function renderQuiet(summary: RunSummary, projectRoot: string): string {
     lines.push(
       `... ${gating.length - QUIET_FINDINGS} more: run with --ai-json - for all`,
     );
-  for (const cr of summary.crashed)
-    lines.push(
-      `${cr.id}: crashed: ${cr.stderr.split("\n").find(Boolean) ?? "no output"}`,
-    );
-  for (const inc of summary.incomplete)
-    lines.push(
-      inc.problem
-        ? `${inc.id}: cannot run: ${inc.problem}`
-        : `${inc.id}: not found; install: ${inc.hint}`,
-    );
+  lines.push(...toolProblems(summary));
   for (const [id, n] of Object.entries(summary.fixesByTool))
     if (n > 0)
       lines.push(`${id}: fixed ${n} finding(s), files changed on disk`);
   const errors = gating.filter((f) => f.severity === "error").length;
+  // How to finish, on the same line: the fixes a rerun applies itself.
+  const fixable = summary.fixMode ? 0 : gating.filter((f) => f.fixable).length;
   const meaning =
     summary.exitCode === EXIT.INTERNAL
       ? `${summary.crashed.length} tool(s) crashed or timed out, so the run cannot vouch for the code`
       : summary.exitCode === EXIT.INCOMPLETE
         ? `${summary.incomplete.length} planned tool(s) missing, so coverage is incomplete`
-        : `${errors} error(s), ${gating.length - errors} warning(s)`;
+        : `${errors} error(s), ${gating.length - errors} warning(s)${fixable > 0 ? `; ${fixable} fixable: rerun with --fix` : ""}`;
   lines.push(`validate-kit: exit ${summary.exitCode}: ${meaning}`);
   return `${lines.join("\n")}\n`;
 }

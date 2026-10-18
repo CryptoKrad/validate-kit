@@ -25,7 +25,7 @@ rsync -a \
 echo "==> Regenerating + verifying baseline in $IMAGE"
 docker run --rm -v "$TMP":/work -w /work -e CI= "$IMAGE" bash -lc '
   set -e
-  corepack enable && corepack prepare pnpm@10.23.0 --activate
+  corepack enable && corepack prepare pnpm@10.34.7 --activate
   pnpm install --frozen-lockfile
   pnpm --filter web exec playwright install chromium
   pnpm --filter web run build

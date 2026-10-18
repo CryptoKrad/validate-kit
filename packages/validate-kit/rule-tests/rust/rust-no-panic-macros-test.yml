@@ -4,6 +4,7 @@ valid:
   - "fn f() { println!(\"ok\"); }"
   - "#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() { panic!(\"expected in test\"); }\n}"
   - "#[test]\nfn t() { unreachable!() }"
+  - "#[test]\n#[ignore]\nfn t() { panic!(\"x\"); }"
 invalid:
   - "fn f() { todo!() }"
   - "fn f() { panic!(\"boom\") }"

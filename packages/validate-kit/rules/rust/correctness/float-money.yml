@@ -1,0 +1,29 @@
+id: rust-float-money
+language: rust
+severity: warning
+message: "Money held in a float: f64 rounds (0.1 + 0.2 != 0.3). Keep integer minor units (price_cents: i64) or use a decimal type."
+note: |
+  Money in a binary float drifts: 0.1 + 0.2 != 0.3. A field, parameter or
+  let named like money typed f32/f64 is reported; price_cents: i64 or
+  rust_decimal are not. Strict preset only.
+rule:
+  any:
+    - kind: field_declaration
+      has:
+        field: name
+        regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+    - kind: parameter
+      has:
+        field: pattern
+        regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+    - kind: let_declaration
+      has:
+        field: pattern
+        regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+  has:
+    field: type
+    regex: "^(Option<|Vec<)?f(32|64)>?$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"

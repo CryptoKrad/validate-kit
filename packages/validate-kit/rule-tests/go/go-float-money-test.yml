@@ -1,0 +1,12 @@
+id: go-float-money
+valid:
+  - "type Order struct { PriceCents int64; Qty float64 }"
+  - "func Charge(price decimal.Decimal) {}"
+  - "var ratio float64"
+  - "var syntax float64"
+invalid:
+  - "type Order struct { Amount float64 }"
+  - "type Order struct { Fee, Tax float32 }"
+  - "func Charge(amount float64) {}"
+  - "var balance float64"
+  - "var price *float64"

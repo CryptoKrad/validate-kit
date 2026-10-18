@@ -1,0 +1,207 @@
+id: py-test-no-assertion
+language: python
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Add an assert on the result."
+note: |
+  A test_ function with no assert or raise statement, no
+  pytest.raises/warns/deprecated_call/fail/skip/xfail, no unittest or mock
+  assert* call and no benchmark(...) only proves the code did not raise. A
+  fixture, a test marked xfail(raises=...), a helper inside a test and a
+  method of a class with an __init__ (pytest does not collect it) are not
+  tests of their own. A call to a function or method of the same file that
+  asserts counts as asserting.
+files:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+utils:
+  # A body that asserts, the test's own or a helper's (in a test file a
+  # helper is test code).
+  asserts:
+    has:
+      stopBy: end
+      any:
+        - kind: assert_statement
+        # raise AssertionError(...)
+        - kind: raise_statement
+        - kind: call
+          has:
+            field: function
+            regex: "(^|\\.)(assert\\w*|raises|warns|deprecated_call|fail|skip|skipTest|xfail|benchmark)$"
+  # A call made as a statement (`helper(x)`, `await helper(x)`), not a value.
+  statement-call:
+    kind: call
+    any:
+      - inside:
+          kind: expression_statement
+      - inside:
+          kind: await
+          inside:
+            kind: expression_statement
+  method:
+    inside:
+      kind: class_definition
+      stopBy: end
+  # A class with an __init__ of its own (decorated too): pytest does not
+  # collect it, unless it is a unittest.TestCase.
+  has-init:
+    not:
+      has:
+        field: superclasses
+        regex: TestCase
+    has:
+      field: body
+      has:
+        any:
+          - kind: function_definition
+            has: &init
+              field: name
+              regex: "^__init__$"
+          - kind: decorated_definition
+            has:
+              field: definition
+              has: *init
+  # The body's last statement, comments aside.
+  last-statement:
+    kind: expression_statement
+    nthChild:
+      position: 1
+      reverse: true
+      ofRule:
+        not:
+          kind: comment
+rule:
+  kind: function_definition
+  has:
+    field: name
+    regex: "^test"
+  not:
+    any:
+      - matches: asserts
+      # A fixture named test_*, or a test that passes only when it raises.
+      - inside:
+          kind: decorated_definition
+          has:
+            kind: decorator
+            regex: "fixture|xfail\\(.*raises"
+      # A helper defined inside a test.
+      - inside:
+          kind: function_definition
+          stopBy: end
+      # A method of a class pytest does not collect: one with an __init__,
+      # its own or a base class's of this file (the module's own tests may
+      # call it and assert what it returns).
+      - inside:
+          kind: class_definition
+          stopBy: end
+          any:
+            - matches: has-init
+            - all:
+                - has:
+                    field: superclasses
+                    has:
+                      kind: identifier
+                      pattern: $BASE
+                - inside:
+                    kind: module
+                    stopBy: end
+                    has:
+                      stopBy: end
+                      kind: class_definition
+                      all:
+                        - has:
+                            field: name
+                            pattern: $BASE
+                        - matches: has-init
+      # A function of this file that asserts, called as a statement: the
+      # first such call, or the body's last statement. A plain call names a
+      # free function, a method call a method. (ast-grep binds a name to its
+      # first match and does not try the others.)
+      - all:
+          - has:
+              stopBy: end
+              matches: statement-call
+              has:
+                field: function
+                kind: identifier
+                pattern: $FREE
+          - inside:
+              kind: module
+              stopBy: end
+              has:
+                stopBy: end
+                kind: function_definition
+                all:
+                  - has:
+                      field: name
+                      pattern: $FREE
+                  - not:
+                      matches: method
+                  - matches: asserts
+      - all:
+          - has:
+              stopBy: end
+              matches: statement-call
+              pattern: $OBJ.$METHOD($$$ARGS)
+          - inside:
+              kind: module
+              stopBy: end
+              has:
+                stopBy: end
+                kind: function_definition
+                all:
+                  - has:
+                      field: name
+                      pattern: $METHOD
+                  - matches: method
+                  - matches: asserts
+      - all:
+          - has:
+              field: body
+              has:
+                matches: last-statement
+                has:
+                  stopBy: end
+                  matches: statement-call
+                  has:
+                    field: function
+                    kind: identifier
+                    pattern: $LFREE
+          - inside:
+              kind: module
+              stopBy: end
+              has:
+                stopBy: end
+                kind: function_definition
+                all:
+                  - has:
+                      field: name
+                      pattern: $LFREE
+                  - not:
+                      matches: method
+                  - matches: asserts
+      - all:
+          - has:
+              field: body
+              has:
+                matches: last-statement
+                has:
+                  stopBy: end
+                  matches: statement-call
+                  pattern: $LOBJ.$LMETHOD($$$LARGS)
+          - inside:
+              kind: module
+              stopBy: end
+              has:
+                stopBy: end
+                kind: function_definition
+                all:
+                  - has:
+                      field: name
+                      pattern: $LMETHOD
+                  - matches: method
+                  - matches: asserts
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

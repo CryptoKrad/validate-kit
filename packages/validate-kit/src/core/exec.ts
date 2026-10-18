@@ -1,5 +1,6 @@
 import { accessSync, constants, existsSync, statSync } from "node:fs";
 import {
+  basename,
   delimiter,
   dirname,
   extname,
@@ -29,6 +30,12 @@ export interface RunOptions {
    * names.
    */
   pathOnly?: boolean;
+  /**
+   * The tool runs in the project's Python environment (it imports the
+   * project's code): a `.venv` on the way up is searched before anything
+   * else.
+   */
+  pythonEnv?: boolean;
 }
 
 function killGroup(pid: number): void {
@@ -218,6 +225,7 @@ export function resolveBin(
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,
   pathOnly = false,
+  pythonEnv = false,
 ): string {
   const pathLike =
     bin.includes("/") || (WINDOWS && bin.includes("\\")) || isAbsolute(bin);
@@ -235,7 +243,10 @@ export function resolveBin(
   // 1) walk up from the run dir — finds project-local tools (the app's own tsc, …)
   let dir = cwd;
   for (let i = 0; i < 16; i++) {
-    const found = existing(join(dir, "node_modules", ".bin", bin), env);
+    const found =
+      (pythonEnv
+        ? existing(join(dir, ".venv", WINDOWS ? "Scripts" : "bin", bin), env)
+        : undefined) ?? existing(join(dir, "node_modules", ".bin", bin), env);
     if (found) return found;
     const parent = dirname(dir);
     if (parent === dir) break;
@@ -277,6 +288,55 @@ export function resolveBin(
 }
 
 /**
+ * The variables that tie a process to one repository: what `git rev-parse
+ * --local-env-vars` lists, less the config ones git itself passes on to
+ * another repository (sanitize_repo_env in git's run-command.c). A git hook
+ * exports some of them (GIT_DIR in a worktree, GIT_INDEX_FILE in every
+ * pre-commit), and a tool run from the hook inherits them: a `git init` it
+ * runs elsewhere (lake does) set core.bare=true in the config all the
+ * worktrees share, and a `git clone` or `git add` elsewhere writes into the
+ * index being committed. Only git itself, run by the kit on the hook's
+ * repository, keeps them; a tool that reads that repository's staged files
+ * is handed the index (`hookIndex`).
+ */
+const REPOSITORY_ENV = new Set([
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_CONFIG",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_IMPLICIT_WORK_TREE",
+  "GIT_GRAFT_FILE",
+  "GIT_INDEX_FILE",
+  "GIT_NO_REPLACE_OBJECTS",
+  "GIT_REPLACE_REF_BASE",
+  "GIT_PREFIX",
+  "GIT_SHALLOW_FILE",
+  "GIT_COMMON_DIR",
+]);
+
+function tied(name: string): boolean {
+  return REPOSITORY_ENV.has(name.toUpperCase());
+}
+
+function withoutRepository(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  if (!Object.keys(env).some(tied)) return env;
+  return Object.fromEntries(
+    Object.entries(env).filter(([name]) => !tied(name)),
+  );
+}
+
+/**
+ * The index a git hook's commit is made from (a pathspec commit's is a
+ * temporary one), for a tool's `env` when it reads the project's staged
+ * files: run() hands it to no tool by itself.
+ */
+export function hookIndex(): Record<string, string> {
+  const index = process.env.GIT_INDEX_FILE;
+  return index ? { GIT_INDEX_FILE: index } : {};
+}
+
+/**
  * Spawn a tool and capture stdout/stderr/exit code without throwing on a
  * non-zero exit (linters legitimately exit non-zero). A genuine spawn failure
  * (binary not found, ENOENT) is reported via `spawnError: true`.
@@ -294,19 +354,30 @@ export async function run(
     // them against: findings at paths that do not exist. Windows has no PWD
     // (Go ignores it there), and its process.env matches names in any case,
     // which a copy does not: it is passed on as it is.
+    const own = /^git(\.exe)?$/i.test(basename(bin))
+      ? process.env
+      : withoutRepository(process.env);
     const env = WINDOWS
       ? opts.env
-        ? { ...process.env, ...opts.env }
-        : process.env
-      : { ...process.env, ...opts.env, PWD: resolve(opts.cwd) };
-    const resolved = resolveBin(bin, opts.cwd, env, opts.pathOnly);
+        ? { ...own, ...opts.env }
+        : own
+      : { ...own, ...opts.env, PWD: resolve(opts.cwd) };
+    const resolved = resolveBin(
+      bin,
+      opts.cwd,
+      env,
+      opts.pathOnly,
+      opts.pythonEnv,
+    );
     const timeoutMs = opts.timeoutMs ?? 180_000;
     // Negative-pid group kills are POSIX; elsewhere fall back to execa's own
     // timeout on the direct child.
     const group = opts.ownProcessGroup === true && process.platform !== "win32";
     const subprocess = execa(resolved, args, {
       cwd: opts.cwd,
+      // The whole environment, so execa adds back nothing it leaves out.
       env,
+      extendEnv: false,
       ...(opts.input !== undefined ? { input: opts.input } : {}),
       ...(group ? { detached: true } : { timeout: timeoutMs }),
       reject: false,

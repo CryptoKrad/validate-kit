@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import pc from "picocolors";
 import { runCheck } from "../api.js";
 import { ConfigError } from "../config/schema.js";
+import { EXIT } from "../core/exit-codes.js";
 import { resolveProjectRoot } from "../core/project-root.js";
 import {
   parseConcurrency,
@@ -138,9 +139,14 @@ export async function checkCommand(
         : renderPretty(result.summary, result.projectRoot),
     );
     // The ci run a pre-push hook makes reads the working tree, not the
-    // commit: say when they differ, so a pass is not taken for the commit's
-    // (under --quiet too, plain: the one line a pass then prints).
-    if (profile === "ci" && !mode && !flags.since) {
+    // commit: say when they differ. Under --quiet only beside a failure,
+    // plain: a quiet run that passes prints nothing.
+    if (
+      profile === "ci" &&
+      !mode &&
+      !flags.since &&
+      !(flags.quiet && result.summary.exitCode === EXIT.CLEAN)
+    ) {
       const { dirty } = await gitState(result.projectRoot);
       const notice =
         "The working tree has uncommitted changes: this run judged them too, and a push carries only what is committed.\n";

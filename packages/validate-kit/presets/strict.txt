@@ -33,3 +33,15 @@ rust-no-unwrap
 rust-no-dbg-macro
 rust-flag-unsafe-block
 rust-flag-transmute
+# Tests that assert nothing (category test-quality).
+ts-test-no-assertion
+tsx-test-no-assertion
+js-test-no-assertion
+go-test-no-assertion
+py-test-no-assertion
+rust-test-no-assertion
+ts-float-money
+tsx-float-money
+go-float-money
+py-float-money
+rust-float-money

@@ -95,12 +95,11 @@ describe("report formats on a real findings run", () => {
 
   it("renderPretty shows each finding's message + tool/rule", () => {
     const out = renderPretty(summary, samples);
-    const first = summary.findings[0];
-    expect(first).toBeDefined();
-    if (first) {
-      expect(out).toContain(first.message);
-      if (first.ruleId) expect(out).toContain(`${first.tool}/${first.ruleId}`);
-    }
+    const first = summary.findings.find((f) => f.ruleId);
+    if (!first?.ruleId)
+      throw new Error("the samples gave no finding with a rule");
+    expect(out).toContain(first.message);
+    expect(out).toContain(`${first.tool}/${first.ruleId}`);
   });
 });
 

@@ -13,6 +13,23 @@
   ],
   "overrides": [
     {
+      "files": [
+        "**/*.test.{ts,tsx,mts,js,mjs}",
+        "**/*.spec.{ts,tsx,mts,js,mjs}",
+        "packages/validate-kit/test/**/*.ts"
+      ],
+      "plugins": ["vitest"],
+      "rules": {
+        "vitest/no-focused-tests": "error",
+        "vitest/no-disabled-tests": "warn",
+        "vitest/no-identical-title": "error",
+        "vitest/valid-expect": ["error", { "maxArgs": 2 }],
+        "vitest/expect-expect": "off",
+        "vitest/no-conditional-expect": "error",
+        "vitest/no-standalone-expect": "error"
+      }
+    },
+    {
       "files": ["apps/web/**/*.{ts,tsx,js,jsx,mjs,cjs}"],
       "plugins": ["react", "nextjs", "jsx-a11y", "import"],
       "rules": {

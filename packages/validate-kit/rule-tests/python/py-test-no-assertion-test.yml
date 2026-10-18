@@ -1,0 +1,131 @@
+id: py-test-no-assertion
+valid:
+  - |
+    def test_is_adult():
+        assert is_adult(18)
+  - |
+    def test_raises():
+        with pytest.raises(ValueError):
+            parse("x")
+  - |
+    def test_unittest_style(self):
+        self.assertEqual(add(1, 2), 3)
+  - |
+    def test_mock(self):
+        m.assert_called_once_with(1)
+  - |
+    def helper():
+        discount(150)
+  - |
+    def test_deprecated():
+        with pytest.deprecated_call():
+            old_api()
+  - |
+    @pytest.mark.xfail(raises=ValueError, strict=True)
+    def test_rejects():
+        parse("x")
+  - |
+    @pytest.fixture
+    def test_data():
+        return load()
+  - |
+    def test_raises_itself():
+        if add(1, 2) != 3:
+            raise AssertionError("wrong")
+  - |
+    def test_outer():
+        def test_inner():
+            run()
+        assert check(test_inner)
+  - |
+    def test_speed(benchmark):
+        benchmark(sort, data)
+  - |
+    class TestThing:
+        def check_parity(self, coin):
+            assert coin
+    
+        def test_method(self):
+            self.check_parity("BTC")
+  - |
+    def checker(x):
+        assert x > 0
+    
+    def test_helper_last():
+        x = setup()
+        checker(x)
+  - |
+    async def checker(x):
+        assert x > 0
+
+    async def test_await_last():
+        await prepare()
+        await checker(1)
+  - |
+    class Suite:
+        def __init__(self, config):
+            self.config = config
+
+    class TestInherited(Suite):
+        def test_properties(self):
+            results = run(self.config)
+            return results["passed"]
+  - |
+    class TestOwnInit:
+        def __init__(self):
+            self.n = 1
+
+        def test_counts(self):
+            return self.n == 1
+  - |
+    class TestDecoratedInit:
+        @traced
+        def __init__(self):
+            self.n = 1
+
+        def test_counts(self):
+            return self.n == 1
+invalid:
+  - |
+    def test_discount():
+        discount(150)
+  - |
+    @pytest.mark.slow
+    def test_slow_discount():
+        discount(150)
+  - |
+    def test_returns_bool():
+        ok = setup() == 1
+        return ok
+  - |
+    def run(x):
+        assert x
+
+    def test_server_runs():
+        server = make_server()
+        server.run()
+  - |
+    def test_schedules():
+        asyncio.ensure_future(job())
+  - |
+    def test_password():
+        user.check_password("pw")
+  - |
+    class TestPlain:
+        def test_runs(self):
+            run(1)
+  - |
+    class TestWithInit(unittest.TestCase):
+        def __init__(self, *args):
+            super().__init__(*args)
+
+        def test_runs(self):
+            run(1)
+  - |
+    class BaseCase(unittest.TestCase):
+        def __init__(self, *args):
+            super().__init__(*args)
+
+    class TestInheritsCase(BaseCase):
+        def test_runs(self):
+            run(1)

@@ -638,7 +638,7 @@ function validateSecurityWorkflow(lines, file) {
     'python -m pip install "semgrep==${SEMGREP_VERSION}"',
     "semgrep --config packages/validate-kit/semgrep/custom.yml --error --disable-version-check .",
     "pnpm/action-setup@",
-    "version: 10.23.0",
+    "version: 10.34.7",
     "actions/setup-node@",
     "node-version: 22",
     "pnpm install --frozen-lockfile",

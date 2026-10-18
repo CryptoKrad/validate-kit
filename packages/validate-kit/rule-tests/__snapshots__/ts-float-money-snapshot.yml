@@ -1,0 +1,100 @@
+id: ts-float-money
+snapshots:
+  'class Wallet { private payout_usd: number = 0; }':
+    labels:
+    - source: 'private payout_usd: number = 0'
+      style: primary
+      start: 15
+      end: 45
+    - source: payout_usd
+      style: secondary
+      start: 23
+      end: 33
+    - source: ': number'
+      style: secondary
+      start: 33
+      end: 41
+  'const price: number = 9.99;':
+    labels:
+    - source: 'price: number = 9.99'
+      style: primary
+      start: 6
+      end: 26
+    - source: price
+      style: secondary
+      start: 6
+      end: 11
+    - source: ': number'
+      style: secondary
+      start: 11
+      end: 19
+  'function charge(amount: number): void {}':
+    labels:
+    - source: 'amount: number'
+      style: primary
+      start: 16
+      end: 30
+    - source: amount
+      style: secondary
+      start: 16
+      end: 22
+    - source: ': number'
+      style: secondary
+      start: 22
+      end: 30
+  'interface Order { totalAmount: number }':
+    labels:
+    - source: 'totalAmount: number'
+      style: primary
+      start: 18
+      end: 37
+    - source: totalAmount
+      style: secondary
+      start: 18
+      end: 29
+    - source: ': number'
+      style: secondary
+      start: 29
+      end: 37
+  'let estimatedCost: number;':
+    labels:
+    - source: 'estimatedCost: number'
+      style: primary
+      start: 4
+      end: 25
+    - source: estimatedCost
+      style: secondary
+      start: 4
+      end: 17
+    - source: ': number'
+      style: secondary
+      start: 17
+      end: 25
+  'let price: number | null;':
+    labels:
+    - source: 'price: number | null'
+      style: primary
+      start: 4
+      end: 24
+    - source: price
+      style: secondary
+      start: 4
+      end: 9
+    - source: ': number | null'
+      style: secondary
+      start: 9
+      end: 24
+  'let prices: number[];':
+    labels:
+    - source: 'prices: number[]'
+      style: primary
+      start: 4
+      end: 20
+    - source: prices
+      style: secondary
+      start: 4
+      end: 10
+    - source: ': number[]'
+      style: secondary
+      start: 10
+      end: 20

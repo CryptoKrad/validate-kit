@@ -13,6 +13,8 @@ export const LAYERS = [
   "formal",
   // Checks a project defines for itself: its tests, builds and invariants.
   "behavior",
+  // The tests themselves, checked by planting bugs: a mutant no test fails.
+  "mutation",
 ] as const;
 export type Layer = (typeof LAYERS)[number];
 
@@ -356,6 +358,11 @@ export interface ToolAdapter {
    * It is hashed into the run's config digest.
    */
   readonly policy?: unknown;
+  /**
+   * Runs in the project's Python environment (it imports the project's code
+   * and tests): found in a `.venv` from where it runs before anywhere else.
+   */
+  readonly pythonEnv?: boolean;
   /** Args to print the version. Default ["--version"]. */
   readonly versionArgs?: readonly string[];
   /**

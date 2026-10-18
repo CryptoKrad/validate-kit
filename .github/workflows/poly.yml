@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
-          version: 10.23.0
+          version: 10.34.7
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
@@ -46,6 +46,7 @@ jobs:
         with:
           version: "0.9.30"
       - name: Install ruff + ast-grep
+        # zizmor: ignore[adhoc-packages] an exact version, as the lockfile would pin it
         run: |
           uv tool install ruff==0.15.6
           uv tool update-shell || true # soft-pass-ok: shell-profile convenience only; PATH is set explicitly on the next line

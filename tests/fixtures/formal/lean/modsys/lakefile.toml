@@ -1,0 +1,12 @@
+name = "modsys"
+version = "0.1.0"
+defaultTargets = ["Core", "Modsys"]
+
+# Lake warns about Modsys.lean (no `module` header) between its job line and
+# its trace: the file is still built, so it is no lean/not-built.
+[[lean_lib]]
+name = "Core"
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "Modsys"

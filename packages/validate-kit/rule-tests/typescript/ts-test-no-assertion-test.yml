@@ -1,0 +1,98 @@
+id: ts-test-no-assertion
+valid:
+  - |
+    it("adds", () => {
+      expect(add(1, 2)).toBe(3);
+    });
+  - |
+    test("rejects", async () => {
+      await expect(load()).rejects.toThrow("x");
+    });
+  - |
+    it("uses node:test assert", () => {
+      assert.strictEqual(add(1, 2), 3);
+    });
+  - |
+    it("delegates to a helper named for what it checks", () => {
+      expectSorted(sort([2, 1]));
+    });
+  - |
+    it.todo("later");
+  - |
+    test.fails("rejects a negative amount", () => {
+      charge(-1);
+    });
+  - |
+    function roundTrips(x: number): void {
+      expect(x).toBe(x);
+    }
+    it("via helper", () => {
+      roundTrips(1);
+    });
+  - |
+    const parity = async (coin: string): Promise<void> => {
+      expect(coin).toBeTruthy();
+    };
+    it("setup then helper", async () => {
+      const x = setup();
+      await parity(String(x));
+    });
+  - |
+    function roundTrips(x: number): void {
+      expect(x).toBe(x);
+    }
+    it("concise", () => roundTrips(1));
+  - |
+    class LoginPage {
+      login = async (): Promise<void> => {
+        await expect(page).toHaveURL("/home");
+      };
+    }
+    it("logs in", async () => {
+      await prepare();
+      await new LoginPage().login();
+    });
+  - |
+    const helpers = {
+      roundTrips: (x: number): void => {
+        expect(x).toBe(x);
+      },
+    };
+    it("object property", () => {
+      prepare();
+      helpers.roundTrips(1);
+    });
+invalid:
+  - |
+    it("discounts", () => {
+      discount(150);
+    });
+  - |
+    test.concurrent("calls it", async function () {
+      await fetchUser(1);
+    });
+  - |
+    const setup = (): number => 1;
+    it("helper that checks nothing", () => {
+      setup();
+    });
+  - |
+    const fetchUser = (): never => {
+      throw new Error("offline");
+    };
+    it("mock that throws", async () => {
+      await fetchUser();
+    });
+  - |
+    const token = verifyToken("abc");
+    it("uses a value, not a helper", () => {
+      token();
+    });
+  - |
+    function login(u: string): void {
+      expect(u).toBeTruthy();
+    }
+    it("method, not the function", async () => {
+      const api = makeApi();
+      await api.login();
+    });

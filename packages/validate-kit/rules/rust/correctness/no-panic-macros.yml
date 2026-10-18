@@ -10,8 +10,8 @@ rule:
     field: macro
     regex: "^(panic|todo|unimplemented|unreachable)$"
   # Test code is exempt: panicking in a `#[cfg(test)]` mod or `#[test]` fn is
-  # idiomatic. `follows` is immediate-sibling only — conservative on purpose
-  # (see rust-no-unwrap).
+  # idiomatic. `follows` walks back only through this item's own stacked
+  # attributes and comments (see rust-no-unwrap).
   not:
     any:
       - inside:
@@ -20,12 +20,24 @@ rule:
           follows:
             kind: attribute_item
             regex: "cfg\\(test\\)"
+            stopBy:
+              not:
+                any:
+                  - kind: attribute_item
+                  - kind: line_comment
+                  - kind: block_comment
       - inside:
           kind: function_item
           stopBy: end
           follows:
             kind: attribute_item
-            regex: "\\btest\\b"
+            regex: "\\b(test|rstest|test_case)\\b"
+            stopBy:
+              not:
+                any:
+                  - kind: attribute_item
+                  - kind: line_comment
+                  - kind: block_comment
 ignores:
   - "**/tests/**"
   - "**/benches/**"

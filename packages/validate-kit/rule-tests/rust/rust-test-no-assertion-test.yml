@@ -1,0 +1,178 @@
+id: rust-test-no-assertion
+valid:
+  - |
+    #[test]
+    fn adds() {
+        assert_eq!(add(1, 2), 3);
+    }
+  - |
+    #[test]
+    #[should_panic]
+    fn panics() {
+        divide(1, 0);
+    }
+  - |
+    #[test]
+    fn parses() -> Result<(), Error> {
+        parse("1")?;
+        Ok(())
+    }
+  - |
+    #[test]
+    fn unwraps() {
+        parse("1").unwrap();
+    }
+  - |
+    #[test]
+    fn renders() {
+        insta::assert_snapshot!(render());
+    }
+  - |
+    #[test]
+    fn rounds() {
+        approx::assert_relative_eq!(round(1.0), 1.0);
+    }
+  - |
+    #[test]
+    fn loads() -> anyhow::Result<()> {
+        load("a.toml").context("load")
+    }
+  - |
+    fn not_a_test() {
+        discount(150.0);
+    }
+  - |
+    async fn repeated(n: u32) {
+        assert!(n > 0);
+    }
+    #[tokio::test]
+    async fn via_helper() {
+        repeated(1).await;
+    }
+  - |
+    struct Copy;
+    impl Copy {
+        fn refuse(&self, why: &str) {
+            assert!(!why.is_empty());
+        }
+    }
+    #[test]
+    fn via_method() {
+        let copy = Copy;
+        copy.refuse("x");
+    }
+  - |
+    fn setup() -> u8 {
+        1
+    }
+    fn checker(x: u8) {
+        assert!(x > 0);
+    }
+    #[test]
+    fn setup_then_helper() {
+        setup();
+        checker(1);
+    }
+  - |
+    #[test]
+    fn named_helper() {
+        assert_recorded_native_parity("BTC", "1h");
+    }
+  - |
+    fn assert_send<T: Send>() {}
+    #[test]
+    fn is_send() {
+        assert_send::<u8>();
+    }
+  - |
+    fn require_refusal(r: Result<u8, String>) {
+        match r {
+            Err(_) => {}
+            other => panic!("must refuse: {other:?}"),
+        }
+    }
+    async fn refuses(n: u8) {
+        let system = build(n).unwrap();
+        require_refusal(system.serve().await);
+    }
+    #[tokio::test]
+    async fn dqn_refuses() {
+        refuses(1).await;
+    }
+  - |
+    fn setup() {}
+    fn checker(x: u8) {
+        assert!(x > 0);
+    }
+    #[test]
+    fn trailing_comment() {
+        setup();
+        checker(1);
+        // done
+    }
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn require_cheaper(p: f64) {
+            match p {
+                x if x < 150.0 => {}
+                other => panic!("not discounted: {other}"),
+            }
+        }
+        fn discounted(p: f64) {
+            let v = discount(p);
+            require_cheaper(v);
+        }
+        #[test]
+        fn through_two_helpers() {
+            discounted(150.0);
+        }
+    }
+invalid:
+  - |
+    #[test]
+    fn discounts() {
+        discount(150.0);
+    }
+  - |
+    #[tokio::test]
+    async fn fetches() {
+        fetch_user(1).await;
+    }
+  - |
+    #[test]
+    fn returns_nothing() -> () {
+        discount(150.0);
+    }
+  - "#[test]\n/// checks nothing\nfn documented() {\n    let _ = sum(1, 2);\n}"
+  - |
+    fn plain(n: u32) -> u32 {
+        n + 1
+    }
+    #[test]
+    fn via_plain() {
+        plain(1);
+    }
+  - |
+    pub fn discount(price: f64) -> f64 {
+        let rate: f64 = "0.9".parse().expect("rate");
+        debug_assert!(rate > 0.0);
+        price * rate
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn discounts() {
+            discount(150.0);
+        }
+    }
+  - |
+    fn run(input: &str) {
+        assert_eq!(parse(input), 1);
+    }
+    #[test]
+    fn starts() {
+        let server = Server::new();
+        server.run();
+    }

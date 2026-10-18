@@ -52,6 +52,26 @@ export function clampSeverity(value: string | undefined): Severity {
   return "warning";
 }
 
+/**
+ * The 1-based character column of a 0-based byte offset into line `line`
+ * (1-based) of `lines`: tools that count bytes (typos, zizmor) against the
+ * kit's characters. Without the text, the offset itself.
+ */
+export function charColumn(
+  lines: readonly string[] | undefined,
+  line: number,
+  byte: number,
+): number {
+  const text = lines?.[line - 1];
+  if (text === undefined) return byte + 1;
+  return Buffer.from(text).subarray(0, byte).toString().length + 1;
+}
+
+/** `value` as a regular expression that matches exactly it (JS and RE2). */
+export function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function absPosix(cwd: string, file: string): string {
   return toPosix(isAbsolute(file) ? file : resolve(cwd, file));
 }
@@ -191,6 +211,7 @@ export async function checkAvailability(
     cwd,
     timeoutMs: 15_000,
     pathOnly,
+    ...(adapter.pythonEnv ? { pythonEnv: true } : {}),
   });
   const out = `${raw.stdout}\n${raw.stderr}`.trim();
   const ok = (adapter.versionExitCodes ?? [0]).includes(raw.exitCode);
@@ -237,7 +258,13 @@ async function availabilityFrom(
 ): Promise<Map<string, AvailabilityResult>> {
   const byBin = groupBy(new Set(cwds), (cwd) => {
     try {
-      const bin = resolveBin(adapter.bin, cwd, process.env, pathOnly);
+      const bin = resolveBin(
+        adapter.bin,
+        cwd,
+        process.env,
+        pathOnly,
+        adapter.pythonEnv,
+      );
       return isAbsolute(bin) ? realpathSync(bin) : bin;
     } catch {
       return ""; // found nowhere: one probe says so for all of them
@@ -428,4 +455,20 @@ export function finding(f: {
     fixable: f.fixable,
     ...(f.url !== undefined ? { url: f.url } : {}),
   };
+}
+
+const scratches = new WeakMap<ToolContext, string>();
+
+/**
+ * The task's scratch folder, the same one for its command and for reading
+ * its report: a report a tool writes to a file goes there.
+ */
+export function scratchOf(ctx: ToolContext): string {
+  let dir = scratches.get(ctx);
+  if (dir === undefined) {
+    if (!ctx.tempDir) throw new Error("this tool needs a scratch folder");
+    dir = ctx.tempDir();
+    scratches.set(ctx, dir);
+  }
+  return dir;
 }

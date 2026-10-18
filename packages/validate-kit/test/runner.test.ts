@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   mkdirSync,
@@ -20,7 +21,7 @@ import { ruffFormat } from "../src/adapters/ruff-format.js";
 import { rustfmt } from "../src/adapters/rustfmt.js";
 import { semgrep } from "../src/adapters/semgrep.js";
 import { tsc } from "../src/adapters/tsc.js";
-import { run } from "../src/core/exec.js";
+import { hookIndex, run } from "../src/core/exec.js";
 import { toPosix } from "../src/detect/languages.js";
 import { renderPretty } from "../src/report/pretty.js";
 import { execute } from "../src/core/runner.js";
@@ -33,6 +34,10 @@ import type {
   ToolContext,
 } from "../src/core/types.js";
 import type { PlannedTask } from "../src/core/plan.js";
+
+function git(cwd: string, ...args: string[]): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+}
 
 function config(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
   return {
@@ -54,6 +59,7 @@ function config(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
       security: { enabled: true },
       formal: { enabled: true },
       behavior: { enabled: true },
+      mutation: { enabled: true },
     },
     include: [],
     ignore: [],
@@ -185,6 +191,112 @@ function fakeTool(binDir: string, name: string, script: string): void {
 }
 
 describe("runner", () => {
+  it("runs a tool without the git hook's repository variables, and git itself with them", async () => {
+    // A worktree's pre-push exports GIT_DIR, every pre-commit GIT_INDEX_FILE.
+    // A tool's `git init` in a sub-folder (lake does) then set core.bare=true
+    // in the config every checkout shares, and its `git add` wrote into the
+    // index being committed.
+    const root = toPosix(mkdtempSync(resolve(tmpdir(), "vk-gitdir-")));
+    const main = `${root}/main`;
+    mkdirSync(main);
+    git(main, "init", "-q");
+    writeFileSync(`${main}/a.txt`, "a\n");
+    git(main, "add", "a.txt");
+    git(
+      main,
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-q",
+      "-m",
+      "base",
+    );
+    git(main, "worktree", "add", "-q", `${root}/wt`);
+    const index = `${root}/next-index.lock`;
+    execFileSync("git", ["read-tree", "HEAD"], {
+      cwd: main,
+      env: { ...process.env, GIT_INDEX_FILE: index },
+    });
+    const saved = {
+      dir: process.env.GIT_DIR,
+      index: process.env.GIT_INDEX_FILE,
+    };
+    process.env.GIT_DIR = `${main}/.git/worktrees/wt`;
+    process.env.GIT_INDEX_FILE = index;
+    try {
+      const tool = await run(
+        process.execPath,
+        [
+          "-e",
+          'const fs = require("node:fs"); const { execFileSync } = require("node:child_process"); fs.mkdirSync("pkg"); fs.writeFileSync("pkg/p.txt", "p"); execFileSync("git", ["init", "-q"], { cwd: "pkg" }); execFileSync("git", ["add", "p.txt"], { cwd: "pkg" });',
+        ],
+        { cwd: `${root}/wt` },
+      );
+      expect(tool.exitCode).toBe(0);
+      // The kit's own git still reads the hook's repository, and a tool that
+      // reads its staged files is handed the index.
+      const own = await run("git", ["rev-parse", "--git-dir"], { cwd: root });
+      expect(own.stdout.trim()).toBe(`${main}/.git/worktrees/wt`);
+      const handed = await run(
+        process.execPath,
+        ["-e", "process.stdout.write(process.env.GIT_INDEX_FILE ?? '')"],
+        { cwd: root, env: hookIndex() },
+      );
+      expect(handed.stdout).toBe(index);
+    } finally {
+      if (saved.dir === undefined) delete process.env.GIT_DIR;
+      else process.env.GIT_DIR = saved.dir;
+      if (saved.index === undefined) delete process.env.GIT_INDEX_FILE;
+      else process.env.GIT_INDEX_FILE = saved.index;
+    }
+    expect(git(main, "config", "core.bare")).toBe("false");
+    expect(git(`${root}/wt/pkg`, "ls-files")).toBe("p.txt");
+    expect(
+      execFileSync("git", ["ls-files"], {
+        cwd: main,
+        encoding: "utf8",
+        env: { ...process.env, GIT_INDEX_FILE: index },
+      }).trim(),
+    ).toBe("a.txt");
+  });
+
+  it("runs a pythonEnv tool from the project's .venv, where its probe found it", async () => {
+    const cwd = toPosix(mkdtempSync(resolve(tmpdir(), "vk-venv-run-")));
+    const binDir = resolve(cwd, ".venv", "bin");
+    mkdirSync(binDir, { recursive: true });
+    // Only in .venv: not on PATH, not in any node_modules.
+    fakeTool(
+      binDir,
+      "vk-venv-only-tool",
+      '#!/usr/bin/env sh\nif [ "$1" = "--version" ]; then echo "vk-venv-only-tool 1.0.0"; exit 0; fi\necho ran-from-venv\n',
+    );
+    const venvTool: ToolAdapter = {
+      ...adapter({ id: "venv-tool" }),
+      bin: "vk-venv-only-tool",
+      pythonEnv: true,
+      buildArgs: () => ({ bin: "vk-venv-only-tool", args: [] }),
+      parseOutput: (raw) => ({
+        findings: raw.stdout.includes("ran-from-venv")
+          ? [finding({ tool: "venv-tool" })]
+          : [],
+        filesProcessed: 0,
+        fixesApplied: 0,
+        rawExitCode: raw.exitCode,
+        stderr: raw.stderr,
+      }),
+    };
+    const summary = await execute({
+      projectRoot: cwd,
+      config: config(),
+      tasks: [task(venvTool, cwd)],
+      fix: false,
+      scope: { profile: "test", mode: "full", files: null },
+    });
+    expect(summary.findings.map((f) => f.tool)).toEqual(["venv-tool"]);
+  });
+
   it("reports required missing tools and skips missing optional tools distinctly", async () => {
     const required = adapter({
       id: "missing-required",

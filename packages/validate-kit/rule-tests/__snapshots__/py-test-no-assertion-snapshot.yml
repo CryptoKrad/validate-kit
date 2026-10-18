@@ -1,0 +1,146 @@
+id: py-test-no-assertion
+snapshots:
+  ? |
+    @pytest.mark.slow
+    def test_slow_discount():
+        discount(150)
+  : labels:
+    - source: |-
+        def test_slow_discount():
+            discount(150)
+      style: primary
+      start: 18
+      end: 61
+    - source: test_slow_discount
+      style: secondary
+      start: 22
+      end: 40
+  ? |
+    class BaseCase(unittest.TestCase):
+        def __init__(self, *args):
+            super().__init__(*args)
+
+    class TestInheritsCase(BaseCase):
+        def test_runs(self):
+            run(1)
+  : labels:
+    - source: |-
+        def test_runs(self):
+                run(1)
+      style: primary
+      start: 137
+      end: 172
+    - source: test_runs
+      style: secondary
+      start: 141
+      end: 150
+  ? |
+    class TestPlain:
+        def test_runs(self):
+            run(1)
+  : labels:
+    - source: |-
+        def test_runs(self):
+                run(1)
+      style: primary
+      start: 21
+      end: 56
+    - source: test_runs
+      style: secondary
+      start: 25
+      end: 34
+  ? |
+    class TestWithInit(unittest.TestCase):
+        def __init__(self, *args):
+            super().__init__(*args)
+
+        def test_runs(self):
+            run(1)
+  : labels:
+    - source: |-
+        def test_runs(self):
+                run(1)
+      style: primary
+      start: 107
+      end: 142
+    - source: test_runs
+      style: secondary
+      start: 111
+      end: 120
+  ? |
+    def run(x):
+        assert x
+
+    def test_server_runs():
+        server = make_server()
+        server.run()
+  : labels:
+    - source: |-
+        def test_server_runs():
+            server = make_server()
+            server.run()
+      style: primary
+      start: 26
+      end: 93
+    - source: test_server_runs
+      style: secondary
+      start: 30
+      end: 46
+  ? |
+    def test_discount():
+        discount(150)
+  : labels:
+    - source: |-
+        def test_discount():
+            discount(150)
+      style: primary
+      start: 0
+      end: 38
+    - source: test_discount
+      style: secondary
+      start: 4
+      end: 17
+  ? |
+    def test_password():
+        user.check_password("pw")
+  : labels:
+    - source: |-
+        def test_password():
+            user.check_password("pw")
+      style: primary
+      start: 0
+      end: 50
+    - source: test_password
+      style: secondary
+      start: 4
+      end: 17
+  ? |
+    def test_returns_bool():
+        ok = setup() == 1
+        return ok
+  : labels:
+    - source: |-
+        def test_returns_bool():
+            ok = setup() == 1
+            return ok
+      style: primary
+      start: 0
+      end: 60
+    - source: test_returns_bool
+      style: secondary
+      start: 4
+      end: 21
+  ? |
+    def test_schedules():
+        asyncio.ensure_future(job())
+  : labels:
+    - source: |-
+        def test_schedules():
+            asyncio.ensure_future(job())
+      style: primary
+      start: 0
+      end: 54
+    - source: test_schedules
+      style: secondary
+      start: 4
+      end: 18

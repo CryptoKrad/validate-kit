@@ -1,0 +1,58 @@
+id: rust-float-money
+snapshots:
+  'fn charge(fee: f32) {}':
+    labels:
+    - source: 'fee: f32'
+      style: primary
+      start: 10
+      end: 18
+    - source: fee
+      style: secondary
+      start: 10
+      end: 13
+    - source: f32
+      style: secondary
+      start: 15
+      end: 18
+  'fn main() { let balance: f64 = 0.0; }':
+    labels:
+    - source: 'let balance: f64 = 0.0;'
+      style: primary
+      start: 12
+      end: 35
+    - source: balance
+      style: secondary
+      start: 16
+      end: 23
+    - source: f64
+      style: secondary
+      start: 25
+      end: 28
+  'struct Order { amount: f64 }':
+    labels:
+    - source: 'amount: f64'
+      style: primary
+      start: 15
+      end: 26
+    - source: amount
+      style: secondary
+      start: 15
+      end: 21
+    - source: f64
+      style: secondary
+      start: 23
+      end: 26
+  'struct Order { fee: Option<f64> }':
+    labels:
+    - source: 'fee: Option<f64>'
+      style: primary
+      start: 15
+      end: 31
+    - source: fee
+      style: secondary
+      start: 15
+      end: 18
+    - source: Option<f64>
+      style: secondary
+      start: 20
+      end: 31

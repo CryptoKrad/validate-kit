@@ -83,7 +83,17 @@ export const mypy: ToolAdapter = {
   parseOutput(raw: RawOutput, ctx: ToolContext): RunResult {
     const findings: Finding[] = [];
     if (raw.exitCode === 2) {
-      for (const line of `${raw.stdout}\n${raw.stderr}`.split(/\r?\n/)) {
+      const lines = `${raw.stdout}\n${raw.stderr}`.split(/\r?\n/);
+      // A blocking error with no line (a file found under two module names,
+      // a usage error) stopped mypy before it checked the code: the errors
+      // it found on the way are not the run's verdict. Untrimmed: a source
+      // line `pretty = true` echoes under an error is indented.
+      const stopped = lines.find(
+        (line) => /^\S.*?: error: /.test(line) && !BLOCKING.test(line.trim()),
+      );
+      if (stopped)
+        throw new Error(`mypy exited 2 before checking the code: ${stopped}`);
+      for (const line of lines) {
         const m = BLOCKING.exec(line.trim());
         if (!m?.[1] || !m[2] || !m[3]) continue;
         findings.push(

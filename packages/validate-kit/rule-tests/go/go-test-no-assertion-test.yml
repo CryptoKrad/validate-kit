@@ -1,0 +1,29 @@
+id: go-test-no-assertion
+valid:
+  - |
+    func TestAdd(t *testing.T) {
+    	if Add(1, 2) != 3 {
+    		t.Errorf("want 3")
+    	}
+    }
+  - |
+    func TestAddTestify(t *testing.T) {
+    	assert.Equal(t, 3, Add(1, 2))
+    }
+  - |
+    func TestTable(t *testing.T) {
+    	for _, c := range cases {
+    		t.Run(c.name, func(t *testing.T) { check(t, c) })
+    	}
+    }
+  - |
+    func TestHelper(t *testing.T) {
+    	mustAdd(t, 1, 2)
+    }
+  - |
+    func helper() { Discount(150) }
+invalid:
+  - |
+    func TestDiscount(t *testing.T) {
+    	Discount(150)
+    }

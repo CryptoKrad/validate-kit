@@ -1,7 +1,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { posix, relative, resolve, sep } from "node:path";
 import { sgconfigDirs } from "../config/sgconfig.js";
-import { resolveBin } from "../core/exec.js";
+import { hookIndex, resolveBin } from "../core/exec.js";
 import { getKitRoot } from "../core/paths.js";
 import { caseInsensitive } from "../detect/languages.js";
 import type {
@@ -284,6 +284,8 @@ export const policy: ToolAdapter = {
       ],
       // From the root: the runner's `diff.relative` cannot narrow the diff.
       cwd: task.top,
+      // Its git reads which files the commit tracks.
+      env: hookIndex(),
     };
   },
 

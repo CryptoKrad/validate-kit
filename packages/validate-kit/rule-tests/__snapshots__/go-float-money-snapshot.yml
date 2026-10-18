@@ -1,0 +1,72 @@
+id: go-float-money
+snapshots:
+  func Charge(amount float64) {}:
+    labels:
+    - source: amount float64
+      style: primary
+      start: 12
+      end: 26
+    - source: amount
+      style: secondary
+      start: 12
+      end: 18
+    - source: float64
+      style: secondary
+      start: 19
+      end: 26
+  type Order struct { Amount float64 }:
+    labels:
+    - source: Amount float64
+      style: primary
+      start: 20
+      end: 34
+    - source: Amount
+      style: secondary
+      start: 20
+      end: 26
+    - source: float64
+      style: secondary
+      start: 27
+      end: 34
+  type Order struct { Fee, Tax float32 }:
+    labels:
+    - source: Fee, Tax float32
+      style: primary
+      start: 20
+      end: 36
+    - source: Fee
+      style: secondary
+      start: 20
+      end: 23
+    - source: float32
+      style: secondary
+      start: 29
+      end: 36
+  var balance float64:
+    labels:
+    - source: balance float64
+      style: primary
+      start: 4
+      end: 19
+    - source: balance
+      style: secondary
+      start: 4
+      end: 11
+    - source: float64
+      style: secondary
+      start: 12
+      end: 19
+  var price *float64:
+    labels:
+    - source: price *float64
+      style: primary
+      start: 4
+      end: 18
+    - source: price
+      style: secondary
+      start: 4
+      end: 9
+    - source: '*float64'
+      style: secondary
+      start: 10
+      end: 18

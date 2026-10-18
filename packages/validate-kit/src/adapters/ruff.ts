@@ -82,7 +82,10 @@ export const ruff: ToolAdapter = {
         ...(i.code ? { ruleId: i.code } : {}),
         severity: clampSeverity(ruffSeverity(i.code)),
         message: i.message,
-        fixable: i.fix !== null && i.fix !== undefined,
+        // `--fix` applies only the fixes ruff calls safe.
+        fixable:
+          (i.fix as { applicability?: unknown } | null)?.applicability ===
+          "safe",
         ...(i.url ? { url: i.url } : {}),
       }),
     );

@@ -1,0 +1,10 @@
+id: rust-float-money
+valid:
+  - "struct Order { price_cents: i64, qty: f64 }"
+  - "fn charge(cost: Decimal) {}"
+  - "fn main() { let syntax: f64 = 1.0; }"
+invalid:
+  - "struct Order { amount: f64 }"
+  - "fn charge(fee: f32) {}"
+  - "fn main() { let balance: f64 = 0.0; }"
+  - "struct Order { fee: Option<f64> }"

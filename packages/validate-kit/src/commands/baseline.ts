@@ -12,6 +12,7 @@ import { profileSettings } from "../core/options.js";
 import { kitVersion } from "../core/paths.js";
 import { activeAstGrepRuleIds, resolveConfig } from "../config/resolve.js";
 import { ConfigError } from "../config/schema.js";
+import { toolProblems } from "../report/pretty.js";
 import { parseCheckFilters, parseProfile, resolveCwd } from "./check.js";
 
 export interface BaselineFlags {
@@ -52,11 +53,12 @@ export async function baselineCommand(
   });
   const { summary, projectRoot } = result;
   if (summary.crashed.length > 0 || summary.incomplete.length > 0) {
-    const tools = [...summary.crashed, ...summary.incomplete]
-      .map((issue) => issue.id)
-      .join(", ");
     process.stderr.write(
-      `Not writing ${BASELINE_FILE}: the run could not see everything (${tools}). Install or fix the tool and run it again.\n`,
+      `Not writing ${BASELINE_FILE}: the run could not see everything. Install or fix the tool and run it again.\n${toolProblems(
+        summary,
+      )
+        .map((line) => `  ${line}`)
+        .join("\n")}\n`,
     );
     return summary.crashed.length > 0 ? EXIT.INTERNAL : EXIT.INCOMPLETE;
   }

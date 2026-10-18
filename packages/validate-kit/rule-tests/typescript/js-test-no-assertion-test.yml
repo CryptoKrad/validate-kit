@@ -1,0 +1,29 @@
+id: js-test-no-assertion
+valid:
+  - |
+    it("adds", () => {
+      expect(add(1, 2)).toBe(3);
+    });
+  - |
+    test("rejects", async () => {
+      await expect(load()).rejects.toThrow("x");
+    });
+  - |
+    it("uses node:test assert", () => {
+      assert.strictEqual(add(1, 2), 3);
+    });
+  - |
+    it("delegates to a helper named for what it checks", () => {
+      expectSorted(sort([2, 1]));
+    });
+  - |
+    it.todo("later");
+invalid:
+  - |
+    it("discounts", () => {
+      discount(150);
+    });
+  - |
+    test.concurrent("calls it", async function () {
+      await fetchUser(1);
+    });

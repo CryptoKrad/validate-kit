@@ -1,5 +1,16 @@
 id: rust-no-unwrap
 snapshots:
+  ? |-
+    #[test]
+    fn t() {}
+
+    #[inline]
+    fn f() { x.unwrap(); }
+  : labels:
+    - source: x.unwrap()
+      style: primary
+      start: 38
+      end: 48
   fn f() { let x = g().expect("must exist"); }:
     labels:
     - source: g().expect("must exist")

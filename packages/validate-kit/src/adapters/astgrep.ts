@@ -11,7 +11,13 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { languageForFile } from "../detect/languages.js";
-import { absPosix, clampSeverity, finding, parseJsonLine } from "./base.js";
+import {
+  absPosix,
+  clampSeverity,
+  escapeRegex,
+  finding,
+  parseJsonLine,
+} from "./base.js";
 
 /** What `expand` attaches to an ast-grep task from the `astGrep` config key. */
 interface AstGrepOptions {
@@ -57,10 +63,6 @@ function generatedConfig(ctx: ToolContext): string {
   );
   generatedConfigCache.set(key, path);
   return path;
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function ruleFilterArgs(ctx: ToolContext): string[] {

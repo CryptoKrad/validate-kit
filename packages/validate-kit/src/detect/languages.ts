@@ -280,7 +280,7 @@ function head(file: string): string {
  * NFC (git's form on macOS, while the disk may hold NFD), and without case
  * on a file system that ignores it (a case-only rename on disk).
  */
-async function gitListed(
+export async function gitListed(
   root: string,
 ): Promise<((file: string) => boolean) | undefined> {
   const raw = await run(

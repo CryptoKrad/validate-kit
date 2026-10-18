@@ -4,6 +4,7 @@ import {
   delimiter,
   dirname,
   join,
+  posix,
   relative,
   resolve,
 } from "node:path";
@@ -143,16 +144,14 @@ async function scaffoldConfig(
   // the project root, not any file in the tree (DV1): .ts only where a root
   // tsconfig makes the root a TypeScript project (anywhere else type-aware
   // linters would meet a file outside every project), .mjs where the root is
-  // a JS package or holds JS or TS files of its own, JSON otherwise, so a Go
-  // repo whose TypeScript is one app below the root gains no language there.
+  // a JS package or holds JS or TS files in the root folder itself, JSON
+  // otherwise, so a Go repo whose TypeScript is one app below the root, or a
+  // Rust repo with scripts under docs/, gains no language there.
   const top = toPosix(resolve(root));
-  const atRoot = (lang: Language): boolean => {
-    const nested = (detection.get(lang)?.roots ?? []).filter((r) => r !== top);
-    return files.some(
-      (file) =>
-        languageForFile(file) === lang && !nested.some((r) => isUnder(file, r)),
+  const atRoot = (lang: Language): boolean =>
+    files.some(
+      (file) => languageForFile(file) === lang && posix.dirname(file) === top,
     );
-  };
   const scripted = detection.has("ts") || detection.has("js");
   const format =
     detection.has("ts") && existsSync(join(root, "tsconfig.json"))

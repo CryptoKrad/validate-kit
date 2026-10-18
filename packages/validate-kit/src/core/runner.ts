@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import pLimit from "p-limit";
@@ -238,7 +238,12 @@ export async function execute(opts: ExecuteOptions): Promise<RunSummary> {
   // after a task timed out.
   let scratchRoot: string | undefined;
   const tempDir = (): string => {
-    scratchRoot ??= mkdtempSync(join(tmpdir(), "validate-kit-run-"));
+    // Its real path: macOS's temp folder is behind a symlink (/var), and a
+    // tool that compares real paths (Vitest under Stryker) misses files
+    // named by the other spelling.
+    scratchRoot ??= realpathSync(
+      mkdtempSync(join(tmpdir(), "validate-kit-run-")),
+    );
     return mkdtempSync(join(scratchRoot, "task-"));
   };
   try {
@@ -487,6 +492,9 @@ async function executeTasks(
       ...(cmd.env ? { env: cmd.env } : {}),
       ...(cmd.processGroup ? { ownProcessGroup: true } : {}),
       ...(task.toolConfig.bin !== undefined ? { pathOnly: true } : {}),
+      // The probe found it in the project's .venv: the run must look there
+      // too, or it spawns a bare name PATH does not have.
+      ...(task.adapter.pythonEnv ? { pythonEnv: true } : {}),
       timeoutMs,
     });
     if (raw.spawnError)
@@ -522,6 +530,15 @@ async function executeTasks(
     let result;
     try {
       result = task.adapter.parseOutput(raw, ctx);
+      // Fixable means `--fix` fixes it: a tool the kit does not run with
+      // its fixes (semgrep's autofix, clippy's suggestions) offers none.
+      if (!task.adapter.supportsFix)
+        result = {
+          ...result,
+          findings: result.findings.map((f) =>
+            f.fixable ? { ...f, fixable: false } : f,
+          ),
+        };
     } catch (err) {
       return {
         findings: [],

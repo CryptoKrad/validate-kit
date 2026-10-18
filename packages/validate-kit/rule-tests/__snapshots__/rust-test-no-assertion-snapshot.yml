@@ -1,0 +1,139 @@
+id: rust-test-no-assertion
+snapshots:
+  ? |-
+    #[test]
+    /// checks nothing
+    fn documented() {
+        let _ = sum(1, 2);
+    }
+  : labels:
+    - source: |-
+        fn documented() {
+            let _ = sum(1, 2);
+        }
+      style: primary
+      start: 27
+      end: 69
+    - source: '#[test]'
+      style: secondary
+      start: 0
+      end: 7
+  ? |
+    #[test]
+    fn discounts() {
+        discount(150.0);
+    }
+  : labels:
+    - source: |-
+        fn discounts() {
+            discount(150.0);
+        }
+      style: primary
+      start: 8
+      end: 47
+    - source: '#[test]'
+      style: secondary
+      start: 0
+      end: 7
+  ? |
+    #[test]
+    fn returns_nothing() -> () {
+        discount(150.0);
+    }
+  : labels:
+    - source: |-
+        fn returns_nothing() -> () {
+            discount(150.0);
+        }
+      style: primary
+      start: 8
+      end: 59
+    - source: '#[test]'
+      style: secondary
+      start: 0
+      end: 7
+  ? |
+    #[tokio::test]
+    async fn fetches() {
+        fetch_user(1).await;
+    }
+  : labels:
+    - source: |-
+        async fn fetches() {
+            fetch_user(1).await;
+        }
+      style: primary
+      start: 15
+      end: 62
+    - source: '#[tokio::test]'
+      style: secondary
+      start: 0
+      end: 14
+  ? |
+    fn plain(n: u32) -> u32 {
+        n + 1
+    }
+    #[test]
+    fn via_plain() {
+        plain(1);
+    }
+  : labels:
+    - source: |-
+        fn via_plain() {
+            plain(1);
+        }
+      style: primary
+      start: 46
+      end: 78
+    - source: '#[test]'
+      style: secondary
+      start: 38
+      end: 45
+  ? |
+    fn run(input: &str) {
+        assert_eq!(parse(input), 1);
+    }
+    #[test]
+    fn starts() {
+        let server = Server::new();
+        server.run();
+    }
+  : labels:
+    - source: |-
+        fn starts() {
+            let server = Server::new();
+            server.run();
+        }
+      style: primary
+      start: 65
+      end: 130
+    - source: '#[test]'
+      style: secondary
+      start: 57
+      end: 64
+  ? |
+    pub fn discount(price: f64) -> f64 {
+        let rate: f64 = "0.9".parse().expect("rate");
+        debug_assert!(rate > 0.0);
+        price * rate
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn discounts() {
+            discount(150.0);
+        }
+    }
+  : labels:
+    - source: |-
+        fn discounts() {
+                discount(150.0);
+            }
+      style: primary
+      start: 196
+      end: 243
+    - source: '#[test]'
+      style: secondary
+      start: 184
+      end: 191

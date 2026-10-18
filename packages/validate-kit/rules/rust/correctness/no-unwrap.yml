@@ -10,10 +10,10 @@ rule:
     - pattern: $RECV.unwrap()
     - pattern: $RECV.expect($MSG)
   # Test code is exempt (matches the note): matches inside a `#[cfg(test)]`
-  # mod or a `#[test]`/`#[tokio::test]`-attributed fn are idiomatic. `follows`
-  # is immediate-sibling only — deliberately conservative so a stray earlier
-  # attribute can't exempt unrelated production items (missing a real finding
-  # is worse than flagging a stacked-attribute test fn).
+  # mod or a `#[test]`/`#[tokio::test]`/`#[rstest]`/`#[test_case]` fn are
+  # idiomatic. `follows` walks back only through the attributes and comments
+  # stacked on this item (`#[tokio::test] #[ignore] /// doc fn`), so an
+  # attribute of an earlier item never exempts it.
   not:
     any:
       - inside:
@@ -22,12 +22,24 @@ rule:
           follows:
             kind: attribute_item
             regex: "cfg\\(test\\)"
+            stopBy:
+              not:
+                any:
+                  - kind: attribute_item
+                  - kind: line_comment
+                  - kind: block_comment
       - inside:
           kind: function_item
           stopBy: end
           follows:
             kind: attribute_item
-            regex: "\\btest\\b"
+            regex: "\\b(test|rstest|test_case)\\b"
+            stopBy:
+              not:
+                any:
+                  - kind: attribute_item
+                  - kind: line_comment
+                  - kind: block_comment
 ignores:
   - "**/tests/**"
   - "**/benches/**"

@@ -473,8 +473,10 @@ function traced(
 
 /**
  * Lake's build log: diagnostics (with their continuation lines), errors with
- * no location, and from the trace lines (counted only right after a job
- * line, where Lake puts them) each source it compiled or replayed.
+ * no location, and from the trace lines (counted only after a job line, the
+ * first one since it: Lake can print the job's own messages before it, such
+ * as the "missing `module` header" warning of 4.34 and 4.35) each source it compiled or
+ * replayed.
  */
 function lakeLog(
   text: string,
@@ -489,12 +491,12 @@ function lakeLog(
   const unlocated: string[] = [];
   const built = new Map<string, string>();
   let current: LakeDiagnostic | undefined;
-  let afterJob = false;
+  let jobTraced = true;
   for (const line of text.split("\n")) {
     const located = LAKE_DIAGNOSTIC.exec(line);
     const bare = LAKE_UNLOCATED_ERROR.exec(line)?.[1];
     const trace =
-      line.startsWith("trace: ") && afterJob && !current
+      line.startsWith("trace: ") && !jobTraced
         ? traced(line, projectRoot)
         : undefined;
     if (located) {
@@ -508,13 +510,15 @@ function lakeLog(
       diagnostics.push(current);
     } else if (trace) {
       built.set(trace.source, trace.module);
+      current = undefined;
+      jobTraced = true;
     } else if (LAKE_NEW_LINE.test(line)) {
       current = undefined;
       if (bare && bare !== "build failed") unlocated.push(bare);
     } else if (current) {
       current.message += `\n${line}`;
     }
-    afterJob = LAKE_JOB.test(line);
+    if (LAKE_JOB.test(line)) jobTraced = false;
   }
   return { diagnostics, unlocated, built };
 }

@@ -1,6 +1,6 @@
 {
   "name": "validate-kit",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "description": "Polyglot bug-finder: one CLI for format/lint/type-check/custom ast-grep rules/security across TS/JS, Rust, Go, Python — with SARIF, AI-assist JSON, and an MCP server for coding agents.",
   "type": "module",
   "license": "MIT",

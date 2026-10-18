@@ -1,0 +1,62 @@
+id: js-test-no-assertion
+snapshots:
+  ? |
+    it("discounts", () => {
+      discount(150);
+    });
+  : labels:
+    - source: |-
+        it("discounts", () => {
+          discount(150);
+        })
+      style: primary
+      start: 0
+      end: 43
+    - source: it
+      style: secondary
+      start: 0
+      end: 2
+    - source: |-
+        () => {
+          discount(150);
+        }
+      style: secondary
+      start: 16
+      end: 42
+    - source: |-
+        () => {
+          discount(150);
+        }
+      style: secondary
+      start: 16
+      end: 42
+  ? |
+    test.concurrent("calls it", async function () {
+      await fetchUser(1);
+    });
+  : labels:
+    - source: |-
+        test.concurrent("calls it", async function () {
+          await fetchUser(1);
+        })
+      style: primary
+      start: 0
+      end: 72
+    - source: test.concurrent
+      style: secondary
+      start: 0
+      end: 15
+    - source: |-
+        async function () {
+          await fetchUser(1);
+        }
+      style: secondary
+      start: 28
+      end: 71
+    - source: |-
+        async function () {
+          await fetchUser(1);
+        }
+      style: secondary
+      start: 28
+      end: 71

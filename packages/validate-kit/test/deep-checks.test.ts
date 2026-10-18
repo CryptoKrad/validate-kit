@@ -236,6 +236,38 @@ describe("mypy", () => {
     ).toThrow(/mypy exited 2/);
   });
 
+  it("is a crash when a blocking error with no line stopped it, whatever else it found", () => {
+    // mypy 2.0.0 on src/pkg/m.py imported as both pkg.m and src.pkg.m.
+    const stdout = [
+      'src/pkg/m.py:1: error: Library stubs not installed for "requests"  [import-untyped]',
+      'src/pkg/m.py:1: note: Hint: "python3 -m pip install types-requests"',
+      'src/pkg/m.py: error: Source file found twice under different module names: "pkg.m" and "src.pkg.m"',
+      "src/pkg/m.py: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#mapping-file-paths-to-modules for more info",
+      "Found 2 errors in 1 file (errors prevented further checking)",
+      "",
+    ].join("\n");
+    expect(() =>
+      mypy.parseOutput({ stdout, stderr: "", exitCode: 2 }, ctx(root)),
+    ).toThrow(/before checking the code: .*Source file found twice/);
+  });
+
+  it("reads a syntax error under `pretty = true`, whose echoed source line may hold `: error: `", () => {
+    // mypy 2.0.0 --pretty: the failing line, indented, and a caret under it.
+    const stdout = [
+      "b.py:1: error: Invalid syntax  [syntax]",
+      '    x = "parse: error: bad" +',
+      "                            ^",
+      "Found 1 error in 1 file (errors prevented further checking)",
+      "",
+    ].join("\n");
+    expect(
+      mypy.parseOutput({ stdout, stderr: "", exitCode: 2 }, ctx(root)).findings,
+    ).toMatchObject([{ ruleId: "syntax", line: 1 }]);
+    expect(() =>
+      mypy.parseOutput({ stdout: "", stderr: "", exitCode: 2 }, ctx(root)),
+    ).toThrow(/mypy exited 2/);
+  });
+
   it("runs where the project configured it, with its virtualenv's interpreter", () => {
     expect(mypy.adoptedAt?.(root, root)).toBe(false);
     writeFileSync(
@@ -250,6 +282,11 @@ describe("mypy", () => {
     expect(args).toContain(join(root, ".venv", "bin", "python"));
   });
 });
+
+/** A crate in cargo-deny's graph JSON. */
+function crateNode(name: string): string {
+  return `{"Krate":{"name":"${name}","version":"0.1.0"}}`;
+}
 
 describe("cargo-deny", () => {
   const root = tmp("vk-deny-");
@@ -274,6 +311,59 @@ describe("cargo-deny", () => {
       message:
         "libc@0.2.190: crate 'libc = 0.2.190' is explicitly banned (banned here)",
     });
+  });
+
+  it("places a [bans] layer rule where each workspace crate declares the banned one", () => {
+    // deny.toml: deny = [{ crate = "shop-db", wrappers = ["shop-api"],
+    // reason = "the web layer goes through the API", use-instead =
+    // "shop-api" }]; shop-web (under a renamed key) and shop-cli depend on
+    // shop-db directly (cargo-deny 0.19.0, layer-rules.md).
+    const ws = tmp("vk-deny-ws-");
+    const manifests: Record<string, string> = {
+      "db/Cargo.toml": '[package]\nname = "shop-db"\nversion = "0.1.0"\n',
+      "api/Cargo.toml":
+        '[package]\nname = "shop-api"\nversion = "0.1.0"\n\n[dependencies]\nshop-db = { path = "../db" }\n',
+      "web/Cargo.toml":
+        '[package]\nname = "shop-web"\nversion = "0.1.0"\n\n[dependencies]\nshop-api = { path = "../api" }\ndb = { package = "shop-db", path = "../db" }\n',
+      // `authors` before `name`.
+      "cli/Cargo.toml":
+        '[package]\nauthors = ["a [at] b"]\nname = "shop-cli"\nversion = "0.1.0"\n\n[dependencies]\nshop-db = { path = "../db" }\n',
+      // A vendored copy is not the workspace's crate.
+      "vendor/web/Cargo.toml":
+        '[package]\nname = "shop-web"\nversion = "0.1.0"\n\n[dependencies]\nshop-db = "1"\n',
+    };
+    for (const [path, text] of Object.entries(manifests)) {
+      mkdirSync(join(ws, path, ".."), { recursive: true });
+      writeFileSync(join(ws, path), text);
+    }
+    const graph = `"graphs":[{"Krate":{"name":"shop-db","version":"0.1.0"},"parents":[${crateNode("shop-api")},${crateNode("shop-web")},${crateNode("shop-cli")}]}],"labels":[{"column":20,"line":6,"message":"banned here","span":"shop-db"},{"column":65,"line":6,"message":"reason","span":"the web layer goes through the API"},{"column":117,"line":6,"message":"use instead","span":"shop-api"}]`;
+    const unwrapped = (parent: string) =>
+      `{"fields":{"code":"unmatched-wrapper",${graph},"message":"direct parent '${parent} = 0.1.0' of banned crate 'shop-db = 0.1.0' was not marked as a wrapper","severity":"warning"},"type":"diagnostic"}`;
+    const bans = [
+      unwrapped("shop-web"),
+      unwrapped("shop-cli"),
+      `{"fields":{"code":"banned",${graph},"message":"crate 'shop-db = 0.1.0' is explicitly banned","severity":"error"},"type":"diagnostic"}`,
+      '{"fields":{"bans":{"errors":1,"helps":0,"notes":2,"warnings":2}},"type":"summary"}',
+    ].join("\n");
+    const result = cargoDeny.parseOutput(
+      { stdout: "", stderr: bans, exitCode: 2 },
+      ctx(ws),
+    );
+    expect(
+      result.findings.map((f) => [
+        f.file.slice(ws.length + 1),
+        f.line,
+        f.ruleId,
+        f.severity,
+      ]),
+    ).toEqual([
+      ["web/Cargo.toml", 7, "unmatched-wrapper", "warning"],
+      ["cli/Cargo.toml", 7, "unmatched-wrapper", "warning"],
+      ["web/Cargo.toml", 7, "banned", "error"],
+    ]);
+    expect(result.findings[2]?.message).toBe(
+      "shop-db@0.1.0: crate 'shop-db = 0.1.0' is explicitly banned (the web layer goes through the API; use shop-api instead)",
+    );
   });
 
   it("fails loud without a summary, or on a failing exit with no error", () => {

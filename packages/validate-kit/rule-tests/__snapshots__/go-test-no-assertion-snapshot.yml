@@ -1,0 +1,12 @@
+id: go-test-no-assertion
+snapshots:
+  ? "func TestDiscount(t *testing.T) {\n\tDiscount(150)\n}\n"
+  : labels:
+    - source: "func TestDiscount(t *testing.T) {\n\tDiscount(150)\n}"
+      style: primary
+      start: 0
+      end: 50
+    - source: TestDiscount
+      style: secondary
+      start: 5
+      end: 17

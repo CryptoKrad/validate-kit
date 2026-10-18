@@ -1,0 +1,24 @@
+id: go-float-money
+language: go
+severity: warning
+message: "Money held in a float: float64 rounds (0.1 + 0.2 != 0.3). Keep integer minor units (PriceCents int64) or use a decimal type."
+note: |
+  Money in a binary float drifts: 0.1 + 0.2 != 0.3. A struct field,
+  parameter or var named like money typed float32/float64 is reported;
+  PriceCents int64 or decimal.Decimal are not. Strict preset only.
+rule:
+  any:
+    - kind: field_declaration
+    - kind: parameter_declaration
+    - kind: var_spec
+  has:
+    field: type
+    regex: "^(\\*|\\[\\])?float(32|64)$"
+  all:
+    - has:
+        field: name
+        regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"

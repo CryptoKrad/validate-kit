@@ -1,0 +1,4 @@
+# zizmor audits this repository's GitHub Actions (validate-kit's check runs it
+# because this file exists). Findings that do not apply are ignored inline,
+# each with its reason (# zizmor: ignore[<audit>] <why>).
+rules: {}

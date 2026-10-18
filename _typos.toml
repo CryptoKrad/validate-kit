@@ -1,0 +1,17 @@
+# typos reads the kit's scope (validate-kit's check runs it because this file
+# exists). Words below are spelled as this repository means them.
+[default.extend-words]
+# Used throughout for input a parser rejects.
+unparseable = "unparseable"
+# `PROPERT(Y|IES)`: a regex fragment in the TLC adapter.
+propert = "propert"
+# A misspelled rule id a config test passes on purpose.
+consol = "consol"
+# "mis-cased", "mis-typed".
+mis = "mis"
+# lizard's nesting-depth column in its warning lines ("0 ND").
+nd = "nd"
+
+[files]
+# Misspellings planted on purpose, as the adapters' test fixtures.
+extend-exclude = ["packages/validate-kit/test/hygiene.test.ts"]

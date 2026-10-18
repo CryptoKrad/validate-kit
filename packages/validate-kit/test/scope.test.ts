@@ -34,6 +34,7 @@ function baseConfig(): ResolvedConfig {
       security: { enabled: true },
       formal: { enabled: true },
       behavior: { enabled: true },
+      mutation: { enabled: true },
     },
     include: [],
     ignore: [],

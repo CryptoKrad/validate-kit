@@ -19,6 +19,12 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+// The fixtures live in temp folders mise does not cover, where `go` is
+// whichever one PATH finds; a GOROOT a mise shim exported for this repo's go
+// then contradicts it and go cannot compile its standard library
+// (scripts/verify-clean.sh unsets it for the same reason).
+delete process.env.GOROOT;
+
 const repoRoot = process.cwd();
 const builtCli = join(repoRoot, "packages", "validate-kit", "dist", "cli.js");
 const requiredRuleIds = [
@@ -246,6 +252,10 @@ try {
     join(dvInitRoot, "frontend", "src", "a.ts"),
     "export const a = 1;\n",
   );
+  // A script under docs/ is not the root's own JS: still JSON (2026-10-13: a
+  // Rust and Python root got validate.config.mjs).
+  mkdirSync(join(dvInitRoot, "docs", "site"), { recursive: true });
+  writeFileSync(join(dvInitRoot, "docs", "site", "app.js"), "export {};\n");
   const toolsDir = join(dvInitRoot, ".tools", "vk");
   mkdirSync(toolsDir, { recursive: true });
   writeFileSync(
@@ -259,6 +269,12 @@ try {
   const dvInitEntries = () => readdirSync(dvInitRoot).toSorted().join();
   const dvDry = run(toolsKit, ["init", "--dry-run"], { cwd: dvInitRoot });
   const afterDry = dvInitEntries();
+  // A root with JS of its own (a script beside go.mod) gets a JS config.
+  const ownJsRoot = join(tempRoot, "dv-init-own-js");
+  mkdirSync(ownJsRoot);
+  writeFileSync(join(ownJsRoot, "go.mod"), "module ownjs\n\ngo 1.22\n");
+  writeFileSync(join(ownJsRoot, "build.mjs"), "export {};\n");
+  const ownJsDry = run(toolsKit, ["init", "--dry-run"], { cwd: ownJsRoot });
   run(toolsKit, ["init", "--no-hook", "--no-mcp"], { cwd: dvInitRoot });
   const afterSkip = dvInitEntries();
   run(toolsKit, ["init"], { cwd: dvInitRoot });
@@ -267,14 +283,15 @@ try {
     .mcpServers["Tester.MCP"];
   run("sh", ["-c", `${dvMcp.command} --version`], { cwd: dvInitRoot });
   assert(
-    afterDry === ".tools,frontend,go.mod" &&
+    afterDry === ".tools,docs,frontend,go.mod" &&
       /Would write .*validate\.config\.json/.test(dvDry.stdout) &&
+      /Would write .*validate\.config\.mjs/.test(ownJsDry.stdout) &&
       /Would write .*lefthook\.yml/.test(dvDry.stdout) &&
-      afterSkip === ".tools,frontend,go.mod,validate.config.json" &&
+      afterSkip === ".tools,docs,frontend,go.mod,validate.config.json" &&
       dvMcp.command === toolsCommand &&
       scaffoldedHookRun(dvInitRoot) ===
         `${toolsCommand} check --staged --quiet`,
-    `DV1/DV2/DV15 init: ${JSON.stringify({ afterDry, afterSkip, dvMcp, hook: scaffoldedHookRun(dvInitRoot), dry: dvDry.stdout })}`,
+    `DV1/DV2/DV15 init: ${JSON.stringify({ afterDry, afterSkip, dvMcp, hook: scaffoldedHookRun(dvInitRoot), dry: dvDry.stdout, ownJs: ownJsDry.stdout })}`,
   );
 
   // DV21 (dark-visitor, 2026-10-10): init beside hook setups `lefthook
@@ -463,12 +480,11 @@ try {
   pushGit(["commit", "--quiet", "-m", "fix"]);
   const passed = pushGit(["push", "origin", "HEAD"], [0, 1]);
   const pushedHead = pushGit(["rev-parse", "HEAD"]).stdout.trim();
-  // A passing hook prints empty lines at most: git's own two lines are all
-  // there is.
+  // A passing hook prints nothing: git's own two lines are all there is.
   pf1.passed =
     passed.status === 0 &&
     remoteHeads().startsWith(pushedHead) &&
-    /^\s*To [^\n]+\n \* \[new branch\] +HEAD -> \S+\n$/.test(
+    /^To [^\n]+\n \* \[new branch\] +HEAD -> \S+\n$/.test(
       passed.stdout + passed.stderr,
     );
   const refLines = readFileSync(pushRefs, "utf8").trim().split("\n");
@@ -477,8 +493,8 @@ try {
     refLines.length === 2 &&
     refLines[1].includes(` ${pushedHead} `);
   // A ci run on a tree with uncommitted changes says so, since its verdict
-  // covers them and a push carries only the commit: under --quiet too, as
-  // the one line a pass prints.
+  // covers them and a push carries only the commit; under --quiet only
+  // beside a failure, so a quiet pass prints nothing.
   writeFileSync(join(pushed.dir, "app.mjs"), "export const a = 2;\n");
   const ciRun = (args) =>
     run(installedKit, ["--profile", "ci", ...args], {
@@ -488,16 +504,25 @@ try {
     });
   const dirtyLoud = ciRun([]);
   const dirtyQuiet = ciRun(["--quiet"]);
+  writeFileSync(join(pushed.dir, "c.mjs"), "debugger;\n");
+  const dirtyFailing = ciRun(["--quiet"]);
+  rmSync(join(pushed.dir, "c.mjs"));
   const notice = /^The working tree has uncommitted changes[^\n]*\n$/;
   pf1.dirtySaid =
     dirtyLoud.status === 0 &&
     dirtyLoud.stderr.includes("The working tree has uncommitted changes") &&
     dirtyQuiet.status === 0 &&
     dirtyQuiet.stdout === "" &&
-    notice.test(dirtyQuiet.stderr);
+    dirtyQuiet.stderr === "" &&
+    dirtyFailing.status === 1 &&
+    notice.test(dirtyFailing.stderr) &&
+    /c\.mjs:1:1 warning [^\n]*\nvalidate-kit: exit 1: /.test(
+      dirtyFailing.stdout,
+    );
   // So a push whose commit holds what the working tree has fixed passes, as
-  // the tree does, and the hook prints that line. The commit is made with
-  // plumbing: the pre-commit hook would have stopped it.
+  // the tree does, and prints nothing (judging the pushed commit itself is
+  // PUSH1). The commit is made with plumbing: the pre-commit hook would have
+  // stopped it.
   writeFileSync(join(pushed.dir, "b.mjs"), "debugger;\n");
   pushGit(["add", "b.mjs"]);
   const badTree = pushGit(["write-tree"]).stdout.trim();
@@ -505,11 +530,9 @@ try {
   pushGit(["update-ref", "HEAD", badCommit.stdout.trim()]);
   writeFileSync(join(pushed.dir, "b.mjs"), "export {};\n");
   const dirtyPush = pushGit(["push", "origin", "HEAD"], [0, 1]);
-  pf1.dirtyPushSaid =
+  pf1.dirtyPushSilent =
     dirtyPush.status === 0 &&
-    /^\s*The working tree has uncommitted changes[^\n]*\n\s*To /.test(
-      dirtyPush.stdout + dirtyPush.stderr,
-    );
+    /^To [^\n]+\n [^\n]+\n$/.test(dirtyPush.stdout + dirtyPush.stderr);
   // A pre-commit hook of the user's that calls lefthook after a step of its
   // own is left as it is: only the missing pre-push hook is installed.
   const wrapper =
@@ -534,7 +557,8 @@ try {
     !existsSync(join(looping.dir, "lefthook.yml"));
   // A config 0.2.2 wrote, pre-commit only, is replaced: init adds the
   // pre-push job and lefthook installs the hook. So is one written before
-  // --quiet; one the user edited (--quiet taken out) is kept.
+  // --quiet, and one of 0.2.3/0.2.4, which showed a passing job's output;
+  // one the user edited (--quiet taken out) is kept.
   const v022 =
     "# Written by validate-kit init.\nassert_lefthook_installed: true\nmin_version: 1.10.0\n\npre-commit:\n  parallel: false\n  jobs:\n    - name: validate\n      run: validate-kit check --staged\n";
   const loudPush =
@@ -552,6 +576,13 @@ try {
   const upgraded = reinit("pf1-upgrade", v022);
   const current = upgraded.config;
   const unquiet = reinit("pf1-upgrade-loud", v022 + loudPush);
+  const v023 = reinit(
+    "pf1-upgrade-023",
+    current.replace(
+      /# A passing hook prints nothing\.[\s\S]*?output:\n {2}- failure\n/,
+      "# check --quiet prints what needs acting on: a failure's findings and exit\n# code, or that a push was judged with uncommitted changes. Run the command\n# without --quiet for the full report.\noutput:\n  - failure\n  - execution_out\n",
+    ),
+  );
   const userEdited = current.replace(
     "check --profile ci --quiet",
     "check --profile ci",
@@ -566,6 +597,9 @@ try {
     ) &&
     unquiet.init.status === 0 &&
     unquiet.config === current &&
+    v023.init.status === 0 &&
+    v023.config === current &&
+    !current.includes("execution_out") &&
     kept.init.status === 0 &&
     kept.config === userEdited;
   // A global folder whose pre-commit calls lefthook but has no pre-push: the
@@ -1624,7 +1658,7 @@ try {
   }
 
   // Lean through the lean adapter (engine-generalisation.md, G2.2), on the
-  // fixtures in tests/fixtures/formal/lean: seven Lake projects and twelve
+  // fixtures in tests/fixtures/formal/lean: eight Lake projects and twelve
   // loose files.
   if (hasTool("lean", ["--version"])) {
     const leanRoot = join(tempRoot, "lean");
@@ -1748,7 +1782,8 @@ try {
     );
     const leanAfterToolchain = leanTasks(["--changed"]);
     assert(
-      leanAll === 19 &&
+      // One task per Lake project and per loose file (modsys: the 20th).
+      leanAll === 20 &&
         leanAfterUnrelated === 0 &&
         leanAfterToolchain === leanAll,
       `a changed lean-toolchain re-runs Lean, an unrelated change does not: ${leanAll} ${leanAfterUnrelated} ${leanAfterToolchain}`,
@@ -4039,6 +4074,28 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       { cwd: leakRoot, env: dv23Env, allowedStatuses: [1] },
     );
     const full = dv23Check(leakRoot, ["--only", "gitleaks"], "dv23 gitleaks");
+    // A pathspec commit's pre-commit: what is committed is the hook's index
+    // (HEAD plus the named path), not .git/index, and gitleaks reads it.
+    writeFileSync(
+      join(leakRoot, "src", "pathspec.ts"),
+      `export const key = "${fakeKey}";\n`,
+    );
+    const hookIndex = {
+      GIT_INDEX_FILE: join(leakRoot, ".git", "next-index-smoke.lock"),
+    };
+    run("git", ["read-tree", "HEAD"], { cwd: leakRoot, env: hookIndex });
+    run("git", ["add", "src/pathspec.ts"], { cwd: leakRoot, env: hookIndex });
+    const pathspec = run(
+      installedKit,
+      ["check", "--staged", "--only", "gitleaks", "--json"],
+      {
+        cwd: leakRoot,
+        env: { ...dv23Env, ...hookIndex },
+        allowedStatuses: [0, 1],
+      },
+    );
+    rmSync(hookIndex.GIT_INDEX_FILE);
+    rmSync(join(leakRoot, "src", "pathspec.ts"));
     // Chosen only by a task step (dark-visitor, 2026-10-10): the change is
     // scanned, the secrets already committed are not, until the kit's config
     // or gitleaks' own files choose the whole tree.
@@ -4073,6 +4130,7 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       `clean:${leakClean.findings.length}`,
       `staged:${findingLines(parseJsonOutput(staged, "dv23 gitleaks staged").findings, "dv23-gitleaks").join()}`,
       `full:${findingLines(full.findings, "dv23-gitleaks").join()}`,
+      `pathspec:${findingLines(parseJsonOutput(pathspec, "dv23 gitleaks pathspec").findings, "dv23-gitleaks").join()}`,
       `secretPrinted:${staged.stdout.includes(fakeKey) || staged.stderr.includes(fakeKey)}`,
       `stepFull:${stepFull}`,
       `stepStaged:${stepStaged}`,
@@ -4116,7 +4174,7 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       dv23.jscpdClean === 0 &&
       (dv23.gitleaks === "gitleaks not installed: skipped" ||
         dv23.gitleaks ===
-          "clean:0 staged:aws-access-token .deploy.conf:1,aws-access-token src/settings.ts:1 full:aws-access-token .deploy.conf:1,aws-access-token src/settings.ts:1 secretPrinted:false stepFull:false stepStaged:aws-access-token src/new.txt:1") &&
+          "clean:0 staged:aws-access-token .deploy.conf:1,aws-access-token src/settings.ts:1 full:aws-access-token .deploy.conf:1,aws-access-token src/settings.ts:1 pathspec:aws-access-token src/pathspec.ts:1 secretPrinted:false stepFull:false stepStaged:aws-access-token src/new.txt:1") &&
       (dv23.deadcode === "go not installed: skipped" ||
         dv23.deadcode === "unreachable-func main.go:7"),
     `DV23 opt-in tools: ${JSON.stringify(dv23)}`,
@@ -5360,13 +5418,18 @@ export default {
   rmSync(join(baseRoot, "FAILTEST"));
   // 8: a run that could not see everything writes nothing.
   const written = readFileSync(baselinePath, "utf8");
-  sequence.incomplete = run(
+  const incompleteRun = run(
     installedKit,
     ["baseline", "--only", "ast-grep", "ghost"],
     { cwd: baseRoot, allowedStatuses: [3] },
-  ).status;
+  );
+  sequence.incomplete = incompleteRun.status;
   sequence.incompleteWroteNothing =
     readFileSync(baselinePath, "utf8") === written;
+  // It says why, as `check --quiet` does: here the tool is not installed.
+  sequence.incompleteSaysWhy = incompleteRun.stderr.includes(
+    "ghost: not found; install:",
+  );
   // 1: moved code.
   writeFileSync(join(baseRoot, "src", "a.ts"), `\n\n// moved\n${twoLogs}`);
   sequence.shifted = baseCheck().status;
@@ -5575,6 +5638,7 @@ export default {
     gateNotDebt: true,
     incomplete: 3,
     incompleteWroteNothing: true,
+    incompleteSaysWhy: true,
     shifted: 0,
     third: 1,
     fixedDefault: 0,

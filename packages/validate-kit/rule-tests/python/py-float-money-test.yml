@@ -1,0 +1,15 @@
+id: py-float-money
+valid:
+  - "price_cents: int = 999"
+  - "tax_rate: float = 0.2"
+  - "def charge(cost: Decimal) -> None: ..."
+  - "syntax: float = 1.0"
+invalid:
+  - "price: float = 9.99"
+  - |
+    class Order:
+        amount: float
+  - "def charge(amount: float) -> None: ..."
+  - "def refund(fee: float = 0.0) -> None: ..."
+  - "amount: float | None = None"
+  - "refunds: list[float] = []"

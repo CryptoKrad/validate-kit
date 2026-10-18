@@ -26,3 +26,10 @@ go-no-fmt-println
 rust-no-panic-macros
 rust-no-unwrap
 rust-flag-transmute
+# Tests that assert nothing (category test-quality).
+ts-test-no-assertion
+tsx-test-no-assertion
+js-test-no-assertion
+go-test-no-assertion
+py-test-no-assertion
+rust-test-no-assertion

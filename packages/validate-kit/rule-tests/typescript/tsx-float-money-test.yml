@@ -1,0 +1,14 @@
+id: tsx-float-money
+valid:
+  - "let priceCents: number = 999;"
+  - "interface Order { quantity: number; taxRate: number; total: number }"
+  - "function charge(amount: Decimal): void {}"
+  - "const price: bigint = 999n;"
+  - "let syntax: number;"
+invalid:
+  - "const Price = ({ price }: { price: number }) => <span>{price}</span>;"
+  - "const price: number = 9.99;"
+  - "interface Order { totalAmount: number }"
+  - "function charge(amount: number): void {}"
+  - "class Wallet { private payout_usd: number = 0; }"
+  - "let price: number | undefined;"

@@ -56,7 +56,7 @@ test:
 install-tools:
     mise install
     brew bundle --no-upgrade
-    corepack prepare pnpm@10.23.0 --activate
+    corepack prepare pnpm@10.34.7 --activate
     pnpm install --frozen-lockfile
 
 # Install the Chromium browser binary required by local Playwright E2E/visual tests

@@ -10,7 +10,7 @@ Install from a tarball packed from this monorepo:
 ```bash
 pnpm --filter validate-kit pack --pack-destination ~/
 cd /path/to/other-repo
-pnpm add -D ~/validate-kit-0.2.2.tgz
+pnpm add -D ~/validate-kit-0.2.4.tgz
 ```
 
 > **Never install this kit by name from the public npm registry.** The
@@ -21,7 +21,7 @@ pnpm add -D ~/validate-kit-0.2.2.tgz
 With pnpm ≥ 10, allow the ast-grep postinstall in the same command:
 
 ```bash
-pnpm add -D --allow-build=@ast-grep/cli ~/validate-kit-0.2.2.tgz
+pnpm add -D --allow-build=@ast-grep/cli ~/validate-kit-0.2.4.tgz
 ```
 
 > pnpm ≥ 10 blocks `@ast-grep/cli`'s postinstall by default and hard-fails
@@ -49,9 +49,10 @@ pnpm exec check --fix
 `check init` also wires lefthook: `check --staged` before each commit, and
 before each push the preflight, `check --profile ci`, the run CI makes. Put the
 same command in CI; `check doctor --profile ci` says whether a machine can run
-it. Both run `--quiet`: a passing hook prints an empty line, or one line when
-a push was judged with uncommitted changes; a failure prints one line per
-finding and the exit code.
+it. Both run `--quiet`: a passing hook prints nothing; a failure prints one
+line per finding and the exit code (and how many `--fix` would fix). The
+tools a hook runs do not inherit its `GIT_DIR` or `GIT_INDEX_FILE`, so a test
+that runs git in a repository of its own cannot write the one being committed.
 
 The package includes the `check` binary (also installed as `validate-kit`),
 bundled ast-grep rules, preset
@@ -59,6 +60,21 @@ manifests, `sgconfig.yml`, and the bundled Semgrep rule config. Native tools
 such as `ruff`, `cargo`/`clippy`/`rustfmt`, `golangci-lint`, `gofumpt`, and
 `semgrep` are machine-level dependencies; `check doctor` reports missing or
 outdated tools.
+
+Under `--profile ci`, where a project configured one, the kit also runs
+mutation testing (Stryker, cargo-mutants, mutmut, gremlins): one warning per
+planted bug no test catches, at its line. A changed-file run mutates only the
+changed files. mutmut is taken from the project's `.venv`. `--profile ci` also
+runs each Go module's tests under the race detector (`go-race`).
+
+On by default, `cooldown` checks that each package manager a lockfile shows in
+use waits before installing a new release. It also reports a lockfile that
+gained a package published inside that wait, looking the date up in the
+registry. The bundled `test-no-assertion` rules report a test that checks
+nothing (a same-file helper that asserts counts). Where a project configured them, the kit also runs dependency-cruiser
+and import-linter (import rules), and, when enabled, lizard (a complexity
+ratchet with the baseline) and diff-cover (changed lines no test runs). The
+repository README has each tool's details.
 
 ## Included Assets
 

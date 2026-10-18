@@ -35,8 +35,8 @@ type Hook = (typeof HOOKS)[number];
 const COMMANDS: Record<Hook, string> = {
   "pre-commit": "check --staged --quiet",
   // What CI runs: every tool the project chose, the deep tier, the whole
-  // tree, read from the working tree (check says in one line when it holds
-  // uncommitted changes, which the push does not carry).
+  // tree, read from the working tree (on a failure check also says when it
+  // holds uncommitted changes, which the push does not carry).
   "pre-push": "check --profile ci --quiet",
 };
 
@@ -57,11 +57,21 @@ min_version: 1.10.0
 `;
 
 /**
- * lefthook prints a job's own output and, for a failure, its exit status:
- * with `--quiet`, a passing hook prints one empty line, or check's one line
- * about uncommitted changes (lefthook-existing-hooks.md, K).
+ * lefthook prints a failing job's output and exit status, and nothing for a
+ * passing one: a hook that passes costs nothing (lefthook-existing-hooks.md,
+ * K).
  */
-const OUTPUT = `# check --quiet prints what needs acting on: a failure's findings and exit
+const OUTPUT = `# A passing hook prints nothing. A failing one prints its findings, one line
+# each, and the exit code. Run the command without --quiet for the full report.
+output:
+  - failure
+`;
+
+/**
+ * The output block of 0.2.3 and 0.2.4, which also showed a passing job's
+ * output (check's line about uncommitted changes): one empty line per hook.
+ */
+const OUTPUT_0_2_3 = `# check --quiet prints what needs acting on: a failure's findings and exit
 # code, or that a push was judged with uncommitted changes. Run the command
 # without --quiet for the full report.
 output:
@@ -129,6 +139,8 @@ function isInitConfig(text: string): boolean {
   );
   return [
     ...current,
+    // 0.2.3 and 0.2.4: a passing job's output shown too.
+    ...current.map((config) => config.replace(OUTPUT, OUTPUT_0_2_3)),
     // The pre-push hook, before --quiet (unreleased).
     ...current.map(loud),
     // 0.2.2: the pre-commit hook alone.

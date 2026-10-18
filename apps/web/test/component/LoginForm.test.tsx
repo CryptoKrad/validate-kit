@@ -4,12 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { LoginForm } from "../../components/LoginForm";
+import { LoginForm, type LoginValues } from "../../components/LoginForm";
 import { server } from "../../vitest.setup";
 
 describe("<LoginForm/>", () => {
   it("calls onSubmit with the typed email and password", async () => {
-    const onSubmit = vi.fn();
+    const onSubmit = vi.fn<(values: LoginValues) => void>();
     const user = userEvent.setup();
 
     render(<LoginForm onSubmit={onSubmit} />);
