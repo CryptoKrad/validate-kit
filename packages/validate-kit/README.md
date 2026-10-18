@@ -67,6 +67,12 @@ planted bug no test catches, at its line. A changed-file run mutates only the
 changed files. mutmut is taken from the project's `.venv`. `--profile ci` also
 runs each Go module's tests under the race detector (`go-race`).
 
+Also on by default, with nothing to install: `blobs` (compiled output and an
+LFS path stored whole in git), `paths` (names that differ only in case, names
+Windows cannot check out), `scripts` (a `#!` script that cannot start or is not
+executable) and `unicode` (Trojan Source characters and look-alike letters in
+code). An extensionless script with a shell `#!` line is shellcheck's.
+
 On by default, `cooldown` checks that each package manager a lockfile shows in
 use waits before installing a new release. It also reports a lockfile that
 gained a package published inside that wait, looking the date up in the

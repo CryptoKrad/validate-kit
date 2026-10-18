@@ -1,0 +1,48 @@
+id: cpp-float-money
+snapshots:
+  double price = 1.0;:
+    labels:
+    - source: double price = 1.0;
+      style: primary
+      start: 0
+      end: 19
+    - source: price
+      style: secondary
+      start: 7
+      end: 12
+    - source: price = 1.0
+      style: secondary
+      start: 7
+      end: 18
+    - source: double
+      style: secondary
+      start: 0
+      end: 6
+  struct A { float amount; };:
+    labels:
+    - source: float amount;
+      style: primary
+      start: 11
+      end: 24
+    - source: amount
+      style: secondary
+      start: 17
+      end: 23
+    - source: float
+      style: secondary
+      start: 11
+      end: 16
+  void pay(double fee) {}:
+    labels:
+    - source: double fee
+      style: primary
+      start: 9
+      end: 19
+    - source: fee
+      style: secondary
+      start: 16
+      end: 19
+    - source: double
+      style: secondary
+      start: 9
+      end: 15

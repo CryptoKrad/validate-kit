@@ -1,0 +1,48 @@
+id: cs-float-money
+snapshots:
+  class A { double Price; }:
+    labels:
+    - source: double Price
+      style: primary
+      start: 10
+      end: 22
+    - source: double
+      style: secondary
+      start: 10
+      end: 16
+    - source: Price
+      style: secondary
+      start: 17
+      end: 22
+    - source: Price
+      style: secondary
+      start: 17
+      end: 22
+  class A { public double TotalAmount { get; set; } }:
+    labels:
+    - source: public double TotalAmount { get; set; }
+      style: primary
+      start: 10
+      end: 49
+    - source: double
+      style: secondary
+      start: 17
+      end: 23
+    - source: TotalAmount
+      style: secondary
+      start: 24
+      end: 35
+  class A { void Pay(float fee) {} }:
+    labels:
+    - source: float fee
+      style: primary
+      start: 19
+      end: 28
+    - source: float
+      style: secondary
+      start: 19
+      end: 24
+    - source: fee
+      style: secondary
+      start: 25
+      end: 28

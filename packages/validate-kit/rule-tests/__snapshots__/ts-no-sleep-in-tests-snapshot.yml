@@ -1,0 +1,20 @@
+id: ts-no-sleep-in-tests
+snapshots:
+  await new Promise((r) => setTimeout(r, 500));:
+    labels:
+    - source: new Promise((r) => setTimeout(r, 500))
+      style: primary
+      start: 6
+      end: 44
+  await new Promise((resolve) => { setTimeout(resolve, 10) });:
+    labels:
+    - source: new Promise((resolve) => { setTimeout(resolve, 10) })
+      style: primary
+      start: 6
+      end: 59
+  await page.waitForTimeout(1000);:
+    labels:
+    - source: page.waitForTimeout(1000)
+      style: primary
+      start: 6
+      end: 31

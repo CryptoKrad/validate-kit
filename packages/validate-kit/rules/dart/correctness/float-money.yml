@@ -1,0 +1,26 @@
+id: dart-float-money
+language: dart
+severity: warning
+message: "Money held in a float: double rounds (0.1 + 0.2 != 0.3). Keep integer minor units (int priceCents) or use a decimal package."
+note: |
+  Money in a binary float drifts: 0.1 + 0.2 != 0.3. A field, variable or
+  parameter named like money (price, amount, cost, balance, fee, ...) typed
+  double is reported; int priceCents or Decimal price are not. Strict preset only.
+rule:
+  any:
+    - kind: declaration
+    - kind: local_variable_declaration
+    - kind: formal_parameter
+  has:
+    stopBy: end
+    kind: type
+    regex: "^double\\??$"
+  all:
+    - has:
+        stopBy: end
+        kind: identifier
+        regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"

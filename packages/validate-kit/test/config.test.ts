@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { ConfigError, parseConfig } from "../src/config/schema.js";
 import { mergeInto, resolveConfig } from "../src/config/resolve.js";
 import type { ResolvedConfig } from "../src/core/types.js";
+import { LANGUAGES } from "../src/core/types.js";
 import { planCheck, runCheck } from "../src/index.js";
 import {
   detectLanguages,
@@ -93,15 +94,11 @@ describe("config and scope", () => {
   it("deep-merges per-tool config so a later layer cannot drop an earlier disable", () => {
     const target = {
       languages: {
+        ...Object.fromEntries(
+          LANGUAGES.map((lang) => [lang, { enabled: true }]),
+        ),
         ts: { enabled: true, tools: { eslint: { enabled: false } } },
-        js: { enabled: true },
-        rust: { enabled: true },
-        go: { enabled: true },
-        python: { enabled: true },
-        shell: { enabled: true },
-        sql: { enabled: true },
-        solidity: { enabled: true },
-      },
+      } as unknown as ResolvedConfig["languages"],
       layers: {
         format: { enabled: true },
         lint: { enabled: true },
@@ -506,8 +503,8 @@ describe("config and scope", () => {
       planCheck({ cwd: root, layers: ["impossible" as never] }),
     ).rejects.toThrow("Invalid layer 'impossible'");
     await expect(
-      planCheck({ cwd: root, languages: ["ruby" as never] }),
-    ).rejects.toThrow("Invalid language 'ruby'");
+      planCheck({ cwd: root, languages: ["cobol" as never] }),
+    ).rejects.toThrow("Invalid language 'cobol'");
     await expect(
       planCheck({ cwd: root, onlyTools: ["not-a-tool"] }),
     ).rejects.toThrow("Invalid tool 'not-a-tool'");

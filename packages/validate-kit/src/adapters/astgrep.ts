@@ -1,6 +1,6 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, posix, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { kitRulesDir, kitSgconfig } from "../core/paths.js";
 import type {
@@ -77,7 +77,7 @@ interface AgMatch {
   lines?: string;
   /** Characters before the match on its first line, and after it on its last. */
   charCount?: { leading?: number };
-  metadata?: { suppressedBy?: unknown };
+  metadata?: { suppressedBy?: unknown; cfgTestFiles?: unknown };
   range?: {
     start?: { line: number; column: number };
     end?: { line: number; column: number };
@@ -112,11 +112,139 @@ function suppressed(m: AgMatch): boolean {
   return re.test(Array.from(first).slice(start).join(""));
 }
 
+// Comments go first: they may mention `#[cfg(test)]` or hold old code.
+const COMMENT = /\/\/[^\n]*|\/\*[\s\S]*?\*\//g;
+const ATTRIBUTE = String.raw`\[(?:[^\]"]|"(?:[^"\\]|\\.)*")*\]\s*`;
+// `mod <name>;` and the attributes stacked on it.
+const DECLARATION = new RegExp(
+  String.raw`((?:#${ATTRIBUTE})*)(?<!\w)(?:pub(?:\([^)]*\))?\s+)?mod\s+(?:r#)?(\w+)\s*;`,
+  "g",
+);
+// The inner attributes a file opens with.
+const INNER = new RegExp(String.raw`^\s*((?:#!${ATTRIBUTE})*)`);
+const CFG_TEST = /\[\s*cfg\s*\(\s*test\s*\)\s*\]/;
+const PATH_ATTR = /#\[\s*path\s*=\s*r?(#*)"(.*?)"\1\s*\]/;
+
+/** What the kit reads of a Rust file: its own `#![cfg(test)]` and its `mod x;` lines. */
+interface RustModule {
+  test: boolean;
+  declarations: { name: string; path: string | undefined; test: boolean }[];
+}
+
+function rustModule(
+  file: string,
+  read: Map<string, RustModule | undefined>,
+): RustModule | undefined {
+  if (!read.has(file)) {
+    let text: string | undefined;
+    try {
+      text = readFileSync(file, "utf8").replace(COMMENT, "");
+    } catch {
+      text = undefined;
+    }
+    read.set(
+      file,
+      text === undefined
+        ? undefined
+        : {
+            test: CFG_TEST.test(INNER.exec(text)?.[1] ?? ""),
+            declarations: [...text.matchAll(DECLARATION)].map(
+              ([, stacked = "", name = ""]) => ({
+                name,
+                path: PATH_ATTR.exec(stacked)?.[2],
+                test: CFG_TEST.test(stacked),
+              }),
+            ),
+          },
+    );
+  }
+  return read.get(file);
+}
+
+/**
+ * A Rust file that is test code only: it opens with `#![cfg(test)]`, or
+ * every `mod x;` that declares it is under `#[cfg(test)]` or in a file that
+ * is test code (`#[cfg(test)] mod tests;` beside `tests.rs`), as an inline
+ * `#[cfg(test)] mod tests { … }` is. A rule with `metadata.cfgTestFiles:
+ * exempt` cannot see that from the one file. Declarations are read where
+ * rustc reads them (`mod.rs`, `lib.rs`, `main.rs` beside the module, or
+ * `<dir>.rs`), and a `#[path]` from any `.rs` file beside the module.
+ */
+function cfgTestFile(
+  file: string,
+  known: Map<string, boolean>,
+  read: Map<string, RustModule | undefined>,
+): boolean {
+  const cached = known.get(file);
+  if (cached !== undefined) return cached;
+  known.set(file, false); // a cycle is not test code
+  const isMod = posix.basename(file) === "mod.rs";
+  const dir = isMod ? posix.dirname(posix.dirname(file)) : posix.dirname(file);
+  const name = isMod
+    ? posix.basename(posix.dirname(file))
+    : posix.basename(file, ".rs");
+  const roots = [
+    `${dir}/mod.rs`,
+    `${dir}/lib.rs`,
+    `${dir}/main.rs`,
+    `${dir}.rs`,
+  ];
+  let siblings: string[] = [];
+  try {
+    siblings = readdirSync(dir)
+      .filter((entry) => entry.endsWith(".rs"))
+      .map((entry) => `${dir}/${entry}`)
+      .filter((path) => !roots.includes(path));
+  } catch {
+    // no folder to read: the roots alone
+  }
+  let declared = false;
+  const test =
+    rustModule(file, read)?.test === true ||
+    ([...roots, ...siblings].every((parent) => {
+      if (parent === file) return true;
+      for (const declaration of rustModule(parent, read)?.declarations ?? []) {
+        const here =
+          declaration.path === undefined
+            ? roots.includes(parent) && declaration.name === name
+            : posix.join(posix.dirname(parent), declaration.path) === file;
+        if (!here) continue;
+        declared = true;
+        if (!declaration.test && !cfgTestFile(parent, known, read))
+          return false;
+      }
+      return true;
+    }) &&
+      declared);
+  known.set(file, test);
+  return test;
+}
+
 /** ast-grep — the custom-rule layer across every language. Uses the kit's sgconfig. */
 export const astgrep: ToolAdapter = {
   id: "ast-grep",
   layer: "custom-rules",
-  languages: ["ts", "js", "rust", "go", "python"],
+  // The languages the bundled rules are written for (each a grammar
+  // ast-grep ships); a project's own rules for others run through ruleDirs.
+  languages: [
+    "ts",
+    "js",
+    "rust",
+    "go",
+    "python",
+    "java",
+    "kotlin",
+    "csharp",
+    "c",
+    "cpp",
+    "swift",
+    "scala",
+    "dart",
+    "php",
+    "ruby",
+    "elixir",
+    "lua",
+  ],
   bin: "ast-grep",
   supportsFix: true,
   fixWriteBack: true,
@@ -139,7 +267,13 @@ export const astgrep: ToolAdapter = {
   },
 
   buildArgs(ctx: ToolContext): BuiltCommand {
-    const targets = ctx.files && ctx.files.length > 0 ? ctx.files : [ctx.cwd];
+    // Relative to the project root: a rule's `files` and `ignores` globs
+    // match the path as given, so an absolute one would match a folder above
+    // the project (a checkout under a `tests/` folder made every file a test).
+    const targets =
+      ctx.files && ctx.files.length > 0
+        ? ctx.files.map((file) => relative(ctx.cwd, file) || ".")
+        : ["."];
     const options = optionsOf(ctx);
     const configPath =
       ctx.configPath ??
@@ -185,12 +319,19 @@ export const astgrep: ToolAdapter = {
       };
     }
     const findings = [];
+    const known = new Map<string, boolean>();
+    const read = new Map<string, RustModule | undefined>();
     for (const line of raw.stdout.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       const m = parseJsonLine<AgMatch>("ast-grep", trimmed);
       if (suppressed(m)) continue;
       const file = absPosix(ctx.cwd, m.file);
+      if (
+        m.metadata?.cfgTestFiles === "exempt" &&
+        cfgTestFile(file, known, read)
+      )
+        continue;
       const lang = languageForFile(file);
       const start = m.range?.start;
       const end = m.range?.end;

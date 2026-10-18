@@ -1,0 +1,28 @@
+id: swift-test-no-assertion
+language: swift
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (XCTAssertEqual, #expect)."
+note: |
+  An XCTest method named test* or a Swift Testing @Test function with no
+  assertion only proves the code did not throw.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, so a helper named so counts too.
+files:
+  - "**/Tests/**"
+  - "**/*Tests.swift"
+  - "**/*Test.swift"
+rule:
+  kind: function_declaration
+  any:
+    - has:
+        field: name
+        regex: "^test"
+    - has:
+        kind: modifiers
+        regex: "@Test\\b"
+  not:
+    regex: "(XCTAssert|XCTFail|XCTUnwrap|XCTExpect|#expect|#require|expectation|(?i)verify|(?i)should)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

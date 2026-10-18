@@ -1,0 +1,7 @@
+id: swift-float-money
+valid:
+  - "let priceCents: Int = 0"
+  - "let price: Decimal = 1"
+invalid:
+  - "let price: Double = 1.0"
+  - "var amount: Float = 0"

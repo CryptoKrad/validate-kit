@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join, posix, resolve } from "node:path";
 import { z } from "zod";
@@ -13,7 +12,8 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { toolAdopted } from "../detect/adoption.js";
-import { languageForFile, toPosix } from "../detect/languages.js";
+import { gitSync } from "../detect/git.js";
+import { isCode, languageForFile, toPosix } from "../detect/languages.js";
 import { absPosix, finding, scratchOf, toolOptions } from "./base.js";
 
 /** Where the usual test runners write a report diff-cover reads. */
@@ -74,17 +74,8 @@ function baseBranch(root: string): string | undefined {
   );
 }
 
-function git(root: string, args: string[]): string | undefined {
-  try {
-    return execFileSync("git", args, {
-      cwd: root,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-  } catch {
-    return undefined;
-  }
-}
+const git = (root: string, args: string[]): string | undefined =>
+  gitSync(root, args)?.trim();
 
 /** Consecutive lines as ranges: [3, 4, 5, 9] -> [[3, 5], [9, 9]]. */
 function runs(lines: number[]): [number, number][] {
@@ -171,9 +162,7 @@ export const diffCover: ToolAdapter = {
       ...(git(root, ["diff", "--name-only", "HEAD"]) ?? "").split("\n"),
     ].filter(
       (path) =>
-        path &&
-        languageForFile(path) !== undefined &&
-        (here === "" || path.startsWith(`${here}/`)),
+        path && isCode(path) && (here === "" || path.startsWith(`${here}/`)),
     );
     // A changed source newer than the oldest report: the report is stale.
     const oldest = Math.min(...reports.map((path) => statSync(path).mtimeMs));

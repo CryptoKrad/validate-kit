@@ -1,0 +1,11 @@
+id: py-no-unbounded-request
+valid:
+  - "requests.get(url, timeout=5)"
+  - "requests.post(url, **opts)"
+  - "urlopen(url, None, 10)"
+  - "pool.urlopen(\"GET\", url)"
+  - "session.get(url)"
+invalid:
+  - "requests.get(url)"
+  - "requests.request(\"GET\", url, headers=h)"
+  - "urllib.request.urlopen(url)"

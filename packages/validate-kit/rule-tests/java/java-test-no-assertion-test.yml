@@ -1,0 +1,19 @@
+id: java-test-no-assertion
+valid:
+  - "class T { @Test void adds() { assertEquals(3, add(1, 2)); } }"
+  - "class T { @Test void m() { verify(repo).save(x); } }"
+  - "class T { @Test(expected = IllegalStateException.class) void ex() { f(); } }"
+  - "class T { void helper() { f(); } }"
+  - |
+    class T {
+      @Test void orders() { testComparator(a(), b()); }
+      private void testComparator(Object x, Object y) { assertTrue(x != y); }
+    }
+invalid:
+  - "class T { @Test void adds() { int x = add(1, 2); } }"
+  - "class T { @ParameterizedTest void p(int x) { f(x); } }"
+  - |
+    class T {
+      @Test void runs() { run(); }
+      private void run() { f(); }
+    }

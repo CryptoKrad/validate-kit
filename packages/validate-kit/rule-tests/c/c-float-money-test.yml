@@ -1,0 +1,6 @@
+id: c-float-money
+valid:
+  - "long price_cents;"
+invalid:
+  - "double price;"
+  - "void pay(float fee);"

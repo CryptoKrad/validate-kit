@@ -1,0 +1,20 @@
+id: scala-test-no-assertion
+snapshots:
+  test("adds") { add(1, 2) }:
+    labels:
+    - source: test("adds") { add(1, 2) }
+      style: primary
+      start: 0
+      end: 26
+    - source: '{ add(1, 2) }'
+      style: secondary
+      start: 13
+      end: 26
+    - source: test
+      style: secondary
+      start: 0
+      end: 4
+    - source: test("adds")
+      style: secondary
+      start: 0
+      end: 12

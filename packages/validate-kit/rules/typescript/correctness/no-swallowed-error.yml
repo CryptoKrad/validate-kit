@@ -1,0 +1,147 @@
+id: ts-no-swallowed-error
+language: typescript
+severity: warning
+message: "This catch swallows the error: nothing handles, logs or rethrows it. Handle it, or say in a comment why it is expected."
+note: |
+  An empty catch block, or `.catch(() => {})` (or `=> null`, `=> undefined`)
+  as a statement, hides the failure, and the code goes on as if the call had
+  worked. A comment inside the block says the error is expected, and is left
+  alone; so is a `.catch` whose result is kept (a promise chain).
+rule:
+  any:
+    - kind: catch_clause
+      has:
+        field: body
+        kind: statement_block
+        regex: "^\\{\\s*\\}$"
+    # As a statement, its result thrown away: `queue = job.catch(() => {})`
+    # keeps a chain going while the caller awaits `job` itself.
+    - kind: call_expression
+      any:
+        - inside:
+            kind: expression_statement
+        - inside:
+            kind: await_expression
+            inside:
+              kind: expression_statement
+      all:
+        - has:
+            field: function
+            kind: member_expression
+            has:
+              field: property
+              regex: "^catch$"
+        - has:
+            field: arguments
+            has:
+              any:
+                - kind: arrow_function
+                - kind: function_expression
+              has:
+                field: body
+                regex: "^(\\{\\s*\\}|null|undefined|void 0)$"
+metadata:
+  category: correctness
+  cwe: "CWE-390"
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: tsx-no-swallowed-error
+language: tsx
+severity: warning
+message: "This catch swallows the error: nothing handles, logs or rethrows it. Handle it, or say in a comment why it is expected."
+note: |
+  An empty catch block, or `.catch(() => {})` (or `=> null`, `=> undefined`)
+  as a statement, hides the failure, and the code goes on as if the call had
+  worked. A comment inside the block says the error is expected, and is left
+  alone; so is a `.catch` whose result is kept (a promise chain).
+rule:
+  any:
+    - kind: catch_clause
+      has:
+        field: body
+        kind: statement_block
+        regex: "^\\{\\s*\\}$"
+    # As a statement, its result thrown away: `queue = job.catch(() => {})`
+    # keeps a chain going while the caller awaits `job` itself.
+    - kind: call_expression
+      any:
+        - inside:
+            kind: expression_statement
+        - inside:
+            kind: await_expression
+            inside:
+              kind: expression_statement
+      all:
+        - has:
+            field: function
+            kind: member_expression
+            has:
+              field: property
+              regex: "^catch$"
+        - has:
+            field: arguments
+            has:
+              any:
+                - kind: arrow_function
+                - kind: function_expression
+              has:
+                field: body
+                regex: "^(\\{\\s*\\}|null|undefined|void 0)$"
+metadata:
+  category: correctness
+  cwe: "CWE-390"
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: js-no-swallowed-error
+language: javascript
+severity: warning
+message: "This catch swallows the error: nothing handles, logs or rethrows it. Handle it, or say in a comment why it is expected."
+note: |
+  An empty catch block, or `.catch(() => {})` (or `=> null`, `=> undefined`)
+  as a statement, hides the failure, and the code goes on as if the call had
+  worked. A comment inside the block says the error is expected, and is left
+  alone; so is a `.catch` whose result is kept (a promise chain).
+rule:
+  any:
+    - kind: catch_clause
+      has:
+        field: body
+        kind: statement_block
+        regex: "^\\{\\s*\\}$"
+    # As a statement, its result thrown away: `queue = job.catch(() => {})`
+    # keeps a chain going while the caller awaits `job` itself.
+    - kind: call_expression
+      any:
+        - inside:
+            kind: expression_statement
+        - inside:
+            kind: await_expression
+            inside:
+              kind: expression_statement
+      all:
+        - has:
+            field: function
+            kind: member_expression
+            has:
+              field: property
+              regex: "^catch$"
+        - has:
+            field: arguments
+            has:
+              any:
+                - kind: arrow_function
+                - kind: function_expression
+              has:
+                field: body
+                regex: "^(\\{\\s*\\}|null|undefined|void 0)$"
+metadata:
+  category: correctness
+  cwe: "CWE-390"
+  autofix: none
+  since: "0.2.5"

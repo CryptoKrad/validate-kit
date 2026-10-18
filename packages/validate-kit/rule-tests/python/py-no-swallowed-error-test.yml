@@ -1,0 +1,34 @@
+id: py-no-swallowed-error
+valid:
+  - |
+    try:
+        f()
+    except KeyError:
+        pass
+  - |
+    try:
+        f()
+    except (AttributeError, ImportError):
+        pass
+  - |
+    try:
+        f()
+    except Exception:
+        # expected: the cache is optional
+        pass
+  - |
+    try:
+        f()
+    except Exception as e:
+        log(e)
+invalid:
+  - |
+    try:
+        f()
+    except Exception:
+        pass
+  - |
+    try:
+        f()
+    except BaseException as e:
+        ...

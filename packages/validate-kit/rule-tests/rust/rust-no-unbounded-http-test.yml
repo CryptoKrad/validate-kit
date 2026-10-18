@@ -1,0 +1,12 @@
+id: rust-no-unbounded-http
+valid:
+  - "fn f() { let c = reqwest::Client::builder().timeout(D).build(); }"
+  - "fn f() { let c = reqwest::Client::new(); }"
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn t() { let b = reqwest::get("http://127.0.0.1:1"); }
+    }
+invalid:
+  - "fn f() { let b = reqwest::get(\"https://x\"); }"
+  - "fn f() { let b = reqwest::blocking::get(\"https://x\"); }"

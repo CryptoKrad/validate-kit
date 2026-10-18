@@ -1,0 +1,13 @@
+id: js-no-swallowed-error
+valid:
+  - "try { f(); } catch (e) { log(e); }"
+  - "try { f(); } catch { /* expected: offline */ }"
+  - "p.catch((e) => log(e));"
+  - "queue = job.catch(() => undefined);"
+invalid:
+  - "try { f(); } catch {}"
+  - "try { f(); } catch (e) {}"
+  - "p.catch(() => {});"
+  - "p.catch(function () {});"
+  - "p.catch(() => null);"
+  - "await p.catch(() => undefined);"

@@ -1,0 +1,14 @@
+id: go-no-swallowed-error
+valid:
+  - "func f() { _ = x }"
+  - "func f() error { if err != nil { return err }; return nil }"
+  - |
+    func f() {
+    	if err != nil {
+    		// cannot happen: closed file
+    	}
+    }
+invalid:
+  - "func f() { _ = err }"
+  - "func f() { _ = closeErr }"
+  - "func f() { if err != nil {} }"

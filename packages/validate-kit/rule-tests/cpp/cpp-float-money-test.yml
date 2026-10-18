@@ -1,0 +1,8 @@
+id: cpp-float-money
+valid:
+  - "int64_t price_cents = 0;"
+  - "double ratio = 0.5;"
+invalid:
+  - "double price = 1.0;"
+  - "struct A { float amount; };"
+  - "void pay(double fee) {}"

@@ -33,3 +33,21 @@ js-test-no-assertion
 go-test-no-assertion
 py-test-no-assertion
 rust-test-no-assertion
+# Errors thrown away, sleeps in tests, tasks nobody keeps, stubs left behind (0.2.5).
+ts-no-swallowed-error
+tsx-no-swallowed-error
+js-no-swallowed-error
+py-no-swallowed-error
+go-no-swallowed-error
+rust-no-swallowed-error
+ts-no-sleep-in-tests
+tsx-no-sleep-in-tests
+js-no-sleep-in-tests
+py-no-sleep-in-tests
+go-no-sleep-in-tests
+rust-no-sleep-in-tests
+py-no-floating-task
+ts-no-hollow-impl
+tsx-no-hollow-impl
+js-no-hollow-impl
+py-no-hollow-impl

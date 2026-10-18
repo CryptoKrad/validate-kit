@@ -1,0 +1,68 @@
+id: py-no-sleep-in-tests
+snapshots:
+  ? |
+    async def test_y():
+        await asyncio.sleep(0.5)
+  : labels:
+    - source: asyncio.sleep(0.5)
+      style: primary
+      start: 30
+      end: 48
+    - source: test_y
+      style: secondary
+      start: 10
+      end: 16
+    - source: |-
+        async def test_y():
+            await asyncio.sleep(0.5)
+      style: secondary
+      start: 0
+      end: 48
+    - source: asyncio.sleep
+      style: secondary
+      start: 30
+      end: 43
+  ? |
+    def test_x():
+        time.sleep(1)
+  : labels:
+    - source: time.sleep(1)
+      style: primary
+      start: 18
+      end: 31
+    - source: test_x
+      style: secondary
+      start: 4
+      end: 10
+    - source: |-
+        def test_x():
+            time.sleep(1)
+      style: secondary
+      start: 0
+      end: 31
+    - source: time.sleep
+      style: secondary
+      start: 18
+      end: 28
+  ? |
+    def test_z():
+        sleep(2)
+  : labels:
+    - source: sleep(2)
+      style: primary
+      start: 18
+      end: 26
+    - source: test_z
+      style: secondary
+      start: 4
+      end: 10
+    - source: |-
+        def test_z():
+            sleep(2)
+      style: secondary
+      start: 0
+      end: 26
+    - source: sleep
+      style: secondary
+      start: 18
+      end: 23

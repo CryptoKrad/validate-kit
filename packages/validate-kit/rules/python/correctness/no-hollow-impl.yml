@@ -1,0 +1,32 @@
+id: py-no-hollow-impl
+language: python
+severity: warning
+message: "This function is a stub (its body is only raise NotImplementedError, or ...): implement it, or remove it."
+note: |
+  Agents leave stubs behind. Only an undecorated function at module level
+  whose whole body is `raise NotImplementedError` or `...` is reported: a
+  method may be an interface for subclasses, a decorator (@overload,
+  @abstractmethod, a route) gives a stub a purpose, and a `pass` body, a
+  docstring or a comment says the no-op is meant. Stub files (.pyi) and
+  tests are left out.
+ignores:
+  - "**/*.pyi"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests.py"
+  - "**/tests/**"
+  - "**/conftest.py"
+rule:
+  kind: function_definition
+  not:
+    inside:
+      any:
+        - kind: block
+        - kind: decorated_definition
+  has:
+    field: body
+    regex: "^(\\.\\.\\.|raise\\s+NotImplementedError(\\(.*\\))?)\\s*$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"

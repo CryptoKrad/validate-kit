@@ -1,0 +1,7 @@
+id: scala-float-money
+valid:
+  - "val priceCents: Long = 0L"
+  - "val price: BigDecimal = 1"
+invalid:
+  - "val price: Double = 1.0"
+  - "def pay(fee: Double): Unit = ()"

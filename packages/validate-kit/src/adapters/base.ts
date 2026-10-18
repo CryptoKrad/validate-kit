@@ -1,18 +1,22 @@
-import { realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, posix, relative, resolve } from "node:path";
 import type { z } from "zod";
 import { ConfigError } from "../config/schema.js";
 import { resolveBin, run } from "../core/exec.js";
 import { groupBy } from "../core/group.js";
 import type { PlannedTask } from "../core/plan.js";
+import { configFolderOf } from "../detect/adoption.js";
 import { languageForFile, toPosix } from "../detect/languages.js";
 import type {
   AvailabilityResult,
+  BuiltCommand,
   Finding,
   Language,
   PlanEnv,
   RawOutput,
+  RunResult,
   Severity,
+  TaskSeed,
   ToolAdapter,
   ToolContext,
 } from "../core/types.js";
@@ -67,14 +71,104 @@ export function charColumn(
   return Buffer.from(text).subarray(0, byte).toString().length + 1;
 }
 
+/** The 1-based line of the first line of `text` matching `key`, else 1. */
+export function lineOf(text: string | undefined, key: RegExp): number {
+  const at = (text ?? "").split("\n").findIndex((line) => key.test(line));
+  return at < 0 ? 1 : at + 1;
+}
+
+/**
+ * Each file's lines, read once, for `charColumn`: undefined for a file that
+ * cannot be read.
+ */
+export function sourceLines(): (file: string) => string[] | undefined {
+  const read = new Map<string, string[] | undefined>();
+  return (file) => {
+    if (!read.has(file))
+      read.set(
+        file,
+        existsSync(file) ? readFileSync(file, "utf8").split("\n") : undefined,
+      );
+    return read.get(file);
+  };
+}
+
 /** `value` as a regular expression that matches exactly it (JS and RE2). */
 export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * A file path as a glob that matches exactly it, for a tool that globs every
+ * file it is named (solhint, html-validate): each glob character in a
+ * character class. A `{a,b}` still expands there, so such a name throws.
+ */
+export function globLiteral(tool: string, path: string): string {
+  if (/\{[^}]*,[^}]*\}/.test(path))
+    throw new Error(
+      `${tool} reads each file name as a glob and cannot be given ${path}: its {…,…} expands to other names. Rename the file or leave it out of the scope.`,
+    );
+  return path.replace(/[[\]*?{}()]/g, "[$&]");
+}
+
 export function absPosix(cwd: string, file: string): string {
   return toPosix(isAbsolute(file) ? file : resolve(cwd, file));
 }
+
+/**
+ * A path a tool printed from its working directory's real path (taplo,
+ * lychee: /private/tmp for /tmp), absolute in the kit's spelling of `cwd`.
+ */
+export function fromRealCwd(cwd: string): (path: string) => string {
+  const kit = toPosix(cwd);
+  const real = toPosix(realpathSync(cwd));
+  return (path) => {
+    const file = absPosix(kit, path);
+    return file.startsWith(`${real}/`)
+      ? `${kit}${file.slice(real.length)}`
+      : file;
+  };
+}
+
+/** The first line of `texts` that is not blank, trimmed. */
+export function firstLineOf(...texts: string[]): string | undefined {
+  for (const text of texts)
+    for (const line of text.split(/\r?\n/)) if (line.trim()) return line.trim();
+  return undefined;
+}
+
+/** A line of a Symfony Console error box: indented two spaces. */
+const boxed = (line: string) => /^ {2}\S/.test(line);
+
+/**
+ * The message of a Symfony Console error (php-cs-fixer, PHPStan, Pint): its
+ * boxed lines joined, else the first line `noise` does not match.
+ */
+export function consoleError(text: string, noise = /^$/): string | undefined {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex(boxed);
+  if (start >= 0) {
+    const end = lines.findIndex((line, i) => i > start && !boxed(line));
+    return lines
+      .slice(start, end < 0 ? undefined : end)
+      .map((line) => line.trim())
+      .join(" ");
+  }
+  return lines.map((line) => line.trim()).find((l) => l && !noise.test(l));
+}
+
+/**
+ * For every `dotnet` command: the SDK sends telemetry unless opted out,
+ * prints a welcome banner on a first run, and its NuGet Audit fetches
+ * vulnerability data on every restore, even with every package cached
+ * (docs/research/lint-toolchain/sota-2026-10-18/dotnet-ruby-php-elixir.md, 1a).
+ * MSBuild reads environment variables as properties.
+ */
+export const DOTNET_ENV = {
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1",
+  DOTNET_NOLOGO: "1",
+  NuGetAudit: "false",
+};
 
 export function parseJsonOutput<T>(
   tool: string,
@@ -212,6 +306,7 @@ export async function checkAvailability(
     timeoutMs: 15_000,
     pathOnly,
     ...(adapter.pythonEnv ? { pythonEnv: true } : {}),
+    ...(adapter.versionEnv ? { env: { ...adapter.versionEnv } } : {}),
   });
   const out = `${raw.stdout}\n${raw.stderr}`.trim();
   const ok = (adapter.versionExitCodes ?? [0]).includes(raw.exitCode);
@@ -372,6 +467,115 @@ export function filesIn(
 }
 
 /**
+ * The seed's files of `language` that exist: several tools pass a missing
+ * path silently. A plan made without a file list (the four-argument
+ * buildPlan) still finds the tool's files.
+ */
+export function existingFiles(
+  seed: TaskSeed,
+  env: PlanEnv,
+  language: Language,
+): string[] {
+  return (
+    seed.files ??
+    env.scopedFiles.filter((file) => languageForFile(file) === language)
+  ).filter((file) => existsSync(file));
+}
+
+/**
+ * The task's files relative to the folder it runs in, each below it (so a
+ * config's own exclude patterns match them). None is a bug in the plan: the
+ * tool would read stdin or its whole folder.
+ */
+export function relativeFiles(ctx: ToolContext, tool: string): string[] {
+  const files = ctx.files ?? [];
+  if (files.length === 0) throw new Error(`${tool} needs the task's file list`);
+  const cwd = toPosix(ctx.cwd);
+  return files.map((file) => posix.relative(cwd, toPosix(file)));
+}
+
+/** One file's own run, after the run of them all failed. */
+export interface EachRun {
+  file: string;
+  /** null: it did not exit (it could not start, or a signal ended it). */
+  status: number | null;
+  /** Its stdout, then its stderr. */
+  out: string;
+}
+
+/** Run by node: the options, then every file; on a failure, each file. */
+const BATCH_THEN_EACH = `
+const { spawnSync } = require("node:child_process");
+const [bin, options, ...files] = process.argv.slice(1);
+const run = (list) => spawnSync(bin, [...JSON.parse(options), ...list], { encoding: "utf8", maxBuffer: 1 << 26 });
+const all = run(files);
+if (all.status === 0 && !all.stderr && !all.stdout) process.exit(0);
+process.stdout.write(JSON.stringify(files.map((file) => {
+  const one = run([file]);
+  return { file, status: one.status, out: (one.stdout || "") + (one.stderr || "") + (one.error ? String(one.error) : "") };
+})));
+process.exit(all.status ?? 1);
+`;
+
+/**
+ * For a tool whose output cannot name the file a finding is in
+ * (ocamlformat prints nothing) or mixes files (ormolu): every file in one
+ * process, and only when that run fails or prints anything, each file in
+ * its own, as JSON `EachRun[]` on stdout (`eachRun` reads it). The exit
+ * code is the first run's.
+ */
+export function batchThenEach(
+  bin: string,
+  options: readonly string[],
+  files: readonly string[],
+): BuiltCommand {
+  return {
+    bin: process.execPath,
+    args: ["-e", BATCH_THEN_EACH, bin, JSON.stringify(options), ...files],
+    okExitCodes: "any",
+    // A timeout stops the per-file runs too.
+    processGroup: true,
+  };
+}
+
+/** batchThenEach's per-file runs: none when the run of them all passed. */
+export function eachRun(tool: string, raw: RawOutput): EachRun[] {
+  if (raw.exitCode === 0 && !raw.stdout.trim()) return [];
+  return findingsArray<EachRun>(tool, parseJsonLine<unknown>(tool, raw.stdout));
+}
+
+/**
+ * For a tool that reads one config from the folder it runs in (taplo,
+ * yamllint, stylelint): the seed's files of `language` that exist (a
+ * missing path passes silently), each run from the folder of its nearest
+ * config in `configs` (or a package.json with `lookup.key`). A file none
+ * reaches is not the tool's, unless `tools.<id>.enabled` runs it on the
+ * tool's defaults; with `tools.<id>.configPath` every file runs from the
+ * seed's folder. `lookup` is configFolderOf's.
+ */
+export function byConfigFolder(
+  seed: TaskSeed,
+  env: PlanEnv,
+  language: Language,
+  configs: readonly string[],
+  lookup?: Parameters<typeof configFolderOf>[2],
+): TaskSeed[] {
+  const named = env.toolConfig.configPath !== undefined;
+  const folderOf = configFolderOf(env.projectRoot, configs, lookup);
+  const kept = existingFiles(seed, env, language).flatMap((file) => {
+    const dir = named
+      ? seed.cwd
+      : (folderOf(file) ??
+        (env.toolConfig.enabled === true ? seed.cwd : undefined));
+    return dir === undefined ? [] : [{ file, dir: toPosix(dir) }];
+  });
+  return [...groupBy(kept, (k) => k.dir)].map(([cwd, own]) => ({
+    cwd,
+    files: own.map((k) => k.file),
+  }));
+}
+
+/**
  * ESLint's and oxlint's `--quiet` drops warnings from the report while a
  * warning limit still counts them, so the tool exits 1 with no finding
  * (docs/research/lint-toolchain/quiet-with-warning-limit.md). `limits` are
@@ -454,6 +658,65 @@ export function finding(f: {
     message: f.message,
     fixable: f.fixable,
     ...(f.url !== undefined ? { url: f.url } : {}),
+  };
+}
+
+/**
+ * A formatter's list of the files that differ, one path a line on stdout
+ * (`files` picks the lines that are paths; `path` decodes one): a finding
+ * each, at 1:1. None in a fix pass, where the list is the files it rewrote.
+ */
+export function listedFiles(
+  tool: string,
+  raw: RawOutput,
+  ctx: ToolContext,
+  {
+    files,
+    message,
+    path = (line) => line,
+  }: { files: RegExp; message: string; path?: (line: string) => string },
+): Finding[] {
+  if (ctx.fix) return [];
+  return raw.stdout.split(/\r?\n/).flatMap((line) => {
+    const printed = line.trim();
+    if (!files.test(printed)) return [];
+    const file = absPosix(ctx.cwd, path(printed));
+    return [
+      finding({
+        tool,
+        layer: "format",
+        language: languageForFile(file),
+        file,
+        line: 1,
+        col: 1,
+        severity: "warning",
+        message,
+        fixable: true,
+      }),
+    ];
+  });
+}
+
+/**
+ * The result of a tool whose exit codes mix findings and crashes: a non-zero
+ * exit with nothing read is a crash, with the tool's first stderr line.
+ */
+export function readResult(
+  tool: string,
+  raw: RawOutput,
+  ctx: ToolContext,
+  findings: Finding[],
+): RunResult {
+  if (raw.exitCode !== 0 && findings.length === 0)
+    throw new Error(
+      `${tool} exited ${raw.exitCode} and reported nothing the kit reads: ${raw.stderr.trim().split("\n")[0] ?? ""}`,
+    );
+  return {
+    findings,
+    filesProcessed: ctx.files?.length ?? 0,
+    fixesApplied: 0,
+    rawExitCode: raw.exitCode,
+    stderr: raw.stderr,
   };
 }
 

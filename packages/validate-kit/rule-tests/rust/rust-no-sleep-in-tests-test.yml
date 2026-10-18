@@ -1,0 +1,20 @@
+id: rust-no-sleep-in-tests
+valid:
+  - "fn f() { std::thread::sleep(D); }"
+  - |
+    #[cfg(not(test))]
+    fn pause() { std::thread::sleep(D) }
+  - |
+    #[test]
+    fn t() { loop { std::thread::sleep(D); break; } }
+  - |
+    #[test]
+    fn t() { std::thread::spawn(|| std::thread::sleep(D)); }
+invalid:
+  - |
+    #[test]
+    fn t() { std::thread::sleep(D); }
+  - |
+    #[tokio::test]
+    #[ignore]
+    async fn t() { thread::sleep(D); }

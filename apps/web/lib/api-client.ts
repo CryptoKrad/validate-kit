@@ -13,6 +13,9 @@ import {
 
 export type { User, LoginResult } from "contracts";
 
+/** How long a request may take before it is abandoned, so a hung API cannot hang the page. */
+const REQUEST_TIMEOUT_MS = 10_000;
+
 /**
  * Resolve the API base URL. Reads NEXT_PUBLIC_API_URL at call time (not module
  * load) so tests can mutate process.env before invoking. Trailing slashes are
@@ -26,6 +29,7 @@ export function apiBase(): string {
 export async function getUsers(): Promise<User[]> {
   const res = await fetch(`${apiBase()}/users`, {
     headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`getUsers failed: ${res.status}`);
@@ -41,6 +45,7 @@ export async function login(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`login failed: ${res.status}`);

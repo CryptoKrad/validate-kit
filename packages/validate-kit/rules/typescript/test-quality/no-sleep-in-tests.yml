@@ -1,0 +1,108 @@
+id: ts-no-sleep-in-tests
+language: typescript
+severity: warning
+message: "A fixed sleep in a test makes it slow, and flaky when the machine is busy: wait for the condition (expect.poll, waitFor, a locator), or use fake timers."
+note: |
+  `await new Promise((r) => setTimeout(r, 500))` and Playwright's
+  `page.waitForTimeout(500)` wait whether or not the thing has happened.
+  Poll for the condition with a deadline, or advance fake timers
+  (vi.useFakeTimers). A timer that rejects (a deadline in a Promise.race) and
+  a zero delay (flushing promises) are left alone.
+files:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+rule:
+  any:
+    - pattern: new Promise(($R) => setTimeout($R, $MS))
+    - pattern: new Promise($R => setTimeout($R, $MS))
+    - pattern: new Promise(($R) => { setTimeout($R, $MS) })
+    - pattern: new Promise(($R) => setTimeout(() => $R(), $MS))
+    - pattern: new Promise((resolve) => { setTimeout(() => resolve(), $MS) })
+    - pattern: $PAGE.waitForTimeout($MS)
+constraints:
+  MS:
+    not:
+      regex: "^0$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: tsx-no-sleep-in-tests
+language: tsx
+severity: warning
+message: "A fixed sleep in a test makes it slow, and flaky when the machine is busy: wait for the condition (expect.poll, waitFor, a locator), or use fake timers."
+note: |
+  `await new Promise((r) => setTimeout(r, 500))` and Playwright's
+  `page.waitForTimeout(500)` wait whether or not the thing has happened.
+  Poll for the condition with a deadline, or advance fake timers
+  (vi.useFakeTimers). A timer that rejects (a deadline in a Promise.race) and
+  a zero delay (flushing promises) are left alone.
+files:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+rule:
+  any:
+    - pattern: new Promise(($R) => setTimeout($R, $MS))
+    - pattern: new Promise($R => setTimeout($R, $MS))
+    - pattern: new Promise(($R) => { setTimeout($R, $MS) })
+    - pattern: new Promise(($R) => setTimeout(() => $R(), $MS))
+    - pattern: new Promise((resolve) => { setTimeout(() => resolve(), $MS) })
+    - pattern: $PAGE.waitForTimeout($MS)
+constraints:
+  MS:
+    not:
+      regex: "^0$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: js-no-sleep-in-tests
+language: javascript
+severity: warning
+message: "A fixed sleep in a test makes it slow, and flaky when the machine is busy: wait for the condition (expect.poll, waitFor, a locator), or use fake timers."
+note: |
+  `await new Promise((r) => setTimeout(r, 500))` and Playwright's
+  `page.waitForTimeout(500)` wait whether or not the thing has happened.
+  Poll for the condition with a deadline, or advance fake timers
+  (vi.useFakeTimers). A timer that rejects (a deadline in a Promise.race) and
+  a zero delay (flushing promises) are left alone.
+files:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+rule:
+  any:
+    - pattern: new Promise(($R) => setTimeout($R, $MS))
+    - pattern: new Promise($R => setTimeout($R, $MS))
+    - pattern: new Promise(($R) => { setTimeout($R, $MS) })
+    - pattern: new Promise(($R) => setTimeout(() => $R(), $MS))
+    - pattern: new Promise((resolve) => { setTimeout(() => resolve(), $MS) })
+    - pattern: $PAGE.waitForTimeout($MS)
+constraints:
+  MS:
+    not:
+      regex: "^0$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

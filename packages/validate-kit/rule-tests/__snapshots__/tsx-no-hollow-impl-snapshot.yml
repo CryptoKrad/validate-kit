@@ -1,0 +1,83 @@
+id: tsx-no-hollow-impl
+snapshots:
+  ? |
+    class Shape {
+      area() {
+        throw new Error("Method not implemented.");
+      }
+    }
+  : labels:
+    - source: throw new Error("Method not implemented.");
+      style: primary
+      start: 29
+      end: 72
+    - source: '"Method not implemented."'
+      style: secondary
+      start: 45
+      end: 70
+    - source: '"Method not implemented."'
+      style: secondary
+      start: 45
+      end: 70
+    - source: '"Method not implemented."'
+      style: secondary
+      start: 45
+      end: 70
+    - source: new Error("Method not implemented.")
+      style: secondary
+      start: 35
+      end: 71
+  'throw Error(`TODO: wire the db`);':
+    labels:
+    - source: 'throw Error(`TODO: wire the db`);'
+      style: primary
+      start: 0
+      end: 33
+    - source: '`TODO: wire the db`'
+      style: secondary
+      start: 12
+      end: 31
+    - source: '`TODO: wire the db`'
+      style: secondary
+      start: 12
+      end: 31
+    - source: 'Error(`TODO: wire the db`)'
+      style: secondary
+      start: 6
+      end: 32
+  throw new Error("not implemented");:
+    labels:
+    - source: throw new Error("not implemented");
+      style: primary
+      start: 0
+      end: 35
+    - source: '"not implemented"'
+      style: secondary
+      start: 16
+      end: 33
+    - source: '"not implemented"'
+      style: secondary
+      start: 16
+      end: 33
+    - source: new Error("not implemented")
+      style: secondary
+      start: 6
+      end: 34
+  throw new TypeError("Not yet implemented");:
+    labels:
+    - source: throw new TypeError("Not yet implemented");
+      style: primary
+      start: 0
+      end: 43
+    - source: '"Not yet implemented"'
+      style: secondary
+      start: 20
+      end: 41
+    - source: '"Not yet implemented"'
+      style: secondary
+      start: 20
+      end: 41
+    - source: new TypeError("Not yet implemented")
+      style: secondary
+      start: 6
+      end: 42

@@ -1,0 +1,31 @@
+id: cpp-float-money
+language: cpp
+severity: warning
+message: "Money held in a float: double rounds (0.1 + 0.2 != 0.3). Keep integer minor units (int64_t price_cents)."
+note: |
+  Money in a binary float drifts: 0.1 + 0.2 != 0.3. A field, variable or
+  parameter named like money (price, amount, cost, balance, fee, ...) typed
+  double or float is reported; int64_t price_cents are not. Strict preset only.
+utils:
+  money-name:
+    regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+rule:
+  any:
+    - kind: declaration
+    - kind: field_declaration
+    - kind: parameter_declaration
+  has:
+    field: type
+    regex: "^(long\\s+)?(double|float)$"
+  all:
+    - has:
+        field: declarator
+        any:
+          - matches: money-name
+          - has:
+              field: declarator
+              matches: money-name
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"

@@ -7,13 +7,14 @@ import { getKitRoot } from "../core/paths.js";
 import { LANGUAGES, type Language } from "../core/types.js";
 
 /**
- * The languages ast-grep rules are written for; shell is shellcheck's, sql
- * squawk's, solidity Slither's (ast-grep has no Solidity grammar).
+ * The languages the bundled ast-grep rules are written for; shell is
+ * shellcheck's, sql squawk's, solidity Slither's (ast-grep has no Solidity
+ * grammar), and the others have their own linters.
  */
-type RuleLanguage = Exclude<Language, "shell" | "sql" | "solidity">;
-export const RULE_LANGUAGES = LANGUAGES.filter(
-  (lang): lang is RuleLanguage =>
-    lang !== "shell" && lang !== "sql" && lang !== "solidity",
+const AST_GREP_LANGUAGES = ["ts", "js", "rust", "go", "python"] as const;
+type RuleLanguage = (typeof AST_GREP_LANGUAGES)[number] & Language;
+export const RULE_LANGUAGES = LANGUAGES.filter((lang): lang is RuleLanguage =>
+  (AST_GREP_LANGUAGES as readonly string[]).includes(lang),
 );
 
 /** Proxy to `ast-grep test` — the rule snapshot harness. */

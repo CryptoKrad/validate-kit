@@ -1,0 +1,60 @@
+id: php-test-no-assertion
+language: php
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result ($this->assertSame, expectException)."
+note: |
+  A PHPUnit method named test* or marked #[Test] with no assertion only
+  proves the code did not throw. Codeception's `$I->see...` asserts. A skipped or incomplete test is left
+  alone.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, and so does a call to a helper
+  of the same file that asserts.
+files:
+  - "**/tests/**"
+  - "**/test/**"
+  - "**/*Test.php"
+rule:
+  kind: method_declaration
+  any:
+    - has:
+        field: name
+        regex: "^test"
+    - has:
+        kind: attribute_list
+        regex: "\\bTest\\b"
+  not:
+    any:
+      - regex: "(?i)(assert|expect|verify|should|\\bfail|markTestSkipped|markTestIncomplete|->(dont|can|cant)?see)"
+      # A helper of this file that asserts, called from the test (the first
+      # such call: ast-grep binds a name once).
+      - all:
+          - has:
+              stopBy: end
+              kind: member_call_expression
+              # Called as a statement: a builder chain on the way is not it.
+              inside:
+                kind: expression_statement
+              has:
+                field: name
+                pattern: $HELPER
+          - inside:
+              kind: program
+              stopBy: end
+              has:
+                stopBy: end
+                kind: method_declaration
+                has:
+                  field: name
+                  pattern: $HELPER
+                regex: "(?i)(assert|expect|verify|should|\\bfail|markTestSkipped|markTestIncomplete|->(dont|can|cant)?see)"
+      # PHPUnit's own marks of a test that asserts nothing on purpose.
+      - follows:
+          kind: comment
+          regex: "@doesNotPerformAssertions"
+      - has:
+          kind: attribute_list
+          regex: "DoesNotPerformAssertions"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

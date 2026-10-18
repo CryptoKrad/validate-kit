@@ -1,0 +1,25 @@
+id: ex-test-no-assertion
+snapshots:
+  ? |
+    test "adds" do
+      add(1, 2)
+    end
+  : labels:
+    - source: |-
+        test "adds" do
+          add(1, 2)
+        end
+      style: primary
+      start: 0
+      end: 30
+    - source: |-
+        do
+          add(1, 2)
+        end
+      style: secondary
+      start: 12
+      end: 30
+    - source: test
+      style: secondary
+      start: 0
+      end: 4

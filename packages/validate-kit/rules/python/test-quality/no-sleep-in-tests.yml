@@ -1,0 +1,43 @@
+id: py-no-sleep-in-tests
+language: python
+severity: warning
+message: "A fixed sleep in a test makes it slow, and flaky when the machine is busy: wait for the condition with a timeout, or fake the clock."
+note: |
+  `time.sleep(1)` in a test waits a second whether or not the thing has
+  happened. Poll for the condition with a deadline, or control time
+  (freezegun, time-machine, an injected clock). Only a `test_` function's own
+  statements are reported: a sleep inside a loop (a poll with a deadline), in
+  a helper or a fake server's handler, and `sleep(0)`, which only yields, are
+  left alone.
+files:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests.py"
+  - "**/tests/**/*.py"
+rule:
+  kind: call
+  has:
+    field: function
+    regex: "^((time|asyncio|trio|anyio)\\.)?sleep$"
+  not:
+    any:
+      - has:
+          field: arguments
+          regex: "^\\(\\s*0(\\.0*)?\\s*\\)$"
+      - inside:
+          any:
+            - kind: for_statement
+            - kind: while_statement
+          stopBy:
+            kind: function_definition
+  inside:
+    kind: function_definition
+    stopBy:
+      kind: function_definition
+    has:
+      field: name
+      regex: "^test"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

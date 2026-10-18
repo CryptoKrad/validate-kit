@@ -1,0 +1,58 @@
+id: java-test-no-assertion
+language: java
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (assertEquals, assertThat, assertThrows, verify)."
+note: |
+  A JUnit @Test, @ParameterizedTest or @RepeatedTest method with no
+  assertion only proves the code did not throw. @Test(expected = ...)
+  asserts the throw.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, and so does a call to a helper
+  of the same file that asserts.
+files:
+  - "**/src/test/**"
+  - "**/test/**"
+  - "**/*Test.java"
+  - "**/*Tests.java"
+rule:
+  kind: method_declaration
+  has:
+    kind: modifiers
+    has:
+      any:
+        - kind: marker_annotation
+        - kind: annotation
+      regex: "^@(org\\.junit\\.(jupiter\\.api\\.)?)?(Test|ParameterizedTest|RepeatedTest)\\b"
+  not:
+    any:
+      - regex: "(?i)(assert|verify|expect|should|\\bcheck|\\bfail\\s*\\()"
+      # A helper of this file that asserts, called from the test (the first
+      # such call: ast-grep binds a name once).
+      - all:
+          - has:
+              stopBy: end
+              kind: method_invocation
+              # Called as a statement: a builder chain on the way is not it.
+              inside:
+                kind: expression_statement
+              not:
+                has:
+                  field: object
+                  regex: "."
+              has:
+                field: name
+                pattern: $HELPER
+          - inside:
+              kind: program
+              stopBy: end
+              has:
+                stopBy: end
+                kind: method_declaration
+                has:
+                  field: name
+                  pattern: $HELPER
+                regex: "(?i)(assert|verify|expect|should|\\bcheck|\\bfail\\s*\\()"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

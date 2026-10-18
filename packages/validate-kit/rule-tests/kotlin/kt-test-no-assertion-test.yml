@@ -1,0 +1,11 @@
+id: kt-test-no-assertion
+valid:
+  - "class T { @Test fun adds() { assertEquals(3, add(1, 2)) } }"
+  - "class T { @Test fun s() { add(1, 2) shouldBe 3 } }"
+  - |
+    class T {
+      @Test fun adds() { same(add(1, 2), 3) }
+      private fun same(a: Int, b: Int) { assertEquals(a, b) }
+    }
+invalid:
+  - "class T { @Test fun adds() { add(1, 2) } }"

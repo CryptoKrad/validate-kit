@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { ConfigError } from "../config/schema.js";
@@ -5,6 +6,56 @@ import { run } from "../core/exec.js";
 import { toPosix } from "./languages.js";
 
 export type ChangedMode = "staged" | "changed" | "since";
+
+/**
+ * git's output, run in `root` (the hook's index, when a hook runs the kit),
+ * with `input` on stdin; undefined when git fails or is not there. For the
+ * checks that read git while they run, which is synchronous.
+ */
+export function gitSync(
+  root: string,
+  args: string[],
+  input?: string,
+): string | undefined {
+  return gitBytes(root, args, input)?.toString("utf8");
+}
+
+/** gitSync's output as bytes: `cat-file --batch` counts sizes in bytes. */
+export function gitBytes(
+  root: string,
+  args: string[],
+  input?: string,
+): Buffer | undefined {
+  try {
+    return execFileSync("git", args, {
+      cwd: root,
+      maxBuffer: 256 * 1024 * 1024,
+      stdio: [input === undefined ? "ignore" : "pipe", "pipe", "ignore"],
+      ...(input === undefined ? {} : { input }),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The main branch's commit at its merge base with HEAD: the trusted ref's
+ * under --trusted-ref, else origin's default branch (`origin/HEAD`, else
+ * `origin/main` or `origin/master`). Undefined when there is none (a
+ * shallow CI checkout).
+ */
+export function mainBase(
+  root: string,
+  trustedCommit?: string,
+): string | undefined {
+  const mergeBase = (ref: string) =>
+    gitSync(root, ["merge-base", "HEAD", ref])?.trim() || undefined;
+  return trustedCommit === undefined
+    ? ["origin/HEAD", "origin/main", "origin/master"]
+        .map(mergeBase)
+        .find(Boolean)
+    : mergeBase(trustedCommit);
+}
 
 async function git(
   rootDir: string,

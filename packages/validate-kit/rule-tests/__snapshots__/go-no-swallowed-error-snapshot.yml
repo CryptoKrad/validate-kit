@@ -1,0 +1,36 @@
+id: go-no-swallowed-error
+snapshots:
+  func f() { _ = closeErr }:
+    labels:
+    - source: _ = closeErr
+      style: primary
+      start: 11
+      end: 23
+    - source: closeErr
+      style: secondary
+      start: 15
+      end: 23
+  func f() { _ = err }:
+    labels:
+    - source: _ = err
+      style: primary
+      start: 11
+      end: 18
+    - source: err
+      style: secondary
+      start: 15
+      end: 18
+  func f() { if err != nil {} }:
+    labels:
+    - source: if err != nil {}
+      style: primary
+      start: 11
+      end: 27
+    - source: err != nil
+      style: secondary
+      start: 14
+      end: 24
+    - source: '{}'
+      style: secondary
+      start: 25
+      end: 27

@@ -1,0 +1,22 @@
+id: go-no-unbounded-http
+snapshots:
+  func f() { resp, err := http.Get(url) }:
+    labels:
+    - source: http.Get(url)
+      style: primary
+      start: 24
+      end: 37
+    - source: http.Get
+      style: secondary
+      start: 24
+      end: 32
+  func f() { resp, err := http.PostForm(url, v) }:
+    labels:
+    - source: http.PostForm(url, v)
+      style: primary
+      start: 24
+      end: 45
+    - source: http.PostForm
+      style: secondary
+      start: 24
+      end: 37

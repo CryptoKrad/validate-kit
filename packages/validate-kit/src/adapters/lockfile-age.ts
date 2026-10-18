@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { posix } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { parse as parseYaml } from "yaml";
+import { gitSync } from "../detect/git.js";
 import { toPosix } from "../detect/languages.js";
 
 /** A registry package a lockfile pins. */
@@ -88,18 +88,8 @@ export function lockedPackages(file: string, text: string): Locked[] {
   return [];
 }
 
-function git(root: string, args: string[]): string | undefined {
-  try {
-    return execFileSync("git", args, {
-      cwd: root,
-      encoding: "utf8",
-      maxBuffer: 256 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-  } catch {
-    return undefined;
-  }
-}
+const git = (root: string, args: string[]): string | undefined =>
+  gitSync(root, args);
 
 /**
  * The packages `lockfile` (relative to `root`) gained against what was

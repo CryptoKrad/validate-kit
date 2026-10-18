@@ -1,0 +1,146 @@
+id: ts-no-swallowed-error
+snapshots:
+  await p.catch(() => undefined);:
+    labels:
+    - source: p.catch(() => undefined)
+      style: primary
+      start: 6
+      end: 30
+    - source: catch
+      style: secondary
+      start: 8
+      end: 13
+    - source: p.catch
+      style: secondary
+      start: 6
+      end: 13
+    - source: undefined
+      style: secondary
+      start: 20
+      end: 29
+    - source: () => undefined
+      style: secondary
+      start: 14
+      end: 29
+    - source: () => undefined
+      style: secondary
+      start: 14
+      end: 29
+    - source: await p.catch(() => undefined);
+      style: secondary
+      start: 0
+      end: 31
+    - source: await p.catch(() => undefined)
+      style: secondary
+      start: 0
+      end: 30
+  p.catch(() => null);:
+    labels:
+    - source: p.catch(() => null)
+      style: primary
+      start: 0
+      end: 19
+    - source: catch
+      style: secondary
+      start: 2
+      end: 7
+    - source: p.catch
+      style: secondary
+      start: 0
+      end: 7
+    - source: 'null'
+      style: secondary
+      start: 14
+      end: 18
+    - source: () => null
+      style: secondary
+      start: 8
+      end: 18
+    - source: () => null
+      style: secondary
+      start: 8
+      end: 18
+    - source: p.catch(() => null);
+      style: secondary
+      start: 0
+      end: 20
+  p.catch(() => {});:
+    labels:
+    - source: p.catch(() => {})
+      style: primary
+      start: 0
+      end: 17
+    - source: catch
+      style: secondary
+      start: 2
+      end: 7
+    - source: p.catch
+      style: secondary
+      start: 0
+      end: 7
+    - source: '{}'
+      style: secondary
+      start: 14
+      end: 16
+    - source: () => {}
+      style: secondary
+      start: 8
+      end: 16
+    - source: () => {}
+      style: secondary
+      start: 8
+      end: 16
+    - source: p.catch(() => {});
+      style: secondary
+      start: 0
+      end: 18
+  p.catch(function () {});:
+    labels:
+    - source: p.catch(function () {})
+      style: primary
+      start: 0
+      end: 23
+    - source: catch
+      style: secondary
+      start: 2
+      end: 7
+    - source: p.catch
+      style: secondary
+      start: 0
+      end: 7
+    - source: '{}'
+      style: secondary
+      start: 20
+      end: 22
+    - source: function () {}
+      style: secondary
+      start: 8
+      end: 22
+    - source: function () {}
+      style: secondary
+      start: 8
+      end: 22
+    - source: p.catch(function () {});
+      style: secondary
+      start: 0
+      end: 24
+  try { f(); } catch (e) {}:
+    labels:
+    - source: catch (e) {}
+      style: primary
+      start: 13
+      end: 25
+    - source: '{}'
+      style: secondary
+      start: 23
+      end: 25
+  try { f(); } catch {}:
+    labels:
+    - source: catch {}
+      style: primary
+      start: 13
+      end: 21
+    - source: '{}'
+      style: secondary
+      start: 19
+      end: 21

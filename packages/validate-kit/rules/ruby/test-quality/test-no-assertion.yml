@@ -1,0 +1,62 @@
+id: rb-test-no-assertion
+language: ruby
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (expect(...).to, assert_equal)."
+note: |
+  An RSpec `it`/`specify`/`example` block, or a Minitest `test_` method,
+  with no expectation or assertion only proves the code did not raise. A
+  pending `it "..."` with no block is left alone.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, and so does a call to a helper
+  of the same file that asserts.
+files:
+  - "**/spec/**"
+  - "**/test/**"
+  - "**/*_spec.rb"
+  - "**/*_test.rb"
+rule:
+  any:
+    - kind: call
+      all:
+        - has:
+            field: method
+            regex: "^(it|specify|example|scenario|its)$"
+        - has:
+            field: block
+            any:
+              - kind: do_block
+              - kind: block
+    - kind: method
+      has:
+        field: name
+        regex: "^test_"
+  not:
+    any:
+      - regex: "(?i)(expect|should|assert|refute|must_|wont_|flunk|raise_error|is_expected|verify)"
+      # A helper of this file that asserts, called from the test (the first
+      # such call: ast-grep binds a name once).
+      - all:
+          - has:
+              stopBy: end
+              kind: call
+              not:
+                has:
+                  field: receiver
+                  regex: "."
+              has:
+                field: method
+                pattern: $HELPER
+          - inside:
+              kind: program
+              stopBy: end
+              has:
+                stopBy: end
+                kind: method
+                has:
+                  field: name
+                  pattern: $HELPER
+                regex: "(?i)(expect|should|assert|refute|must_|wont_|flunk|raise_error|is_expected|verify)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

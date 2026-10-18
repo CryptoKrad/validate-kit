@@ -1,0 +1,6 @@
+id: dart-float-money
+valid:
+  - "class A { int priceCents = 0; double ratio = 0.5; }"
+invalid:
+  - "class A { double price = 1.0; }"
+  - "void pay(double fee) {}"

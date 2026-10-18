@@ -1,0 +1,7 @@
+id: swift-test-no-assertion
+valid:
+  - "class T: XCTestCase { func testAdds() { XCTAssertEqual(3, add(1, 2)) } }"
+  - "@Test func adds() { #expect(add(1, 2) == 3) }"
+  - "func helper() { run() }"
+invalid:
+  - "class T: XCTestCase { func testAdds() { _ = add(1, 2) } }"

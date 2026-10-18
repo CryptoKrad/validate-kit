@@ -1,0 +1,5 @@
+id: lua-test-no-assertion
+valid:
+  - "it(\"adds\", function() assert.are.equal(3, add(1, 2)) end)"
+invalid:
+  - "it(\"adds\", function() add(1, 2) end)"

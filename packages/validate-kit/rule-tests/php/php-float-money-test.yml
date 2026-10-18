@@ -1,0 +1,7 @@
+id: php-float-money
+valid:
+  - "<?php class A { public int $priceCents; }"
+  - "<?php function f(float $ratio) {}"
+invalid:
+  - "<?php class A { public float $price; }"
+  - "<?php function pay(float $fee) {}"

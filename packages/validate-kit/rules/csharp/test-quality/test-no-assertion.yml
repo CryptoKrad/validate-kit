@@ -1,0 +1,54 @@
+id: cs-test-no-assertion
+language: csharp
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (Assert.Equal, .Should(), Verify)."
+note: |
+  An xUnit [Fact] or [Theory], NUnit [Test] or [TestCase], or MSTest
+  [TestMethod] with no assertion only proves the code did not throw.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, and so does a call to a helper
+  of the same file that asserts.
+files:
+  - "**/*Test.cs"
+  - "**/*Tests.cs"
+  - "**/*.Tests/**"
+  - "**/*.Test/**"
+  - "**/test/**"
+  - "**/tests/**"
+rule:
+  kind: method_declaration
+  has:
+    kind: attribute_list
+    has:
+      kind: attribute
+      regex: "^(Fact|Theory|Test|TestCase|TestMethod|DataTestMethod)\\b"
+  not:
+    any:
+      - regex: "(?i)(assert|verify|expect|should|received\\(|\\bfail)"
+      # A helper of this file that asserts, called from the test (the first
+      # such call: ast-grep binds a name once).
+      - all:
+          - has:
+              stopBy: end
+              kind: invocation_expression
+              # Called as a statement: a builder chain on the way is not it.
+              inside:
+                kind: expression_statement
+              has:
+                field: function
+                kind: identifier
+                pattern: $HELPER
+          - inside:
+              kind: compilation_unit
+              stopBy: end
+              has:
+                stopBy: end
+                kind: method_declaration
+                has:
+                  field: name
+                  pattern: $HELPER
+                regex: "(?i)(assert|verify|expect|should|received\\(|\\bfail)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

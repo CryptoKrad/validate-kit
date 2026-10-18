@@ -1,0 +1,28 @@
+id: go-no-swallowed-error
+language: go
+severity: warning
+message: "This throws the error away: return it, wrap it, or log it."
+note: |
+  `_ = err` and an empty `if err != nil {}` silence errcheck while the
+  failure goes unhandled. A comment inside the block says why the error
+  cannot matter, and is left alone.
+rule:
+  any:
+    - kind: assignment_statement
+      pattern: _ = $ERR
+      has:
+        field: right
+        regex: "^(err|\\w*Err|\\w*Error)$"
+    - kind: if_statement
+      all:
+        - has:
+            field: condition
+            regex: "^\\w*(err|Err|Error)\\s*!=\\s*nil$"
+        - has:
+            field: consequence
+            regex: "^\\{\\s*\\}$"
+metadata:
+  category: correctness
+  cwe: "CWE-390"
+  autofix: none
+  since: "0.2.5"

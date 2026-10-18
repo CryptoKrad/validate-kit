@@ -1,0 +1,30 @@
+id: rb-test-no-assertion
+valid:
+  - |
+    it "adds" do
+      expect(add(1, 2)).to eq(3)
+    end
+  - "it \"is pending\""
+  - |
+    def test_adds
+      assert_equal 3, add(1, 2)
+    end
+  - |
+    class T < Minitest::Test
+      def test_valid
+        valid!('a@b.c')
+      end
+
+      def valid!(email)
+        assert Checker.valid?(email)
+      end
+    end
+invalid:
+  - |
+    it "adds" do
+      add(1, 2)
+    end
+  - |
+    def test_adds
+      add(1, 2)
+    end

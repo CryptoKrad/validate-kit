@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { parse as parseYaml } from "yaml";
@@ -130,11 +131,27 @@ export function prettierAdopted(root: string, top: string): boolean {
   });
 }
 
+/** composer.json in `dir` requires `name` (`require` or `require-dev`). */
+function composerRequires(dir: string, name: string): boolean {
+  try {
+    const manifest = JSON.parse(
+      read(join(dir, "composer.json")) ?? "null",
+    ) as Record<string, unknown> | null;
+    return ["require", "require-dev"].some((field) => {
+      const deps = manifest?.[field];
+      return typeof deps === "object" && deps !== null && name in deps;
+    });
+  } catch {
+    return false;
+  }
+}
+
 /**
  * A tool the kit runs only where the repository chose it: one of its config
  * files at or above `root`, the npm package `dep` in a package.json's
  * dependencies (or a `key` of its own there), `dep` in a pyproject.toml when
- * it is a Python package too, or a task or CI step that runs `step`.
+ * it is a Python package too, a gem in the Gemfile, a package composer.json
+ * requires, a dependency in mix.exs, or a task or CI step that runs `step`.
  */
 export function toolAdopted(
   root: string,
@@ -145,6 +162,9 @@ export function toolAdopted(
     key,
     step,
     pyproject = false,
+    gem,
+    composer,
+    mix,
   }: {
     configs: readonly string[];
     dep?: string;
@@ -152,11 +172,26 @@ export function toolAdopted(
     step?: RegExp;
     /** `dep` is also a Python package, named in a pyproject.toml. */
     pyproject?: boolean;
+    /** The gem's name, a regular expression (`rubocop(?:-[\w-]+)?`). */
+    gem?: string;
+    /** The Composer package (`laravel/pint`). */
+    composer?: string;
+    /** The Mix dependency's name (`credo` for `{:credo, …}`). */
+    mix?: string;
   },
 ): boolean {
   if (step && stepsMention(top, step)) return true;
+  const gemLine =
+    gem === undefined
+      ? undefined
+      : new RegExp(`^\\s*gem\\s+["'](?:${gem})["']`, "m");
+  const mixDep =
+    mix === undefined ? undefined : new RegExp(`\\{\\s*:${mix}\\s*,`);
   return upTo(root, top).some((dir) => {
     if (configs.some((name) => existsSync(join(dir, name)))) return true;
+    if (gemLine?.test(code(read(join(dir, "Gemfile")) ?? ""))) return true;
+    if (mixDep?.test(code(read(join(dir, "mix.exs")) ?? ""))) return true;
+    if (composer !== undefined && composerRequires(dir, composer)) return true;
     if (dep === undefined && key === undefined) return false;
     const python = pyproject ? read(join(dir, "pyproject.toml")) : undefined;
     if (dep && python !== undefined && code(python).includes(dep)) return true;
@@ -176,6 +211,148 @@ export function toolAdopted(
       return false;
     }
   });
+}
+
+/**
+ * The folder of each file's nearest config among `configs` (or a package.json
+ * with `key`), looking from the file's folder up to `top`, one look per
+ * folder; undefined where none reaches it. For a tool that reads its config
+ * only from where it runs (taplo, yamllint) or per file (markdownlint-cli2).
+ * With `highest`, the highest one instead (SwiftLint runs from it and merges
+ * the nested ones); with `stopAt`, no higher than the first folder holding
+ * one of those (ocamlformat's project root: `.git`, `.hg`, `dune-project`).
+ */
+export function configFolderOf(
+  top: string,
+  configs: readonly string[],
+  {
+    key,
+    highest = false,
+    stopAt = [],
+  }: { key?: string; highest?: boolean; stopAt?: readonly string[] } = {},
+): (file: string) => string | undefined {
+  const byFolder = new Map<string, string | undefined>();
+  const isRoot = (dir: string) =>
+    stopAt.some((name) => existsSync(join(dir, name)));
+  const hasConfig = (dir: string) =>
+    toolAdopted(dir, dir, { configs, ...(key ? { key } : {}) });
+  return (file) => {
+    const folder = dirname(file);
+    if (!byFolder.has(folder)) {
+      const dirs = upTo(folder, top);
+      const root = dirs.findIndex(isRoot);
+      const reach = root === -1 ? dirs : dirs.slice(0, root + 1);
+      byFolder.set(
+        folder,
+        highest ? reach.findLast(hasConfig) : reach.find(hasConfig),
+      );
+    }
+    return byFolder.get(folder);
+  };
+}
+
+const DOTNET_PROJECT = /\.csproj$/i;
+const DOTNET_SOLUTION = /\.slnx?$/i;
+
+/**
+ * What dotnet loads to reach each file: the highest solution (`.sln`,
+ * `.slnx`) up to `top` that lists the file's project, else that project
+ * (the nearest `.csproj` up). Undefined for a file in no project. A solution
+ * that does not list the project would check nothing for it (`--include` of
+ * a file outside the workspace exits 0:
+ * docs/research/lint-toolchain/sota-2026-10-18/dotnet-ruby-php-elixir.md, 1c).
+ */
+export function dotnetWorkspaces(
+  top: string,
+): (file: string) => string | undefined {
+  const listed = new Map<string, string[]>();
+  const names = (dir: string): string[] => {
+    let found = listed.get(dir);
+    if (found === undefined) {
+      try {
+        found = readdirSync(dir)
+          .filter((n) => DOTNET_PROJECT.test(n) || DOTNET_SOLUTION.test(n))
+          .toSorted();
+      } catch {
+        found = [];
+      }
+      listed.set(dir, found);
+    }
+    return found;
+  };
+  // Each solution's projects, relative to its folder, `/`-separated and
+  // lower-case: `"src\App\App.csproj"` in a .sln, `Path="src/App/App.csproj"`
+  // in a .slnx.
+  const projects = new Map<string, Set<string>>();
+  const lists = (solution: string, project: string): boolean => {
+    let own = projects.get(solution);
+    if (own === undefined) {
+      own = new Set(
+        [...(read(solution) ?? "").matchAll(/"([^"]+\.csproj)"/gi)].map((m) =>
+          (m[1] ?? "").replaceAll("\\", "/").replace(/^\.\//, "").toLowerCase(),
+        ),
+      );
+      projects.set(solution, own);
+    }
+    return own.has(
+      relative(dirname(solution), project).replaceAll("\\", "/").toLowerCase(),
+    );
+  };
+  return (file) => {
+    const dirs = upTo(dirname(file), top);
+    const projectDir = dirs.find((dir) =>
+      names(dir).some((n) => DOTNET_PROJECT.test(n)),
+    );
+    const name =
+      projectDir && names(projectDir).find((n) => DOTNET_PROJECT.test(n));
+    if (!projectDir || !name) return undefined;
+    const project = join(projectDir, name);
+    const solution = dirs
+      .slice(dirs.indexOf(projectDir))
+      .toReversed()
+      .flatMap((dir) =>
+        names(dir)
+          .filter((n) => DOTNET_SOLUTION.test(n))
+          .map((n) => join(dir, n)),
+      )
+      .find((path) => lists(path, project));
+    return (solution ?? project).replaceAll("\\", "/");
+  };
+}
+
+/**
+ * Mix can load Hex packages: the Hex archive is installed (`MIX_ARCHIVES`,
+ * else the `archives` folder of Mix's home: `MIX_HOME`, the XDG data folder
+ * under `MIX_XDG`, else ~/.mix). Without it, any Hex dependency fails to load.
+ */
+export function hexInstalled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const home =
+    env.MIX_HOME ??
+    (env.MIX_XDG
+      ? join(env.XDG_DATA_HOME ?? join(homedir(), ".local", "share"), "mix")
+      : join(homedir(), ".mix"));
+  try {
+    return readdirSync(env.MIX_ARCHIVES ?? join(home, "archives")).some(
+      (name) => name.startsWith("hex"),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The first of `names` (paths relative to a folder) in `dir` or a folder
+ * above it, up to `top`: the config a tool is handed by flag (PMD's ruleset,
+ * detekt's and scalafmt's config), since it does not look for it itself.
+ */
+export function firstConfig(
+  dir: string,
+  top: string,
+  names: readonly string[],
+): string | undefined {
+  return upTo(dir, top)
+    .flatMap((folder) => names.map((name) => join(folder, name)))
+    .find((path) => existsSync(path));
 }
 
 /** Biome's config names, in the order it reads them (biome-cli.md, 5). */

@@ -10,22 +10,16 @@ import { ConfigError } from "../src/config/schema.js";
 import { parseConcurrency } from "../src/commands/check.js";
 import { buildPlan, FILE_ARG_CHUNK } from "../src/core/plan.js";
 import type { ResolvedConfig } from "../src/core/types.js";
+import { LANGUAGES } from "../src/core/types.js";
 import { changedFiles } from "../src/detect/git.js";
 import { listScopedFiles, toPosix } from "../src/detect/languages.js";
 import { detectLanguages, planCheck } from "../src/index.js";
 
 function baseConfig(): ResolvedConfig {
   return {
-    languages: {
-      ts: { enabled: true },
-      js: { enabled: true },
-      rust: { enabled: true },
-      go: { enabled: true },
-      python: { enabled: true },
-      shell: { enabled: true },
-      sql: { enabled: true },
-      solidity: { enabled: true },
-    },
+    languages: Object.fromEntries(
+      LANGUAGES.map((lang) => [lang, { enabled: true }]),
+    ) as ResolvedConfig["languages"],
     layers: {
       format: { enabled: true },
       lint: { enabled: true },
@@ -92,11 +86,13 @@ describe("scope and profile planning", () => {
 
     expect(planned.scope.profile).toBe("fixtures");
     expect(planned.scope.mode).toBe("full");
+    // Cargo.toml is TOML, detected though no planned tool reads it.
     expect([...planned.detection.keys()].toSorted()).toEqual([
       "go",
       "js",
       "python",
       "rust",
+      "toml",
       "ts",
     ]);
     expect(planned.tasks).toHaveLength(1);

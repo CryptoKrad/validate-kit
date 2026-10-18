@@ -1,0 +1,20 @@
+id: tsx-no-hollow-impl
+valid:
+  - "throw new Error(\"bad input\");"
+  - "throw new Error(\"Todo not found\");"
+  - |
+    class Base {
+      send() {
+        throw new Error("not implemented");
+      }
+    }
+invalid:
+  - "throw new Error(\"not implemented\");"
+  - "throw Error(`TODO: wire the db`);"
+  - "throw new TypeError(\"Not yet implemented\");"
+  - |
+    class Shape {
+      area() {
+        throw new Error("Method not implemented.");
+      }
+    }

@@ -1,0 +1,52 @@
+id: java-float-money
+snapshots:
+  class A { double price; }:
+    labels:
+    - source: double price;
+      style: primary
+      start: 10
+      end: 23
+    - source: double
+      style: secondary
+      start: 10
+      end: 16
+    - source: price
+      style: secondary
+      start: 17
+      end: 22
+    - source: price
+      style: secondary
+      start: 17
+      end: 22
+  class A { void f() { float totalAmount = 1f; } }:
+    labels:
+    - source: float totalAmount = 1f;
+      style: primary
+      start: 21
+      end: 44
+    - source: float
+      style: secondary
+      start: 21
+      end: 26
+    - source: totalAmount
+      style: secondary
+      start: 27
+      end: 38
+    - source: totalAmount
+      style: secondary
+      start: 27
+      end: 38
+  class A { void pay(Double fee) {} }:
+    labels:
+    - source: Double fee
+      style: primary
+      start: 19
+      end: 29
+    - source: Double
+      style: secondary
+      start: 19
+      end: 25
+    - source: fee
+      style: secondary
+      start: 26
+      end: 29

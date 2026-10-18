@@ -1,0 +1,8 @@
+id: go-no-sleep-in-tests
+valid:
+  - "func TestX(t *testing.T) { <-done }"
+  - "func TestX(t *testing.T) { for !ok() { time.Sleep(time.Millisecond) } }"
+  - "func TestX(t *testing.T) { synctest.Test(t, func(t *testing.T) { time.Sleep(time.Hour) }) }"
+  - "func helper() { time.Sleep(time.Second) }"
+invalid:
+  - "func TestX(t *testing.T) { time.Sleep(time.Second) }"

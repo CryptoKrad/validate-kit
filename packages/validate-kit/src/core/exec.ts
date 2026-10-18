@@ -378,7 +378,12 @@ export async function run(
       // The whole environment, so execa adds back nothing it leaves out.
       env,
       extendEnv: false,
-      ...(opts.input !== undefined ? { input: opts.input } : {}),
+      // No input is an empty stdin, never a pipe left open: a tool that
+      // asks a question (Mix's "Shall I install Hex? [Yn]") reads the end of
+      // it and goes on, instead of waiting out the timeout.
+      ...(opts.input !== undefined
+        ? { input: opts.input }
+        : { stdin: "ignore" as const }),
       ...(group ? { detached: true } : { timeout: timeoutMs }),
       reject: false,
       all: false,

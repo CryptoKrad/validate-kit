@@ -1,0 +1,41 @@
+id: rb-test-no-assertion
+snapshots:
+  ? |
+    def test_adds
+      add(1, 2)
+    end
+  : labels:
+    - source: |-
+        def test_adds
+          add(1, 2)
+        end
+      style: primary
+      start: 0
+      end: 29
+    - source: test_adds
+      style: secondary
+      start: 4
+      end: 13
+  ? |
+    it "adds" do
+      add(1, 2)
+    end
+  : labels:
+    - source: |-
+        it "adds" do
+          add(1, 2)
+        end
+      style: primary
+      start: 0
+      end: 28
+    - source: it
+      style: secondary
+      start: 0
+      end: 2
+    - source: |-
+        do
+          add(1, 2)
+        end
+      style: secondary
+      start: 10
+      end: 28

@@ -1,0 +1,165 @@
+id: ts-no-unbounded-fetch
+language: typescript
+severity: warning
+message: "This fetch has no signal, so a server that never answers hangs it: pass { signal: AbortSignal.timeout(ms) }."
+note: |
+  fetch waits without a deadline of its own. A fetch of a URL string with no
+  options, or with an options object that names no `signal`, is reported; an
+  options object passed as a variable or spread, or a Request object (which
+  may carry its own signal), is left alone. Tests are left out: the test
+  runner's timeout bounds them.
+ignores:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: "^(globalThis\\.|window\\.)?fetch$"
+  any:
+    - has:
+        field: arguments
+        has:
+          nthChild: 1
+          any:
+            - kind: string
+            - kind: template_string
+        not:
+          has:
+            nthChild: 2
+    - has:
+        field: arguments
+        has:
+          nthChild: 2
+          kind: object
+          not:
+            has:
+              any:
+                - kind: spread_element
+                - kind: shorthand_property_identifier
+                  regex: "^signal$"
+                - kind: pair
+                  has:
+                    field: key
+                    regex: "^[\"']?signal[\"']?$"
+metadata:
+  category: reliability
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: tsx-no-unbounded-fetch
+language: tsx
+severity: warning
+message: "This fetch has no signal, so a server that never answers hangs it: pass { signal: AbortSignal.timeout(ms) }."
+note: |
+  fetch waits without a deadline of its own. A fetch of a URL string with no
+  options, or with an options object that names no `signal`, is reported; an
+  options object passed as a variable or spread, or a Request object (which
+  may carry its own signal), is left alone. Tests are left out: the test
+  runner's timeout bounds them.
+ignores:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: "^(globalThis\\.|window\\.)?fetch$"
+  any:
+    - has:
+        field: arguments
+        has:
+          nthChild: 1
+          any:
+            - kind: string
+            - kind: template_string
+        not:
+          has:
+            nthChild: 2
+    - has:
+        field: arguments
+        has:
+          nthChild: 2
+          kind: object
+          not:
+            has:
+              any:
+                - kind: spread_element
+                - kind: shorthand_property_identifier
+                  regex: "^signal$"
+                - kind: pair
+                  has:
+                    field: key
+                    regex: "^[\"']?signal[\"']?$"
+metadata:
+  category: reliability
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: js-no-unbounded-fetch
+language: javascript
+severity: warning
+message: "This fetch has no signal, so a server that never answers hangs it: pass { signal: AbortSignal.timeout(ms) }."
+note: |
+  fetch waits without a deadline of its own. A fetch of a URL string with no
+  options, or with an options object that names no `signal`, is reported; an
+  options object passed as a variable or spread, or a Request object (which
+  may carry its own signal), is left alone. Tests are left out: the test
+  runner's timeout bounds them.
+ignores:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: "^(globalThis\\.|window\\.)?fetch$"
+  any:
+    - has:
+        field: arguments
+        has:
+          nthChild: 1
+          any:
+            - kind: string
+            - kind: template_string
+        not:
+          has:
+            nthChild: 2
+    - has:
+        field: arguments
+        has:
+          nthChild: 2
+          kind: object
+          not:
+            has:
+              any:
+                - kind: spread_element
+                - kind: shorthand_property_identifier
+                  regex: "^signal$"
+                - kind: pair
+                  has:
+                    field: key
+                    regex: "^[\"']?signal[\"']?$"
+metadata:
+  category: reliability
+  autofix: none
+  since: "0.2.5"

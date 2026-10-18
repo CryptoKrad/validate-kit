@@ -1,0 +1,19 @@
+id: php-test-no-assertion
+valid:
+  - "<?php class T { public function testAdds(): void { $this->assertSame(3, add(1, 2)); } }"
+  - "<?php class T { public function testX(): void { $this->expectException(E::class); f(); } }"
+  - "<?php class T { public function helper(): void { f(); } }"
+  - |
+    <?php class T {
+      /**
+       * @doesNotPerformAssertions
+       */
+      public function testRuns(): void { f(); }
+    }
+  - |
+    <?php class T {
+      public function testAdds(): void { $this->same(add(1, 2), 3); }
+      private function same($a, $b): void { $this->assertSame($a, $b); }
+    }
+invalid:
+  - "<?php class T { public function testAdds(): void { add(1, 2); } }"

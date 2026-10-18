@@ -1,0 +1,27 @@
+id: py-no-hollow-impl
+valid:
+  - |
+    def f():
+        return 1
+  - |
+    def noop():
+        pass
+  - |
+    def f():
+        """Later."""
+        raise NotImplementedError
+  - |
+    @overload
+    def f(): ...
+  - |
+    class Base:
+        def run(self):
+            raise NotImplementedError
+invalid:
+  - |
+    def f():
+        raise NotImplementedError
+  - |
+    def f():
+        raise NotImplementedError("use parse() instead")
+  - "def f(x): ..."

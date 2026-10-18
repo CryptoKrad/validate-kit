@@ -2,6 +2,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -234,8 +235,9 @@ try {
     run(installedKit, ["list", "--json"], { cwd: impostorRoot }),
     "list --json in the non-TS project",
   );
+  // The hook init writes is YAML; its config must add no code language.
   assert(
-    impostorList.languages.join(",") === "go",
+    impostorList.languages.join(",") === "go,yaml",
     `scaffolding a config must not add a language to the project: ${impostorList.languages.join(",")}`,
   );
 
@@ -4238,6 +4240,325 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     evalLines.join() === "2,3,5,6,7",
     `DV13 eval under # noqa: S307: findings at lines ${JSON.stringify(evalLines)}`,
   );
+  // A test module split into its own file (`#[cfg(test)] mod tests;` in the
+  // parent) is test code, as the inline module it was: no rust-no-unwrap or
+  // rust-no-panic-macros there, nor in a module it declares, nor in one a
+  // `#[path]` beside it declares, nor in a file opening with #![cfg(test)].
+  // A cfg(test) on an earlier item or in a comment, none, or a second
+  // declaration without it (main.rs beside lib.rs) still reports.
+  const testModRoot = join(tempRoot, "cfg-test-files");
+  const unwrapIn = "pub fn f(x: Option<u8>) -> u8 { x.unwrap() }\n";
+  const testModFiles = {
+    "Cargo.toml":
+      '[package]\nname = "c"\nversion = "0.1.0"\nedition = "2021"\n',
+    "src/lib.rs": `pub mod ws_ingest;\npub mod live;\n#[cfg(test)]\nmod test_support;\n// #[cfg(test)]\npub mod old;\n#[cfg(test)]\npub mod both;\nmod inner;\n${unwrapIn}`,
+    "src/main.rs": "mod both;\nfn main() {}\n",
+    "src/old.rs": unwrapIn,
+    "src/both.rs": unwrapIn,
+    "src/inner.rs": `#![cfg(test)]\n${unwrapIn}`,
+    "src/test_support.rs": `mod deep;\n${unwrapIn}`,
+    "src/test_support/deep.rs": unwrapIn,
+    "src/ws_ingest.rs": `#[cfg(test)]\n/// The moved inline tests.\nmod tests;\n#[cfg(test)]\nfn only_in_tests() {}\nmod helpers;\n${unwrapIn}`,
+    "src/ws_ingest/tests.rs": `${unwrapIn}fn g() { panic!("x") }\n`,
+    "src/ws_ingest/helpers.rs": unwrapIn,
+    "src/live/mod.rs": "#[cfg(test)]\npub(crate) mod live_tests;\n",
+    "src/live/live_tests.rs": unwrapIn,
+    "src/bin/tool.rs":
+      '#[cfg(test)]\n#[path = "tool/tests.rs"]\nmod tool_tests;\n#[path = "tool/shipped.rs"]\nmod shipped;\nfn main() {}\n',
+    "src/bin/tool/tests.rs": `#[path = "more.rs"]\nmod more;\n${unwrapIn}`,
+    "src/bin/tool/more.rs": unwrapIn,
+    "src/bin/tool/shipped.rs": unwrapIn,
+  };
+  for (const [path, text] of Object.entries(testModFiles)) {
+    mkdirSync(dirname(join(testModRoot, path)), { recursive: true });
+    writeFileSync(join(testModRoot, path), text);
+  }
+  const testModFlagged = parseJsonOutput(
+    run(installedKit, ["check", "--only", "ast-grep", "--json"], {
+      cwd: testModRoot,
+      allowedStatuses: [0, 1],
+    }),
+    "cfg-test files",
+  )
+    .findings.filter((f) => /^rust-no-(unwrap|panic-macros)$/.test(f.ruleId))
+    .map((f) => f.file.split("/cfg-test-files/")[1])
+    .toSorted();
+  assert(
+    testModFlagged.join() ===
+      "src/bin/tool/shipped.rs,src/both.rs,src/lib.rs,src/old.rs,src/ws_ingest.rs,src/ws_ingest/helpers.rs",
+    `cfg(test) module files: unwrap/panic findings in ${JSON.stringify(testModFlagged)}`,
+  );
+  // The kit's own checks of what git stores (S1.1-S1.3): compiled output
+  // and an LFS path stored whole (blobs), names macOS or Windows cannot
+  // check out (paths), scripts that cannot start (scripts), and characters
+  // that make code read otherwise than it runs (unicode). Extensionless shell
+  // scripts are shellcheck's. A PNG, an executable script, prose with a
+  // zero-width space, an emoji joiner and a Russian name are not reported.
+  // A staged run reports only what the commit adds.
+  const storedRoot = join(tempRoot, "stored");
+  const elf = Buffer.concat([
+    Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1]),
+    Buffer.alloc(120),
+  ]);
+  const pe = Buffer.alloc(200);
+  pe.write("MZ", 0, "latin1");
+  pe.writeUInt32LE(0x40, 0x3c);
+  pe.write("PE\0\0", 0x40, "latin1");
+  const storedFiles = {
+    "assets/tool": elf,
+    // Where the validation scope does not look: what git stores is checked.
+    "build/server": elf,
+    ".tools/protoc": elf,
+    "assets/app.exe": pe,
+    "assets/Main.class": Buffer.concat([
+      Buffer.from([0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 0x3d]),
+      Buffer.alloc(40),
+    ]),
+    "assets/logo.png": Buffer.concat([
+      Buffer.from("\x89PNG\r\n\x1a\n", "latin1"),
+      Buffer.alloc(64),
+    ]),
+    "assets/cache.db": Buffer.concat([
+      Buffer.from("SQLite format 3\0", "latin1"),
+      Buffer.alloc(84),
+    ]),
+    "assets/model.bin": Buffer.alloc(1200, 1),
+    "assets/big.dat": Buffer.alloc(11 * 1024 * 1024, 97),
+    ".gitattributes": "*.bin filter=lfs diff=lfs merge=lfs -text\n",
+    "src/trojan.ts":
+      "const isAdmin = false;\n/* \u202e } \u2066if (isAdmin)\u2069 \u2066 admins only */\nexport const ok = isAdmin;\n",
+    "src/names.ts":
+      'export const user\u200bName = 1;\nexport const \u0440\u0430ypal = 2;\nexport const family = "\u{1F468}\u200d\u{1F469}";\nexport const \u0444\u0443\u043d\u043a\u0446\u0438\u044f_unicode = 3;\n',
+    "docs/notes.md": "word\u200bjoined, and text \u202e reversed, in prose\n",
+    "src/aux.ts": "export const a = 1;\n",
+    "src/clean.ts": 'export const fine = "ok";\n',
+    "bin/tool": "#!/usr/bin/env bash\necho $1\n",
+    "bin/crlf": "#!/bin/sh\r\necho hi\r\n",
+    "bin/ok": '#!/bin/sh\necho "ok"\n',
+  };
+  for (const [path, body] of Object.entries(storedFiles)) {
+    mkdirSync(dirname(join(storedRoot, path)), { recursive: true });
+    writeFileSync(join(storedRoot, path), body);
+  }
+  chmodSync(join(storedRoot, "bin/ok"), 0o755);
+  chmodSync(join(storedRoot, "bin/crlf"), 0o755);
+  const storedGit = gitIn(storedRoot);
+  storedGit(["init", "--quiet"]);
+  // As a machine without `git lfs install` stores it: the file itself.
+  storedGit([
+    "-c",
+    "filter.lfs.clean=cat",
+    "-c",
+    "filter.lfs.process=",
+    "-c",
+    "filter.lfs.required=false",
+    "add",
+    ".",
+  ]);
+  // A case-insensitive disk holds one of these, a case-sensitive one both;
+  // the index holds both.
+  for (const name of ["src/User.ts", "src/user.ts"])
+    writeFileSync(join(storedRoot, name), "export const b = 2;\n");
+  const twin = run("git", ["hash-object", "-w", "--stdin"], {
+    cwd: storedRoot,
+    input: "export const b = 2;\n",
+  }).stdout.trim();
+  for (const name of ["src/User.ts", "src/user.ts"])
+    storedGit([
+      "update-index",
+      "--add",
+      "--cacheinfo",
+      `100644,${twin},${name}`,
+    ]);
+  storedGit(["commit", "--quiet", "-m", "base"]);
+  const storedTools = ["blobs", "paths", "scripts", "unicode"];
+  const withShellcheck = hasTool("shellcheck", ["--version"]);
+  const stored = parseJsonOutput(
+    run(
+      installedKit,
+      [
+        "check",
+        "--only",
+        ...storedTools,
+        ...(withShellcheck ? ["shellcheck"] : []),
+        "--json",
+      ],
+      {
+        cwd: storedRoot,
+        allowedStatuses: [1],
+      },
+    ),
+    "stored files",
+  );
+  const storedFound = findingLines(
+    stored.findings.filter((f) => f.tool !== "scope"),
+    "stored",
+  );
+  const storedExpected = [
+    "binary assets/Main.class:1",
+    "binary assets/app.exe:1",
+    "binary assets/cache.db:1",
+    "binary assets/tool:1",
+    "binary build/server:1",
+    "binary .tools/protoc:1",
+    "bidi src/trojan.ts:2",
+    "case-collision src/User.ts:1",
+    "crlf-shebang bin/crlf:1",
+    "invisible src/names.ts:1",
+    "large assets/big.dat:1",
+    "mixed-script src/names.ts:2",
+    "not-executable bin/tool:1",
+    "not-in-lfs assets/model.bin:1",
+    "windows-name src/aux.ts:1",
+    ...(withShellcheck
+      ? ["SC1017 bin/crlf:1", "SC1017 bin/crlf:2", "SC2086 bin/tool:2"]
+      : []),
+  ].toSorted();
+  assert(
+    JSON.stringify(storedFound) === JSON.stringify(storedExpected),
+    `stored files: ${JSON.stringify(storedFound)}`,
+  );
+  writeFileSync(
+    join(storedRoot, "src/clean.ts"),
+    'export const fine = "still";\n',
+  );
+  storedGit(["add", "src/clean.ts"]);
+  const storedStaged = run(
+    installedKit,
+    ["check", "--staged", "--only", ...storedTools, "--quiet"],
+    {
+      cwd: storedRoot,
+      allowedStatuses: [0],
+    },
+  );
+  assert(
+    storedStaged.stdout === "",
+    `stored files: an unrelated commit printed ${storedStaged.stdout}`,
+  );
+  writeFileSync(join(storedRoot, "assets/tool2"), elf);
+  storedGit(["add", "assets/tool2"]);
+  const storedAdded = parseJsonOutput(
+    run(
+      installedKit,
+      ["check", "--staged", "--only", ...storedTools, "--json"],
+      {
+        cwd: storedRoot,
+        allowedStatuses: [1],
+      },
+    ),
+    "stored files, staged",
+  );
+  assert(
+    findingLines(storedAdded.findings, "stored").join() ===
+      "binary assets/tool2:1",
+    `stored files, staged: ${JSON.stringify(findingLines(storedAdded.findings, "stored"))}`,
+  );
+  // A rule's `files` and `ignores` globs match paths inside the project: a
+  // checkout under a folder named `tests` is not all test code.
+  const nestedRoot = join(tempRoot, "tests", "nested-project");
+  mkdirSync(join(nestedRoot, "src"), { recursive: true });
+  writeFileSync(
+    join(nestedRoot, "src", "app.py"),
+    "import time\n\n\ndef run():\n    time.sleep(1)\n\n\ndef stub():\n    raise NotImplementedError\n",
+  );
+  const nested = parseJsonOutput(
+    run(installedKit, ["check", "--only", "ast-grep", "--json"], {
+      cwd: nestedRoot,
+      allowedStatuses: [1],
+    }),
+    "project under tests/",
+  );
+  assert(
+    findingLines(nested.findings, "nested-project").join() ===
+      "py-no-hollow-impl src/app.py:8",
+    `project under tests/: ${JSON.stringify(findingLines(nested.findings, "nested-project"))}`,
+  );
+  // The project's own conventions (S1.4, S1.6-S1.8): two migrations with one
+  // version and one edited after it reached main (migrations), a variable
+  // read but not in .env.example and one listed that nothing names (env), a
+  // file over the opt-in length cap, and a `covers` glob that matches no
+  // file. An up/down pair, Django's numbering, NODE_ENV and the variables
+  // the code reads that .env.example lists are not reported.
+  const conventionsRoot = join(tempRoot, "conventions");
+  const conventionsFiles = {
+    "package.json": '{ "name": "conventions" }\n',
+    "db/migrations/001_init.up.sql": "create table a (x int);\n",
+    "db/migrations/001_init.down.sql": "drop table a;\n",
+    "db/migrations/002_users.sql": "create table b (x int);\n",
+    "app/migrations/__init__.py": "",
+    "app/migrations/0001_initial.py": "x = 1\n",
+    ".env.example":
+      "DATABASE_URL=postgres://localhost/app\nAPI_KEY=xxx\nOLD_FLAG=1\n",
+    "src/app.ts":
+      'export const db = process.env.DATABASE_URL;\nexport const k = process.env["API_KEY"];\nexport const s = process.env.STRIPE_SECRET;\nexport const e = process.env.NODE_ENV;\n',
+  };
+  for (const [path, body] of Object.entries(conventionsFiles)) {
+    mkdirSync(dirname(join(conventionsRoot, path)), { recursive: true });
+    writeFileSync(join(conventionsRoot, path), body);
+  }
+  const conventionsGit = gitIn(conventionsRoot);
+  conventionsGit(["init", "--quiet"]);
+  conventionsGit(["add", "."]);
+  conventionsGit(["commit", "--quiet", "-m", "base"]);
+  conventionsGit(["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  writeFileSync(
+    join(conventionsRoot, "db/migrations/002_orders.sql"),
+    "create table c (x int);\n",
+  );
+  writeFileSync(
+    join(conventionsRoot, "db/migrations/002_users.sql"),
+    "create table b (x int, y int);\n",
+  );
+  writeFileSync(
+    join(conventionsRoot, "app/migrations/0002_auto.py"),
+    "y = 2\n",
+  );
+  writeFileSync(
+    join(conventionsRoot, "validate.config.json"),
+    `${JSON.stringify({
+      tools: { "file-length": { enabled: true, options: { max: 3 } } },
+      invariants: [
+        {
+          id: "INV-1",
+          statement: "workers are covered",
+          covers: ["worker/**", "src/**"],
+          evidence: ["src/app.ts"],
+        },
+      ],
+    })}\n`,
+  );
+  const conventions = parseJsonOutput(
+    run(
+      installedKit,
+      [
+        "check",
+        "--only",
+        "migrations",
+        "env",
+        "file-length",
+        "inv:INV-1",
+        "--json",
+      ],
+      {
+        cwd: conventionsRoot,
+        allowedStatuses: [1],
+      },
+    ),
+    "conventions",
+  );
+  const conventionsFound = findingLines(conventions.findings, "conventions");
+  const conventionsExpected = [
+    "dead-cover src/app.ts:1",
+    "duplicate-version db/migrations/002_orders.sql:1",
+    "edited db/migrations/002_users.sql:1",
+    "too-long src/app.ts:4",
+    "undeclared src/app.ts:3",
+    "unused .env.example:3",
+  ];
+  assert(
+    JSON.stringify(conventionsFound) === JSON.stringify(conventionsExpected),
+    `conventions: ${JSON.stringify(conventionsFound)}`,
+  );
   // R11 row 2 (the operator's decision, 2026-10-04): a formatter runs only
   // where the repository adopted it; Go gets gofmt unless gofumpt is
   // configured; `enabled: true` runs a formatter anyway. Files a formatter
@@ -5859,6 +6180,7 @@ function run(command, args, options = {}) {
     env: { ...process.env, CI: "1", ...options.env },
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024,
+    ...(options.input === undefined ? {} : { input: options.input }),
   });
 
   const allowedStatuses = options.allowedStatuses ?? [0];

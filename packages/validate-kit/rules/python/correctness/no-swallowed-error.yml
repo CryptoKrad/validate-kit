@@ -1,0 +1,17 @@
+id: py-no-swallowed-error
+language: python
+severity: warning
+message: "`except Exception: pass` swallows every error, so a bug looks like success: catch the error you expect, log it, or re-raise."
+note: |
+  A broad catch whose body is only `pass` (or `...`) hides every failure,
+  bugs included, and the code goes on as if the call had worked. A narrow
+  `except KeyError: pass` says which error is expected and is left alone;
+  so is a body with a comment. A bare `except:` is py-no-bare-except's.
+rule:
+  kind: except_clause
+  regex: "^except\\s*\\(?\\s*(builtins\\.)?(Base)?Exception\\s*\\)?(\\s+as\\s+\\w+)?\\s*:\\s*(pass|\\.\\.\\.)\\s*$"
+metadata:
+  category: correctness
+  cwe: "CWE-390"
+  autofix: none
+  since: "0.2.5"

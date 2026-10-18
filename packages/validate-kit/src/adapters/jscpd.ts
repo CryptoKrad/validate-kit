@@ -11,7 +11,7 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { toolAdopted } from "../detect/adoption.js";
-import { languageForFile, toPosix } from "../detect/languages.js";
+import { isCode, languageForFile, toPosix } from "../detect/languages.js";
 import { finding, parseFindings } from "./base.js";
 
 /** One side of a clone (docs/research/lint-toolchain/jscpd-cli.md, 1). */
@@ -112,10 +112,9 @@ export const jscpd: ToolAdapter = {
   expand(seed: TaskSeed, env: PlanEnv): TaskSeed[] {
     // A copy is found only between the paths jscpd is given: always the
     // whole scope, even when a change touched one file (jscpd-cli.md, 4).
-    const files = env.scopedFiles.filter((file) => {
-      const lang = languageForFile(file);
-      return lang !== undefined && lang !== "sql";
-    });
+    const files = env.scopedFiles.filter(
+      (file) => isCode(file) && languageForFile(file) !== "sql",
+    );
     if (files.length === 0) return [];
     const changed = env.changedPaths
       ? new Set(env.changedPaths.map((path) => toPosix(join(seed.cwd, path))))

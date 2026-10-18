@@ -1,0 +1,8 @@
+id: java-float-money
+valid:
+  - "class A { long priceCents; BigDecimal price; double ratio; }"
+  - "class A { void f(double taxRate) {} }"
+invalid:
+  - "class A { double price; }"
+  - "class A { void f() { float totalAmount = 1f; } }"
+  - "class A { void pay(Double fee) {} }"

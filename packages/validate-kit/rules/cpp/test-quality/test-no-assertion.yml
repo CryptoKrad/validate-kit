@@ -1,0 +1,29 @@
+id: cpp-test-no-assertion
+language: cpp
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (EXPECT_EQ, ASSERT_TRUE, REQUIRE)."
+note: |
+  A GoogleTest TEST/TEST_F/TEST_P/TYPED_TEST or a Catch2 TEST_CASE/SCENARIO
+  with no EXPECT_/ASSERT_/REQUIRE/CHECK only proves the code did not crash.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, so a helper named so counts too.
+files:
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/*_test.cc"
+  - "**/*_test.cpp"
+  - "**/*_tests.cpp"
+  - "**/test_*.cpp"
+rule:
+  kind: function_definition
+  has:
+    field: declarator
+    has:
+      field: declarator
+      regex: "^(TEST|TEST_F|TEST_P|TYPED_TEST|TYPED_TEST_P|TEST_CASE|TEST_CASE_METHOD|SCENARIO)$"
+  not:
+    regex: "(EXPECT_|ASSERT_|GTEST_FAIL|FAIL\\(|ADD_FAILURE|REQUIRE|CHECK|(?i)verify|(?i)should)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

@@ -1,0 +1,7 @@
+id: go-no-unbounded-http
+valid:
+  - "func f() { resp, err := c.Get(url) }"
+  - "func f() { c := &http.Client{} }"
+invalid:
+  - "func f() { resp, err := http.Get(url) }"
+  - "func f() { resp, err := http.PostForm(url, v) }"

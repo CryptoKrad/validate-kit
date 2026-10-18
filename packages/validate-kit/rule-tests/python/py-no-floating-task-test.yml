@@ -1,0 +1,9 @@
+id: py-no-floating-task
+valid:
+  - "task = asyncio.create_task(work())"
+  - "tasks.add(asyncio.create_task(work()))"
+  - "tg.create_task(work())"
+invalid:
+  - "asyncio.create_task(work())"
+  - "asyncio.ensure_future(work())"
+  - "loop.create_task(work())"

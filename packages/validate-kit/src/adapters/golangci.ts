@@ -110,7 +110,7 @@ export async function outsideWorkspace(moduleDir: string): Promise<boolean> {
 }
 
 /** Go's os.UserCacheDir, where golangci-lint keeps its own cache. */
-function userCacheDir(): string {
+export function userCacheDir(): string {
   if (process.platform === "darwin")
     return join(homedir(), "Library", "Caches");
   if (process.platform === "win32")

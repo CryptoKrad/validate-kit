@@ -1,0 +1,26 @@
+id: ex-test-no-assertion
+language: elixir
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (assert, refute, assert_raise)."
+note: |
+  An ExUnit `test "..." do ... end` with no assertion only proves the code
+  did not raise.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, so a helper named so counts too.
+files:
+  - "**/test/**"
+  - "**/*_test.exs"
+rule:
+  kind: call
+  has:
+    field: target
+    regex: "^test$"
+  all:
+    - has:
+        kind: do_block
+  not:
+    regex: "(?i)(assert|refute|flunk|catch_|expect|verify)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

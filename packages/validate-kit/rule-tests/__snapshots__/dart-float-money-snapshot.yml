@@ -1,0 +1,30 @@
+id: dart-float-money
+snapshots:
+  class A { double price = 1.0; }:
+    labels:
+    - source: double price = 1.0
+      style: primary
+      start: 10
+      end: 28
+    - source: price
+      style: secondary
+      start: 17
+      end: 22
+    - source: double
+      style: secondary
+      start: 10
+      end: 16
+  void pay(double fee) {}:
+    labels:
+    - source: double fee
+      style: primary
+      start: 9
+      end: 19
+    - source: fee
+      style: secondary
+      start: 16
+      end: 19
+    - source: double
+      style: secondary
+      start: 9
+      end: 15

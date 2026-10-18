@@ -1,0 +1,16 @@
+id: rust-no-swallowed-error
+valid:
+  - "fn f() { match g() { Ok(v) => u(v), Err(e) => log(e) } }"
+  - "fn f() { match g() { Ok(_) => {}, Err(_) => { /* expected: a cache miss */ } } }"
+  - |
+    fn f() {
+        match g() {
+            Ok(v) => u(v),
+            Err(_) => {} // nothing queued yet
+        }
+    }
+  - "fn f() { if let Err(e) = g() { log(e); } }"
+invalid:
+  - "fn f() { match g() { Ok(v) => u(v), Err(_) => {} } }"
+  - "fn f() { match g() { Ok(v) => u(v), Err(_e) => () } }"
+  - "fn f() { if let Err(_) = tx.send(Msg { id: 1 }) {} }"

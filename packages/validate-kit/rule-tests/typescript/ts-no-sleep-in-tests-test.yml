@@ -1,0 +1,9 @@
+id: ts-no-sleep-in-tests
+valid:
+  - "vi.advanceTimersByTime(100);"
+  - "await new Promise((_, reject) => setTimeout(() => reject(new Error(\"t\")), 50));"
+  - "const flush = () => new Promise((r) => setTimeout(r, 0));"
+invalid:
+  - "await new Promise((r) => setTimeout(r, 500));"
+  - "await new Promise((resolve) => { setTimeout(resolve, 10) });"
+  - "await page.waitForTimeout(1000);"

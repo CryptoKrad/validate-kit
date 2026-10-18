@@ -14,6 +14,7 @@ import type {
   ToolAdapter,
   ToolContext,
 } from "../src/core/types.js";
+import { LANGUAGES } from "../src/core/types.js";
 import type { PlannedTask } from "../src/core/plan.js";
 
 // Behavioral regressions for the 2026-07-01 full-surface review fixes.
@@ -21,16 +22,9 @@ import type { PlannedTask } from "../src/core/plan.js";
 
 function config(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
   return {
-    languages: {
-      ts: { enabled: true },
-      js: { enabled: true },
-      rust: { enabled: true },
-      go: { enabled: true },
-      python: { enabled: true },
-      shell: { enabled: true },
-      sql: { enabled: true },
-      solidity: { enabled: true },
-    },
+    languages: Object.fromEntries(
+      LANGUAGES.map((lang) => [lang, { enabled: true }]),
+    ) as ResolvedConfig["languages"],
     layers: {
       format: { enabled: true },
       lint: { enabled: true },
@@ -148,6 +142,18 @@ describe("review fixes (2026-07-01)", () => {
     );
     expect(raw.timedOut).toBe(true);
     expect(raw.spawnError).toBe(false);
+  });
+
+  // A tool that asks on stdin (Mix: "Shall I install Hex? [Yn]") reads its
+  // end at once, instead of waiting out the timeout on an open pipe.
+  it("gives a tool an empty stdin when it has no input", async () => {
+    const raw = await run(
+      process.execPath,
+      ["-e", "process.stdin.on('end', () => console.log('eof')).resume()"],
+      { cwd: process.cwd(), timeoutMs: 3000 },
+    );
+    expect(raw.timedOut).not.toBe(true);
+    expect(raw.stdout).toBe("eof\n");
   });
 
   // C2 — oxlint schema drift (missing `diagnostics`) must fail loud, not CLEAN.

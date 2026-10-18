@@ -1,0 +1,23 @@
+id: rust-no-swallowed-error
+language: rust
+severity: warning
+message: "This throws the error away: return it with ?, map it, or log it."
+note: |
+  `Err(_) => {}` and `if let Err(_) = x {}` drop the failure, and the code
+  goes on as if the call had worked. Bind the error and handle it, or say in
+  a comment why it is expected (a comment in the block, or after the arm, is
+  left alone).
+rule:
+  any:
+    - kind: match_arm
+      regex: "^Err\\(\\s*(_\\w*|\\.\\.)\\s*\\)\\s*=>\\s*(\\{\\s*\\}|\\(\\s*\\))\\s*,?$"
+      not:
+        precedes:
+          kind: line_comment
+    - kind: if_expression
+      regex: "^if\\s+let\\s+Err\\(\\s*(_\\w*|\\.\\.)\\s*\\)\\s*=[\\s\\S]*\\{\\s*\\}$"
+metadata:
+  category: correctness
+  cwe: "CWE-390"
+  autofix: none
+  since: "0.2.5"

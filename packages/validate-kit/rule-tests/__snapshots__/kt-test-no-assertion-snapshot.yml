@@ -1,0 +1,16 @@
+id: kt-test-no-assertion
+snapshots:
+  class T { @Test fun adds() { add(1, 2) } }:
+    labels:
+    - source: '@Test fun adds() { add(1, 2) }'
+      style: primary
+      start: 10
+      end: 40
+    - source: '@Test'
+      style: secondary
+      start: 10
+      end: 15
+    - source: '@Test'
+      style: secondary
+      start: 10
+      end: 15

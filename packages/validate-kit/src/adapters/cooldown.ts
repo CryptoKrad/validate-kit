@@ -14,7 +14,13 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { gitListed, toPosix } from "../detect/languages.js";
-import { absPosix, compareSemver, escapeRegex, finding } from "./base.js";
+import {
+  absPosix,
+  compareSemver,
+  escapeRegex,
+  finding,
+  lineOf,
+} from "./base.js";
 import { durationMinutes, type Fresh, gained, LOOKUP } from "./lockfile-age.js";
 
 /** The lockfiles that say pnpm, uv or npm is the project's manager. */
@@ -185,12 +191,6 @@ function read(path: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-/** The 1-based line of the first line matching `key`, else 1. */
-function lineOf(text: string | undefined, key: RegExp): number {
-  const at = (text ?? "").split("\n").findIndex((line) => key.test(line));
-  return at < 0 ? 1 : at + 1;
 }
 
 /** The pnpm version package.json's `packageManager` pins, if it does. */

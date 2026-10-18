@@ -1,0 +1,45 @@
+id: py-no-unbounded-request
+language: python
+severity: warning
+message: "This request has no timeout, so a server that never answers hangs it: pass timeout=."
+note: |
+  requests and urllib.request wait without limit unless they are given a
+  timeout (requests' docs: "Nearly all production code should use this
+  parameter"). A call that passes **kwargs, or urlopen's timeout as its third
+  argument, is left alone, and so are tests, which talk to a local fake
+  server.
+ignores:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests.py"
+  - "**/tests/**"
+  - "**/conftest.py"
+rule:
+  kind: call
+  any:
+    - has:
+        field: function
+        regex: "^requests\\.(get|post|put|patch|delete|head|options|request)$"
+    - all:
+        - has:
+            field: function
+            regex: "^(urllib\\.request\\.)?urlopen$"
+        - not:
+            has:
+              field: arguments
+              has:
+                nthChild: 3
+  not:
+    has:
+      field: arguments
+      has:
+        any:
+          - kind: keyword_argument
+            has:
+              field: name
+              regex: "^timeout$"
+          - kind: dictionary_splat
+metadata:
+  category: reliability
+  autofix: none
+  since: "0.2.5"

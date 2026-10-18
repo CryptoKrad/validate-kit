@@ -1,0 +1,33 @@
+id: scala-test-no-assertion
+language: scala
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (assert, assertEquals, shouldBe)."
+note: |
+  A ScalaTest or MUnit `test("...") { ... }` or `it("...") { ... }` with no
+  assertion only proves the code did not throw.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, so a helper named so counts too.
+files:
+  - "**/src/test/**"
+  - "**/test/**"
+  - "**/*Spec.scala"
+  - "**/*Test.scala"
+  - "**/*Suite.scala"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: call_expression
+    has:
+      field: function
+      regex: "^(test|it)$"
+  all:
+    - has:
+        field: arguments
+        kind: block
+  not:
+    regex: "(?i)(assert|expect|should|must|intercept|verify|\\bfail)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

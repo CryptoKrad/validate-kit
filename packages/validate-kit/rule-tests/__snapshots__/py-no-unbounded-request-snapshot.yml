@@ -1,0 +1,32 @@
+id: py-no-unbounded-request
+snapshots:
+  requests.get(url):
+    labels:
+    - source: requests.get(url)
+      style: primary
+      start: 0
+      end: 17
+    - source: requests.get
+      style: secondary
+      start: 0
+      end: 12
+  requests.request("GET", url, headers=h):
+    labels:
+    - source: requests.request("GET", url, headers=h)
+      style: primary
+      start: 0
+      end: 39
+    - source: requests.request
+      style: secondary
+      start: 0
+      end: 16
+  urllib.request.urlopen(url):
+    labels:
+    - source: urllib.request.urlopen(url)
+      style: primary
+      start: 0
+      end: 27
+    - source: urllib.request.urlopen
+      style: secondary
+      start: 0
+      end: 22

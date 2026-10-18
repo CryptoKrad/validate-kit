@@ -1,0 +1,6 @@
+id: cpp-test-no-assertion
+valid:
+  - "TEST(Math, Adds) { EXPECT_EQ(3, add(1, 2)); }"
+  - "TEST_CASE(\"adds\") { REQUIRE(add(1, 2) == 3); }"
+invalid:
+  - "TEST(Math, Adds) { add(1, 2); }"

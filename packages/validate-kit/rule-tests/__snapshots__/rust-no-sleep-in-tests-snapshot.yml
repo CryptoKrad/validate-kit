@@ -1,0 +1,43 @@
+id: rust-no-sleep-in-tests
+snapshots:
+  ? |
+    #[test]
+    fn t() { std::thread::sleep(D); }
+  : labels:
+    - source: std::thread::sleep(D)
+      style: primary
+      start: 17
+      end: 38
+    - source: '#[test]'
+      style: secondary
+      start: 0
+      end: 7
+    - source: fn t() { std::thread::sleep(D); }
+      style: secondary
+      start: 8
+      end: 41
+    - source: std::thread::sleep
+      style: secondary
+      start: 17
+      end: 35
+  ? |
+    #[tokio::test]
+    #[ignore]
+    async fn t() { thread::sleep(D); }
+  : labels:
+    - source: thread::sleep(D)
+      style: primary
+      start: 40
+      end: 56
+    - source: '#[tokio::test]'
+      style: secondary
+      start: 0
+      end: 14
+    - source: async fn t() { thread::sleep(D); }
+      style: secondary
+      start: 25
+      end: 59
+    - source: thread::sleep
+      style: secondary
+      start: 40
+      end: 53

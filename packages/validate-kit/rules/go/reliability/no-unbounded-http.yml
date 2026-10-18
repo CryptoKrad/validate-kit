@@ -1,0 +1,21 @@
+id: go-no-unbounded-http
+language: go
+severity: warning
+message: "This HTTP call uses http.DefaultClient, which has no timeout, so a server that never answers hangs it: use a client with Timeout set, or a request with a context deadline."
+note: |
+  http.Get, http.Post, http.Head and http.PostForm go through
+  http.DefaultClient, which never times out, and take no context to bound
+  them. A client of your own is left alone: its requests may carry a context
+  deadline. Tests are left out: go test's -timeout bounds them, and they call
+  httptest servers.
+ignores:
+  - "**/*_test.go"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: "^http\\.(Get|Post|Head|PostForm)$"
+metadata:
+  category: reliability
+  autofix: none
+  since: "0.2.5"

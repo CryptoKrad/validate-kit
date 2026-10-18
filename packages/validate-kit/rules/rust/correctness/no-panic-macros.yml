@@ -31,7 +31,7 @@ rule:
           stopBy: end
           follows:
             kind: attribute_item
-            regex: "\\b(test|rstest|test_case)\\b"
+            regex: "^#\\[\\s*(\\w+::)*(test|rstest|test_case)\\b"
             stopBy:
               not:
                 any:
@@ -44,5 +44,8 @@ ignores:
   - "**/examples/**"
 metadata:
   category: correctness
+  # A file its parent declares as `#[cfg(test)] mod x;` is test code too;
+  # the kit drops matches there, which a rule reading one file cannot.
+  cfgTestFiles: exempt
   autofix: none
   since: "0.1.0"

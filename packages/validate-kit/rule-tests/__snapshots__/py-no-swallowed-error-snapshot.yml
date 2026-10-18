@@ -1,0 +1,26 @@
+id: py-no-swallowed-error
+snapshots:
+  ? |
+    try:
+        f()
+    except BaseException as e:
+        ...
+  : labels:
+    - source: |-
+        except BaseException as e:
+            ...
+      style: primary
+      start: 13
+      end: 47
+  ? |
+    try:
+        f()
+    except Exception:
+        pass
+  : labels:
+    - source: |-
+        except Exception:
+            pass
+      style: primary
+      start: 13
+      end: 39

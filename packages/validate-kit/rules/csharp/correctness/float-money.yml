@@ -1,0 +1,37 @@
+id: cs-float-money
+language: csharp
+severity: warning
+message: "Money held in a float: double rounds (0.1 + 0.2 != 0.3). Use decimal, or integer minor units (long PriceCents)."
+note: |
+  Money in a binary float drifts: 0.1 + 0.2 != 0.3. A field, variable or
+  parameter named like money (price, amount, cost, balance, fee, ...) typed
+  double or float is reported; decimal Price or long PriceCents are not. Strict preset only.
+utils:
+  float-type:
+    regex: "^(double|float|Double|Single)\\??$"
+rule:
+  any:
+    - all:
+        - kind: variable_declaration
+        - has:
+            field: type
+            matches: float-type
+        - has:
+            kind: variable_declarator
+            has:
+              field: name
+              regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+    - all:
+        - any:
+            - kind: parameter
+            - kind: property_declaration
+        - has:
+            field: type
+            matches: float-type
+        - has:
+            field: name
+            regex: "(^|_)(?i:price|amount|cost|balance|fee|subtotal|tax|payment|payout|refund|revenue|salary|wage|budget|deposit|withdrawal|pnl|profit|notional|premium)s?(_?(?i:usd|eur|gbp|usdc|usdt))?$|[a-z0-9](Price|Amount|Cost|Balance|Fee|Subtotal|Tax|Payment|Payout|Refund|Revenue|Salary|Wage|Budget|Deposit|Withdrawal|Profit|Notional|Premium|P[nN][lL])s?((?i:_?usd|eur|gbp|usdc|usdt))?$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"

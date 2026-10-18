@@ -1,0 +1,20 @@
+id: dart-test-no-assertion
+snapshots:
+  void main() { test('adds', () { add(1, 2); }); }:
+    labels:
+    - source: test('adds', () { add(1, 2); })
+      style: primary
+      start: 14
+      end: 45
+    - source: () { add(1, 2); }
+      style: secondary
+      start: 27
+      end: 44
+    - source: () { add(1, 2); }
+      style: secondary
+      start: 27
+      end: 44
+    - source: test
+      style: secondary
+      start: 14
+      end: 18

@@ -1,0 +1,11 @@
+id: ts-no-unbounded-fetch
+valid:
+  - "await fetch(url, { signal: AbortSignal.timeout(5000) });"
+  - "await fetch(\"https://x\", { signal });"
+  - "await fetch(url, opts);"
+  - "await fetch(req);"
+  - "await fetch(url, { ...base });"
+invalid:
+  - "await fetch(\"https://x\");"
+  - "await fetch(`${base}/users`);"
+  - "await fetch(url, { method: \"POST\" });"

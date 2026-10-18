@@ -1,0 +1,38 @@
+id: php-float-money
+snapshots:
+  <?php class A { public float $price; }:
+    labels:
+    - source: public float $price;
+      style: primary
+      start: 16
+      end: 36
+    - source: price
+      style: secondary
+      start: 30
+      end: 35
+    - source: $price
+      style: secondary
+      start: 29
+      end: 35
+    - source: float
+      style: secondary
+      start: 23
+      end: 28
+  <?php function pay(float $fee) {}:
+    labels:
+    - source: float $fee
+      style: primary
+      start: 19
+      end: 29
+    - source: fee
+      style: secondary
+      start: 26
+      end: 29
+    - source: $fee
+      style: secondary
+      start: 25
+      end: 29
+    - source: float
+      style: secondary
+      start: 19
+      end: 24

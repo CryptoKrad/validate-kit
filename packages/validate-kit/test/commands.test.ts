@@ -372,8 +372,8 @@ describe("commands", () => {
       listCommand([root], { json: true, layer: ["nope"] }),
     ).rejects.toThrow("Invalid layer 'nope'");
     await expect(
-      listCommand([root], { json: true, lang: ["ruby"] }),
-    ).rejects.toThrow("Invalid language 'ruby'");
+      listCommand([root], { json: true, lang: ["cobol"] }),
+    ).rejects.toThrow("Invalid language 'cobol'");
     await expect(
       checkCommand([root], { json: true, only: ["not-a-tool"] }),
     ).rejects.toThrow("Invalid tool 'not-a-tool'");

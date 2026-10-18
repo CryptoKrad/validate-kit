@@ -1,0 +1,12 @@
+id: swift-test-no-assertion
+snapshots:
+  'class T: XCTestCase { func testAdds() { _ = add(1, 2) } }':
+    labels:
+    - source: func testAdds() { _ = add(1, 2) }
+      style: primary
+      start: 22
+      end: 55
+    - source: testAdds
+      style: secondary
+      start: 27
+      end: 35

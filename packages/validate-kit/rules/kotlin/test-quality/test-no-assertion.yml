@@ -1,0 +1,48 @@
+id: kt-test-no-assertion
+language: kotlin
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (assertEquals, assertThat, shouldBe, verify)."
+note: |
+  A @Test, @ParameterizedTest or @RepeatedTest function with no assertion
+  only proves the code did not throw.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, and so does a call to a helper
+  of the same file that asserts.
+files:
+  - "**/src/test/**"
+  - "**/test/**"
+  - "**/*Test.kt"
+  - "**/*Tests.kt"
+rule:
+  kind: function_declaration
+  has:
+    kind: modifiers
+    has:
+      kind: annotation
+      regex: "^@(org\\.junit\\.(jupiter\\.api\\.)?|kotlin\\.test\\.)?(Test|ParameterizedTest|RepeatedTest)\\b"
+  not:
+    any:
+      - regex: "(?i)(assert|verify|expect|should|\\bcheck|\\bfail\\s*\\()"
+      # A helper of this file that asserts, called from the test (the first
+      # such call: ast-grep binds a name once).
+      - all:
+          - has:
+              stopBy: end
+              kind: call_expression
+              has:
+                kind: simple_identifier
+                pattern: $HELPER
+          - inside:
+              kind: source_file
+              stopBy: end
+              has:
+                stopBy: end
+                kind: function_declaration
+                has:
+                  kind: simple_identifier
+                  pattern: $HELPER
+                regex: "(?i)(assert|verify|expect|should|\\bcheck|\\bfail\\s*\\()"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

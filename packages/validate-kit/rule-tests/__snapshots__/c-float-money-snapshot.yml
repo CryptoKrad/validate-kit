@@ -1,0 +1,30 @@
+id: c-float-money
+snapshots:
+  double price;:
+    labels:
+    - source: double price;
+      style: primary
+      start: 0
+      end: 13
+    - source: price
+      style: secondary
+      start: 7
+      end: 12
+    - source: double
+      style: secondary
+      start: 0
+      end: 6
+  void pay(float fee);:
+    labels:
+    - source: float fee
+      style: primary
+      start: 9
+      end: 18
+    - source: fee
+      style: secondary
+      start: 15
+      end: 18
+    - source: float
+      style: secondary
+      start: 9
+      end: 14

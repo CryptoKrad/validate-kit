@@ -1,0 +1,28 @@
+id: dart-test-no-assertion
+language: dart
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (expect)."
+note: |
+  A `test(...)` or `testWidgets(...)` whose callback has no expect only
+  proves the code did not throw.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, so a helper named so counts too.
+files:
+  - "**/test/**"
+  - "**/*_test.dart"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: "^(test|testWidgets)$"
+  all:
+    - has:
+        field: arguments
+        has:
+          kind: function_expression
+  not:
+    regex: "(?i)(expect|\\bfail|verify|should|assert)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

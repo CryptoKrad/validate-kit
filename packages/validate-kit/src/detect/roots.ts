@@ -10,7 +10,7 @@ import { toPosix } from "./languages.js";
  * explicitly (members globs minus exclude) — collapsing a NON-member (e.g. an
  * excluded crate) would silently un-lint it.
  */
-function cargoWorkspaceMembers(wsRoot: string): Set<string> | undefined {
+export function cargoWorkspaceMembers(wsRoot: string): Set<string> | undefined {
   let toml: string;
   try {
     toml = readFileSync(resolve(wsRoot, "Cargo.toml"), "utf8");

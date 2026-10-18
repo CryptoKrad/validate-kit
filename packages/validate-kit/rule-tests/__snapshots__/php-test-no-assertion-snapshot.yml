@@ -1,0 +1,12 @@
+id: php-test-no-assertion
+snapshots:
+  '<?php class T { public function testAdds(): void { add(1, 2); } }':
+    labels:
+    - source: 'public function testAdds(): void { add(1, 2); }'
+      style: primary
+      start: 16
+      end: 63
+    - source: testAdds
+      style: secondary
+      start: 32
+      end: 40

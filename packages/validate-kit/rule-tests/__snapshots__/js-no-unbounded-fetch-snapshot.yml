@@ -1,0 +1,56 @@
+id: js-no-unbounded-fetch
+snapshots:
+  await fetch("https://x");:
+    labels:
+    - source: fetch("https://x")
+      style: primary
+      start: 6
+      end: 24
+    - source: '"https://x"'
+      style: secondary
+      start: 12
+      end: 23
+    - source: ("https://x")
+      style: secondary
+      start: 11
+      end: 24
+    - source: fetch
+      style: secondary
+      start: 6
+      end: 11
+  await fetch(`${base}/users`);:
+    labels:
+    - source: fetch(`${base}/users`)
+      style: primary
+      start: 6
+      end: 28
+    - source: '`${base}/users`'
+      style: secondary
+      start: 12
+      end: 27
+    - source: (`${base}/users`)
+      style: secondary
+      start: 11
+      end: 28
+    - source: fetch
+      style: secondary
+      start: 6
+      end: 11
+  'await fetch(url, { method: "POST" });':
+    labels:
+    - source: 'fetch(url, { method: "POST" })'
+      style: primary
+      start: 6
+      end: 36
+    - source: '{ method: "POST" }'
+      style: secondary
+      start: 17
+      end: 35
+    - source: '{ method: "POST" }'
+      style: secondary
+      start: 17
+      end: 35
+    - source: fetch
+      style: secondary
+      start: 6
+      end: 11

@@ -1,0 +1,6 @@
+id: scala-test-no-assertion
+valid:
+  - "test(\"adds\") { assert(add(1, 2) == 3) }"
+  - "test(\"adds\") { add(1, 2) shouldBe 3 }"
+invalid:
+  - "test(\"adds\") { add(1, 2) }"

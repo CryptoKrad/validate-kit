@@ -1,0 +1,20 @@
+id: go-no-sleep-in-tests
+snapshots:
+  func TestX(t *testing.T) { time.Sleep(time.Second) }:
+    labels:
+    - source: time.Sleep(time.Second)
+      style: primary
+      start: 27
+      end: 50
+    - source: TestX
+      style: secondary
+      start: 5
+      end: 10
+    - source: func TestX(t *testing.T) { time.Sleep(time.Second) }
+      style: secondary
+      start: 0
+      end: 52
+    - source: time.Sleep
+      style: secondary
+      start: 27
+      end: 37

@@ -1,0 +1,22 @@
+id: rust-no-unbounded-http
+snapshots:
+  fn f() { let b = reqwest::blocking::get("https://x"); }:
+    labels:
+    - source: reqwest::blocking::get("https://x")
+      style: primary
+      start: 17
+      end: 52
+    - source: reqwest::blocking::get
+      style: secondary
+      start: 17
+      end: 39
+  fn f() { let b = reqwest::get("https://x"); }:
+    labels:
+    - source: reqwest::get("https://x")
+      style: primary
+      start: 17
+      end: 42
+    - source: reqwest::get
+      style: secondary
+      start: 17
+      end: 29

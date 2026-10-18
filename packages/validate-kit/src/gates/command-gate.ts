@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import picomatch from "picomatch";
 import { absPosix, finding } from "../adapters/base.js";
+import { gitSync } from "../adapters/native.js";
 import type {
   Invariant,
   Layer,
@@ -74,6 +75,40 @@ function watcher(spec: CommandGateSpec): (env: PlanEnv) => boolean {
     );
 }
 
+/** git's file list, once per plan: every gate's expand gets the same scope list. */
+const listedFor = new WeakMap<readonly string[], string[] | undefined>();
+
+/**
+ * The `covers` patterns that match no file of the project: an invariant
+ * whose glob a rename left behind never runs in a changed-file run again.
+ * Read from git's file list; outside git, none is reported.
+ */
+function deadCovers(spec: CommandGateSpec, env: PlanEnv): string[] {
+  const include = (spec.covers ?? []).filter(
+    (pattern) => !pattern.startsWith("!"),
+  );
+  if (include.length === 0) return [];
+  if (!listedFor.has(env.scopedFiles))
+    listedFor.set(
+      env.scopedFiles,
+      gitSync(env.projectRoot, [
+        "ls-files",
+        "-z",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+      ])
+        ?.split("\0")
+        .filter(Boolean),
+    );
+  const files = listedFor.get(env.scopedFiles);
+  if (files === undefined) return [];
+  return include.filter((pattern) => {
+    const matches = picomatch(pattern, { dot: true });
+    return !files.some((file) => matches(file));
+  });
+}
+
 const OUTPUT_TAIL_LINES = 15;
 const OUTPUT_TAIL_CHARS = 2000;
 
@@ -110,7 +145,10 @@ export function commandGate(spec: CommandGateSpec): ToolAdapter {
     ...(spec.timeoutMs !== undefined ? { timeoutMs: spec.timeoutMs } : {}),
     policy: spec,
 
-    expand: (seed, env) => (watches(env) ? [seed] : []),
+    expand: (seed, env) =>
+      watches(env)
+        ? [{ ...seed, options: { dead: deadCovers(spec, env) } }]
+        : [],
 
     buildArgs: () => ({
       bin: "sh",
@@ -145,20 +183,30 @@ export function commandGate(spec: CommandGateSpec): ToolAdapter {
         .join("\n");
       const label = spec.statement ?? `\`${spec.run}\``;
       const anchor = requires.find((path) => !missing.includes(path)) ?? ".";
-      const failure = (file: string, why: string) =>
+      const failure = (file: string, why: string, ruleId = spec.id) =>
         finding({
           tool: spec.id,
           layer: spec.layer ?? "behavior",
           file: absPosix(ctx.cwd, file),
           line: 1,
           col: 1,
-          ruleId: spec.id,
+          ruleId,
           severity: "error",
           message: `${label} — ${why}`,
           fixable: false,
         });
+      const dead = (
+        (ctx.options as { dead?: string[] } | undefined)?.dead ?? []
+      ).map((pattern) =>
+        failure(
+          anchor,
+          `covers \`${pattern}\`, which matches no file: in a changed-file run this check never runs. Fix the pattern`,
+          "dead-cover",
+        ),
+      );
       return {
         findings: [
+          ...dead,
           ...missing.map((path) => failure(path, `${path} does not exist`)),
           ...(reason === undefined
             ? []

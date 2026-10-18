@@ -1,0 +1,30 @@
+id: swift-float-money
+snapshots:
+  'let price: Double = 1.0':
+    labels:
+    - source: 'let price: Double = 1.0'
+      style: primary
+      start: 0
+      end: 23
+    - source: price
+      style: secondary
+      start: 4
+      end: 9
+    - source: Double
+      style: secondary
+      start: 11
+      end: 17
+  'var amount: Float = 0':
+    labels:
+    - source: 'var amount: Float = 0'
+      style: primary
+      start: 0
+      end: 21
+    - source: amount
+      style: secondary
+      start: 4
+      end: 10
+    - source: Float
+      style: secondary
+      start: 12
+      end: 17

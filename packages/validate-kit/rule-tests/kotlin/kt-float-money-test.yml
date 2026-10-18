@@ -1,0 +1,8 @@
+id: kt-float-money
+valid:
+  - "class A(val priceCents: Long)"
+  - "val price: BigDecimal = BigDecimal.ONE"
+invalid:
+  - "val price: Double = 1.0"
+  - "class A(val amount: Double)"
+  - "fun pay(fee: Float?) {}"

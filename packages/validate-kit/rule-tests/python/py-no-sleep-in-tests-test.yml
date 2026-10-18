@@ -1,0 +1,22 @@
+id: py-no-sleep-in-tests
+valid:
+  - |
+    def test_x():
+        await asyncio.sleep(0)
+  - |
+    def wait_until(pred):
+        time.sleep(0.1)
+  - |
+    def test_poll():
+        while not ready():
+            time.sleep(0.1)
+invalid:
+  - |
+    def test_x():
+        time.sleep(1)
+  - |
+    async def test_y():
+        await asyncio.sleep(0.5)
+  - |
+    def test_z():
+        sleep(2)

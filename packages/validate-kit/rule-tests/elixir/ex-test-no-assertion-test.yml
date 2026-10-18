@@ -1,0 +1,11 @@
+id: ex-test-no-assertion
+valid:
+  - |
+    test "adds" do
+      assert add(1, 2) == 3
+    end
+invalid:
+  - |
+    test "adds" do
+      add(1, 2)
+    end

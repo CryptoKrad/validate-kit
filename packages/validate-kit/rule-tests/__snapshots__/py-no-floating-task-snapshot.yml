@@ -1,0 +1,44 @@
+id: py-no-floating-task
+snapshots:
+  asyncio.create_task(work()):
+    labels:
+    - source: asyncio.create_task(work())
+      style: primary
+      start: 0
+      end: 27
+    - source: asyncio.create_task
+      style: secondary
+      start: 0
+      end: 19
+    - source: asyncio.create_task(work())
+      style: secondary
+      start: 0
+      end: 27
+  asyncio.ensure_future(work()):
+    labels:
+    - source: asyncio.ensure_future(work())
+      style: primary
+      start: 0
+      end: 29
+    - source: asyncio.ensure_future
+      style: secondary
+      start: 0
+      end: 21
+    - source: asyncio.ensure_future(work())
+      style: secondary
+      start: 0
+      end: 29
+  loop.create_task(work()):
+    labels:
+    - source: loop.create_task(work())
+      style: primary
+      start: 0
+      end: 24
+    - source: loop.create_task
+      style: secondary
+      start: 0
+      end: 16
+    - source: loop.create_task(work())
+      style: secondary
+      start: 0
+      end: 24

@@ -1,0 +1,35 @@
+id: go-no-sleep-in-tests
+language: go
+severity: warning
+message: "A fixed sleep in a test makes it slow, and flaky when the machine is busy: wait on a channel or poll with a deadline, or use testing/synctest."
+note: |
+  time.Sleep in a test waits whether or not the goroutine has done its
+  work. Wait on what it signals (a channel, a sync.WaitGroup), poll the
+  condition with a deadline, or run the test in a testing/synctest bubble,
+  where time is fake. Only a Test, Benchmark or Fuzz function's own
+  statements are reported: a sleep in a loop (a poll), in a closure (a fake
+  server's handler, a synctest bubble) or in a helper is left alone.
+files:
+  - "**/*_test.go"
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: "^time\\.Sleep$"
+  not:
+    inside:
+      any:
+        - kind: for_statement
+        - kind: func_literal
+      stopBy:
+        kind: function_declaration
+  inside:
+    kind: function_declaration
+    stopBy: end
+    has:
+      field: name
+      regex: "^(Test|Benchmark|Fuzz)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

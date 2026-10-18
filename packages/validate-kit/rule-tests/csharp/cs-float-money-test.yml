@@ -1,0 +1,7 @@
+id: cs-float-money
+valid:
+  - "class A { decimal Price; long PriceCents; double Ratio; }"
+invalid:
+  - "class A { double Price; }"
+  - "class A { void Pay(float fee) {} }"
+  - "class A { public double TotalAmount { get; set; } }"

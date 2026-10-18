@@ -1,0 +1,48 @@
+id: java-test-no-assertion
+snapshots:
+  ? |
+    class T {
+      @Test void runs() { run(); }
+      private void run() { f(); }
+    }
+  : labels:
+    - source: '@Test void runs() { run(); }'
+      style: primary
+      start: 12
+      end: 40
+    - source: '@Test'
+      style: secondary
+      start: 12
+      end: 17
+    - source: '@Test'
+      style: secondary
+      start: 12
+      end: 17
+  class T { @ParameterizedTest void p(int x) { f(x); } }:
+    labels:
+    - source: '@ParameterizedTest void p(int x) { f(x); }'
+      style: primary
+      start: 10
+      end: 52
+    - source: '@ParameterizedTest'
+      style: secondary
+      start: 10
+      end: 28
+    - source: '@ParameterizedTest'
+      style: secondary
+      start: 10
+      end: 28
+  class T { @Test void adds() { int x = add(1, 2); } }:
+    labels:
+    - source: '@Test void adds() { int x = add(1, 2); }'
+      style: primary
+      start: 10
+      end: 50
+    - source: '@Test'
+      style: secondary
+      start: 10
+      end: 15
+    - source: '@Test'
+      style: secondary
+      start: 10
+      end: 15

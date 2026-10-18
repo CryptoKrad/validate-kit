@@ -1,0 +1,41 @@
+id: rust-no-sleep-in-tests
+language: rust
+severity: warning
+message: "A fixed sleep in a test makes it slow, and flaky when the machine is busy: wait on a channel or poll with a deadline, or pause tokio's clock."
+note: |
+  thread::sleep in a test function waits whether or not the work is done.
+  Wait on what it signals (a channel, a barrier), poll with a deadline, or
+  use #[tokio::test(start_paused = true)] with tokio::time, whose clock is
+  fake. A sleep in a loop or a closure (a poll, a spawned thread) is left
+  alone.
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: "^(std::)?thread::sleep$"
+  # Not a retry loop's back-off or a spawned thread's work.
+  not:
+    inside:
+      any:
+        - kind: closure_expression
+        - kind: loop_expression
+        - kind: while_expression
+        - kind: for_expression
+      stopBy:
+        kind: function_item
+  inside:
+    kind: function_item
+    stopBy: end
+    follows:
+      kind: attribute_item
+      regex: "^#\\[\\s*(\\w+::)*(test|rstest|test_case)\\b"
+      stopBy:
+        not:
+          any:
+            - kind: attribute_item
+            - kind: line_comment
+            - kind: block_comment
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

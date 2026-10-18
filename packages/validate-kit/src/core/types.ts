@@ -35,6 +35,33 @@ export const LANGUAGES = [
   "shell",
   "sql",
   "solidity",
+  // Checked where a tool for them is planned (each is opt-in, below).
+  "c",
+  "cpp",
+  "zig",
+  "java",
+  "kotlin",
+  "scala",
+  "csharp",
+  "ruby",
+  "php",
+  "elixir",
+  "swift",
+  "dart",
+  "lua",
+  "haskell",
+  "ocaml",
+  "nix",
+  "starlark",
+  "dockerfile",
+  "terraform",
+  "proto",
+  "graphql",
+  "toml",
+  "yaml",
+  "markdown",
+  "css",
+  "html",
 ] as const;
 export type Language = (typeof LANGUAGES)[number];
 
@@ -52,6 +79,10 @@ export interface LanguageSpec {
    * it that no tool takes is not source the run failed to route.
    */
   readonly optIn?: boolean;
+  /** File names that are this language whatever their extension (`Dockerfile`). */
+  readonly names?: RegExp;
+  /** Configuration, markup or prose, not program code (no test covers it). */
+  readonly data?: boolean;
 }
 
 export const LANGUAGE_SPECS: Record<Language, LanguageSpec> = {
@@ -90,6 +121,124 @@ export const LANGUAGE_SPECS: Record<Language, LanguageSpec> = {
       "hardhat.config.mjs",
     ],
   },
+  c: {
+    extensions: [".c", ".h"],
+    markers: ["compile_commands.json", "CMakeLists.txt", "meson.build"],
+    optIn: true,
+  },
+  cpp: {
+    extensions: [
+      ".cc",
+      ".cpp",
+      ".cxx",
+      ".c++",
+      ".hh",
+      ".hpp",
+      ".hxx",
+      ".h++",
+      ".ipp",
+    ],
+    markers: ["compile_commands.json", "CMakeLists.txt", "meson.build"],
+    optIn: true,
+  },
+  zig: { extensions: [".zig", ".zon"], markers: ["build.zig"], optIn: true },
+  java: {
+    extensions: [".java"],
+    markers: ["pom.xml", "build.gradle", "build.gradle.kts"],
+    optIn: true,
+  },
+  kotlin: {
+    extensions: [".kt", ".kts"],
+    markers: ["build.gradle.kts", "build.gradle", "pom.xml"],
+    optIn: true,
+  },
+  scala: {
+    extensions: [".scala", ".sc", ".sbt"],
+    markers: ["build.sbt", "build.sc", "build.mill"],
+    optIn: true,
+  },
+  csharp: { extensions: [".cs", ".csx"], markers: [], optIn: true },
+  ruby: {
+    extensions: [".rb", ".rake", ".gemspec", ".ru"],
+    markers: ["Gemfile"],
+    optIn: true,
+    names: /^(?:Gemfile|Rakefile|Guardfile|Capfile|Vagrantfile)$/,
+  },
+  php: { extensions: [".php"], markers: ["composer.json"], optIn: true },
+  elixir: { extensions: [".ex", ".exs"], markers: ["mix.exs"], optIn: true },
+  swift: { extensions: [".swift"], markers: ["Package.swift"], optIn: true },
+  dart: { extensions: [".dart"], markers: ["pubspec.yaml"], optIn: true },
+  lua: { extensions: [".lua", ".luau"], markers: [], optIn: true },
+  haskell: {
+    extensions: [".hs", ".lhs"],
+    markers: ["stack.yaml", "cabal.project", "package.yaml"],
+    optIn: true,
+  },
+  ocaml: {
+    extensions: [".ml", ".mli"],
+    markers: ["dune-project"],
+    optIn: true,
+  },
+  nix: { extensions: [".nix"], markers: ["flake.nix"], optIn: true },
+  // Bazel's BUILD and WORKSPACE files, and .bzl (buildifier's inputs,
+  // docs/research/lint-toolchain/sota-2026-10-18/swift-dart-lua-haskell-nix.md).
+  starlark: {
+    extensions: [".bzl", ".star", ".sky", ".BUILD", ".bazel"],
+    markers: ["MODULE.bazel", "WORKSPACE", "WORKSPACE.bazel"],
+    optIn: true,
+    names: /^(?:BUILD|WORKSPACE|WORKSPACE\.bzlmod)$/,
+  },
+  dockerfile: {
+    extensions: [".dockerfile", ".containerfile"],
+    markers: [],
+    optIn: true,
+    data: true,
+    // Not `Dockerfile.dockerignore` (an ignore file) or a template to render.
+    names:
+      /^(?:Dockerfile|Containerfile)(?:\.[\w.-]+)?$(?<!\.(?:dockerignore|j2|tmpl|tpl|template))/,
+  },
+  // `.tf.json` and `.tfvars.json`: Terraform's JSON syntax, which tflint
+  // reads and `tofu fmt` refuses.
+  terraform: {
+    extensions: [
+      ".tf",
+      ".tfvars",
+      ".tofu",
+      ".tftest.hcl",
+      ".tf.json",
+      ".tfvars.json",
+    ],
+    markers: [],
+    optIn: true,
+    data: true,
+  },
+  proto: {
+    extensions: [".proto"],
+    markers: ["buf.yaml"],
+    optIn: true,
+    data: true,
+  },
+  graphql: {
+    extensions: [".graphql", ".gql", ".graphqls"],
+    markers: [],
+    optIn: true,
+    data: true,
+  },
+  toml: { extensions: [".toml"], markers: [], optIn: true, data: true },
+  yaml: { extensions: [".yml", ".yaml"], markers: [], optIn: true, data: true },
+  markdown: {
+    extensions: [".md", ".markdown"],
+    markers: [],
+    optIn: true,
+    data: true,
+  },
+  css: {
+    extensions: [".css", ".scss", ".sass", ".less"],
+    markers: [],
+    optIn: true,
+    data: true,
+  },
+  html: { extensions: [".html", ".htm"], markers: [], optIn: true, data: true },
 };
 
 export type Severity = "error" | "warning" | "info" | "hint";
@@ -371,6 +520,11 @@ export interface ToolAdapter {
    * error text must not be read as a version.
    */
   readonly versionExitCodes?: readonly number[];
+  /**
+   * Environment for the version command: one that would otherwise use the
+   * network (tflint's asks GitHub for a newer release) is told not to.
+   */
+  readonly versionEnv?: Readonly<Record<string, string>>;
   /** Extract a semver from `--version` stdout. Default: first x.y.z match. */
   parseVersion?(stdout: string): string | undefined;
   /**
@@ -383,6 +537,12 @@ export interface ToolAdapter {
    * that read their own project, crate or module and ignore file arguments.
    */
   readonly fileScoped?: boolean;
+  /**
+   * For a tool with `fileScoped: false`: its own config file names (and the
+   * file `tools.<id>.configPath` names). In a changed-file run, a change to
+   * one plans the tool as a changed source file would: its settings changed.
+   */
+  readonly configFiles?: readonly string[];
   /**
    * Tool-specific relevance, beyond what the planner already requires (an
    * enabled layer and at least one detected, enabled language it serves).

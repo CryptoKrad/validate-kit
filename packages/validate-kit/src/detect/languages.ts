@@ -93,7 +93,60 @@ export function languageForFile(file: string): Language | undefined {
     if (LANGUAGE_SPECS[lang].extensions.some((e) => file.endsWith(e)))
       return lang;
   }
-  return undefined;
+  const name = basename(file);
+  for (const lang of LANGUAGES)
+    if (LANGUAGE_SPECS[lang].names?.test(name)) return lang;
+  return byShebang.get(file);
+}
+
+/** A file of program code (not configuration, markup or prose). */
+export function isCode(file: string): boolean {
+  const lang = languageForFile(file);
+  return lang !== undefined && LANGUAGE_SPECS[lang].data !== true;
+}
+
+/**
+ * A `#!` line naming a shell shellcheck reads (directly, or through `env`,
+ * with flags after it): `#!/bin/sh -e`, `#!/usr/bin/env -S bash -eu`.
+ */
+const SHELL_SHEBANG =
+  /^#![ \t]*(?:\/usr\/bin\/env[ \t]+(?:-S[ \t]+)?)?(?:\/\S*\/)?(?:sh|bash|dash|ksh|bats)(?:[ \t]|\r?$)/;
+
+/**
+ * Extensionless files whose `#!` line names a shell, found when the scope is
+ * scanned: a script in bin/ or a hook is shell to every tool that asks
+ * languageForFile, as a `.sh` file is.
+ */
+const byShebang = new Map<string, Language>();
+
+/** The first line of a file, up to 256 bytes; "" when it cannot be read. */
+export function firstLine(file: string): string {
+  const buffer = Buffer.alloc(256);
+  let fd: number | undefined;
+  try {
+    fd = openSync(file, "r");
+    const text = buffer.toString("latin1", 0, readSync(fd, buffer, 0, 256, 0));
+    return text.split("\n", 1)[0] ?? "";
+  } catch {
+    return "";
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/**
+ * Generated wrappers: Gradle's and Maven's, and autoconf's. Nobody edits
+ * them, and older ones hold dozens of shellcheck warnings.
+ */
+const GENERATED_SCRIPT =
+  /^(?:gradlew|mvnw|configure|config\.guess|config\.sub|install-sh|depcomp|missing|compile|mkinstalldirs|libtool|ltmain)$/;
+
+function noteShebangs(files: readonly string[]): void {
+  for (const file of files) {
+    if (extname(file) !== "" || GENERATED_SCRIPT.test(basename(file))) continue;
+    if (SHELL_SHEBANG.test(firstLine(file))) byShebang.set(file, "shell");
+    else byShebang.delete(file);
+  }
 }
 
 /**
@@ -194,6 +247,8 @@ export async function scanScope(
   const oversized: string[] = [];
   const minified: string[] = [];
   const looks: string[] = [];
+  // First, so an extensionless shell script is held to the size limit too.
+  noteShebangs(all);
   for (const file of all) {
     const dirs = toPosix(relative(root, file)).split("/").slice(0, -1);
     const hit = skippers.find(({ match }) => dirs.some((dir) => match(dir)));

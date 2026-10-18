@@ -310,24 +310,28 @@ export async function buildPlan(
           const l = languageForFile(f);
           return l !== undefined && langs.includes(l);
         });
-        // A module-wide tool also answers for a file the change deleted: what
-        // imported it may no longer build.
-        const deleted =
+        // A module-wide tool also answers for a file the change deleted (what
+        // imported it may no longer build) and for its own config.
+        const ownConfig = (f: string) =>
+          adapter.configFiles?.includes(posix.basename(f)) === true ||
+          (adapter.configFiles !== undefined && f === toolCfg.configPath);
+        const answered =
           adapter.fileScoped === false && filters.changedFiles
             ? (filters.changedPaths ?? [])
                 .map((path) => posix.join(toPosix(projectRoot), toPosix(path)))
                 .filter((f) => {
                   const l = languageForFile(f);
                   return (
-                    l !== undefined &&
-                    langs.includes(l) &&
-                    !existsSync(f) &&
+                    (ownConfig(f) ||
+                      (l !== undefined &&
+                        langs.includes(l) &&
+                        !existsSync(f))) &&
                     isUnder(f, scopeRoot) &&
                     !nested.some((root) => isUnder(f, root))
                   );
                 })
             : [];
-        if (relevant.length === 0 && deleted.length === 0) continue;
+        if (relevant.length === 0 && answered.length === 0) continue;
         if (!adopted(adapter, toolCfg, cwd, projectRoot)) {
           const replaced = new Set(
             adapter.replacedIn?.(relevant, projectRoot) ?? [],
@@ -409,5 +413,14 @@ export async function buildPlan(
       return planned;
     }),
   );
-  return expanded.flat();
+  // Two seeds can expand to the same task (two PHP roots under one PHPStan
+  // config): it runs once.
+  const seen = new Set<string>();
+  return expanded.flat().filter((task) => {
+    const { adapter, ...rest } = task;
+    const key = `${adapter.id}\0${stableJson(rest)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

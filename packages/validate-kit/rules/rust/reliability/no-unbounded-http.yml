@@ -1,0 +1,49 @@
+id: rust-no-unbounded-http
+language: rust
+severity: warning
+message: "reqwest::get builds a client with no timeout, so a server that never answers hangs it: build one with Client::builder().timeout(...)."
+note: |
+  reqwest::get and reqwest::blocking::get make a default client for one
+  request, with no timeout and no way to set one. A client of your own is
+  left alone: its requests may set .timeout(...). Test code, which talks to
+  a local fake server, is left out.
+ignores:
+  - "**/tests/**"
+  - "**/benches/**"
+rule:
+  not:
+    any:
+      - inside:
+          kind: mod_item
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: "cfg\\(test\\)"
+            stopBy:
+              not:
+                any:
+                  - kind: attribute_item
+                  - kind: line_comment
+                  - kind: block_comment
+      - inside:
+          kind: function_item
+          stopBy: end
+          follows:
+            kind: attribute_item
+            regex: "^#\\[\\s*(\\w+::)*(test|rstest|test_case)\\b"
+            stopBy:
+              not:
+                any:
+                  - kind: attribute_item
+                  - kind: line_comment
+                  - kind: block_comment
+  kind: call_expression
+  has:
+    field: function
+    regex: "^reqwest::(blocking::)?get$"
+metadata:
+  category: reliability
+  # A file its parent declares as `#[cfg(test)] mod x;` is test code too.
+  cfgTestFiles: exempt
+  autofix: none
+  since: "0.2.5"

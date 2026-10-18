@@ -1,0 +1,153 @@
+id: ts-no-hollow-impl
+language: typescript
+severity: warning
+message: "This throws \"not implemented\": a stub left in place of the code. Implement it, or remove it."
+note: |
+  Agents leave `throw new Error("not implemented")` or `throw new
+  Error("TODO: ...")` behind. In a class method the same throw is how
+  JavaScript marks an abstract method, and is left alone, except the
+  "Method not implemented." TypeScript's quick fix writes. Tests are left
+  out.
+ignores:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+utils:
+  thrown-message:
+    any:
+      - kind: new_expression
+      - kind: call_expression
+    has:
+      field: arguments
+      has:
+        any:
+          - kind: string
+          - kind: template_string
+        regex: "(?i)^[\"'`]\\s*((method|function) )?(not (yet )?implemented|unimplemented|todo\\s*([:.!-]|[\"'`]$))"
+rule:
+  kind: throw_statement
+  has:
+    matches: thrown-message
+  any:
+    - not:
+        inside:
+          kind: method_definition
+          stopBy: end
+    - has:
+        stopBy: end
+        any:
+          - kind: string
+          - kind: template_string
+        regex: "^[\"'`]Method not implemented\\.?[\"'`]$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: tsx-no-hollow-impl
+language: tsx
+severity: warning
+message: "This throws \"not implemented\": a stub left in place of the code. Implement it, or remove it."
+note: |
+  Agents leave `throw new Error("not implemented")` or `throw new
+  Error("TODO: ...")` behind. In a class method the same throw is how
+  JavaScript marks an abstract method, and is left alone, except the
+  "Method not implemented." TypeScript's quick fix writes. Tests are left
+  out.
+ignores:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+utils:
+  thrown-message:
+    any:
+      - kind: new_expression
+      - kind: call_expression
+    has:
+      field: arguments
+      has:
+        any:
+          - kind: string
+          - kind: template_string
+        regex: "(?i)^[\"'`]\\s*((method|function) )?(not (yet )?implemented|unimplemented|todo\\s*([:.!-]|[\"'`]$))"
+rule:
+  kind: throw_statement
+  has:
+    matches: thrown-message
+  any:
+    - not:
+        inside:
+          kind: method_definition
+          stopBy: end
+    - has:
+        stopBy: end
+        any:
+          - kind: string
+          - kind: template_string
+        regex: "^[\"'`]Method not implemented\\.?[\"'`]$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: js-no-hollow-impl
+language: javascript
+severity: warning
+message: "This throws \"not implemented\": a stub left in place of the code. Implement it, or remove it."
+note: |
+  Agents leave `throw new Error("not implemented")` or `throw new
+  Error("TODO: ...")` behind. In a class method the same throw is how
+  JavaScript marks an abstract method, and is left alone, except the
+  "Method not implemented." TypeScript's quick fix writes. Tests are left
+  out.
+ignores:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+utils:
+  thrown-message:
+    any:
+      - kind: new_expression
+      - kind: call_expression
+    has:
+      field: arguments
+      has:
+        any:
+          - kind: string
+          - kind: template_string
+        regex: "(?i)^[\"'`]\\s*((method|function) )?(not (yet )?implemented|unimplemented|todo\\s*([:.!-]|[\"'`]$))"
+rule:
+  kind: throw_statement
+  has:
+    matches: thrown-message
+  any:
+    - not:
+        inside:
+          kind: method_definition
+          stopBy: end
+    - has:
+        stopBy: end
+        any:
+          - kind: string
+          - kind: template_string
+        regex: "^[\"'`]Method not implemented\\.?[\"'`]$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"

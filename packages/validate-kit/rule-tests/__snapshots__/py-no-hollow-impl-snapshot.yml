@@ -1,0 +1,40 @@
+id: py-no-hollow-impl
+snapshots:
+  ? |
+    def f():
+        raise NotImplementedError
+  : labels:
+    - source: |-
+        def f():
+            raise NotImplementedError
+      style: primary
+      start: 0
+      end: 38
+    - source: raise NotImplementedError
+      style: secondary
+      start: 13
+      end: 38
+  ? |
+    def f():
+        raise NotImplementedError("use parse() instead")
+  : labels:
+    - source: |-
+        def f():
+            raise NotImplementedError("use parse() instead")
+      style: primary
+      start: 0
+      end: 61
+    - source: raise NotImplementedError("use parse() instead")
+      style: secondary
+      start: 13
+      end: 61
+  'def f(x): ...':
+    labels:
+    - source: 'def f(x): ...'
+      style: primary
+      start: 0
+      end: 13
+    - source: '...'
+      style: secondary
+      start: 10
+      end: 13

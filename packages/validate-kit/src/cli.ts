@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { Command, CommanderError } from "commander";
 import { baselineCommand, type BaselineFlags } from "./commands/baseline.js";
 import { checkCommand, type CheckFlags } from "./commands/check.js";
@@ -14,6 +16,23 @@ import { EXIT } from "./core/exit-codes.js";
 import { kitVersion } from "./core/paths.js";
 import { LANGUAGES, LAYERS } from "./core/types.js";
 import { ConfigError } from "./config/schema.js";
+
+// A hook in a linked worktree exports GIT_DIR without GIT_WORK_TREE, and git
+// then takes whatever folder it runs in for the top of the work tree: the
+// kit's git calls from a project folder below the top would name paths from
+// that folder. The top is where GIT_DIR says: a linked worktree's `gitdir`
+// file names its `.git`, and a `.git` folder sits in the top.
+if (process.env.GIT_DIR && !process.env.GIT_WORK_TREE) {
+  const gitDir = resolve(process.env.GIT_DIR);
+  process.env.GIT_DIR = gitDir;
+  let top: string | undefined;
+  try {
+    top = dirname(readFileSync(join(gitDir, "gitdir"), "utf8").trim());
+  } catch {
+    if (basename(gitDir) === ".git") top = dirname(gitDir);
+  }
+  if (top) process.env.GIT_WORK_TREE = top;
+}
 
 // `git bisect run` reads 125 as "this revision cannot be tested". With
 // --bisect, a usage or config error, a missing tool and a crash all say that:

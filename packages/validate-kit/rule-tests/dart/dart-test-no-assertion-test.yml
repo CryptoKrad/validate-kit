@@ -1,0 +1,5 @@
+id: dart-test-no-assertion
+valid:
+  - "void main() { test('adds', () { expect(add(1, 2), 3); }); }"
+invalid:
+  - "void main() { test('adds', () { add(1, 2); }); }"

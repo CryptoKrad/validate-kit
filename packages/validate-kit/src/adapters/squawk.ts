@@ -8,7 +8,7 @@ import type {
 } from "../core/types.js";
 import { toolAdopted } from "../detect/adoption.js";
 import { toPosix } from "../detect/languages.js";
-import { absPosix, finding, parseFindings } from "./base.js";
+import { absPosix, finding, parseFindings, relativeFiles } from "./base.js";
 
 /** One squawk violation (docs/research/lint-toolchain/squawk-cli.md, 1). */
 interface SquawkViolation {
@@ -88,18 +88,13 @@ export const squawk: ToolAdapter = {
   },
 
   buildArgs(ctx: ToolContext): BuiltCommand {
-    const files = ctx.files ?? [];
-    // No paths makes squawk read stdin, which never ends under the kit.
-    if (files.length === 0)
-      throw new Error("squawk needs the task's file list");
     const args = ["--reporter", "json"];
     if (ctx.configPath) args.push("--config", ctx.configPath);
     args.push(
       ...ctx.extraArgs,
       "--",
-      ...files.map((file) =>
-        literal(posix.relative(toPosix(ctx.cwd), toPosix(file))),
-      ),
+      // No paths makes squawk read stdin, which never ends under the kit.
+      ...relativeFiles(ctx, "squawk").map(literal),
     );
     return {
       bin: this.bin,

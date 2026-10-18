@@ -45,3 +45,52 @@ tsx-float-money
 go-float-money
 py-float-money
 rust-float-money
+# Errors thrown away, sleeps in tests, tasks nobody keeps, stubs left behind (0.2.5).
+ts-no-swallowed-error
+tsx-no-swallowed-error
+js-no-swallowed-error
+py-no-swallowed-error
+go-no-swallowed-error
+rust-no-swallowed-error
+ts-no-sleep-in-tests
+tsx-no-sleep-in-tests
+js-no-sleep-in-tests
+py-no-sleep-in-tests
+go-no-sleep-in-tests
+rust-no-sleep-in-tests
+py-no-floating-task
+ts-no-hollow-impl
+tsx-no-hollow-impl
+js-no-hollow-impl
+py-no-hollow-impl
+# Network calls with no deadline.
+ts-no-unbounded-fetch
+tsx-no-unbounded-fetch
+js-no-unbounded-fetch
+py-no-unbounded-request
+go-no-unbounded-http
+rust-no-unbounded-http
+# Other languages (0.2.5): money in a float, and tests that assert nothing,
+# for JUnit, Kotlin, xUnit/NUnit/MSTest, RSpec/Minitest, PHPUnit and
+# Codeception, XCTest/Swift Testing, ScalaTest/MUnit, ExUnit, Dart,
+# GoogleTest/Catch2 and busted. Strict only until they have met more code.
+java-float-money
+kt-float-money
+cs-float-money
+c-float-money
+cpp-float-money
+swift-float-money
+scala-float-money
+dart-float-money
+php-float-money
+java-test-no-assertion
+kt-test-no-assertion
+cs-test-no-assertion
+rb-test-no-assertion
+php-test-no-assertion
+swift-test-no-assertion
+scala-test-no-assertion
+ex-test-no-assertion
+dart-test-no-assertion
+cpp-test-no-assertion
+lua-test-no-assertion

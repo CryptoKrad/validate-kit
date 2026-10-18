@@ -1,0 +1,12 @@
+id: cs-test-no-assertion
+valid:
+  - "class T { [Fact] public void Adds() { Assert.Equal(3, Add(1, 2)); } }"
+  - "class T { [Test] public void S() { Add(1, 2).Should().Be(3); } }"
+  - |
+    class T {
+      [Fact] public void Adds() { Same(Add(1, 2), 3); }
+      void Same(int a, int b) { Assert.Equal(a, b); }
+    }
+invalid:
+  - "class T { [Fact] public void Adds() { var x = Add(1, 2); } }"
+  - "class T { [TestMethod] public void M() { Run(); } }"

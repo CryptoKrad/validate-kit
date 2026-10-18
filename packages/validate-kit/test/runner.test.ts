@@ -33,6 +33,7 @@ import type {
   ToolAdapter,
   ToolContext,
 } from "../src/core/types.js";
+import { LANGUAGES } from "../src/core/types.js";
 import type { PlannedTask } from "../src/core/plan.js";
 
 function git(cwd: string, ...args: string[]): string {
@@ -41,16 +42,9 @@ function git(cwd: string, ...args: string[]): string {
 
 function config(overrides: Partial<ResolvedConfig> = {}): ResolvedConfig {
   return {
-    languages: {
-      ts: { enabled: true },
-      js: { enabled: true },
-      rust: { enabled: true },
-      go: { enabled: true },
-      python: { enabled: true },
-      shell: { enabled: true },
-      sql: { enabled: true },
-      solidity: { enabled: true },
-    },
+    languages: Object.fromEntries(
+      LANGUAGES.map((lang) => [lang, { enabled: true }]),
+    ) as ResolvedConfig["languages"],
     layers: {
       format: { enabled: true },
       lint: { enabled: true },

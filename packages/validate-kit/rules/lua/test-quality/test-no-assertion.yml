@@ -1,0 +1,30 @@
+id: lua-test-no-assertion
+language: lua
+severity: warning
+message: "This test asserts nothing: it passes whatever the code does. Check the result (assert.are.equal, assert.is_true)."
+note: |
+  A busted `it("...", function() ... end)` with no assert only proves the
+  code did not error.
+  Any call or word that looks like a check (assert, expect, verify,
+  should, fail, ...) counts as asserting, so a helper named so counts too.
+files:
+  - "**/spec/**"
+  - "**/test/**"
+  - "**/*_spec.lua"
+  - "**/*_test.lua"
+rule:
+  kind: function_call
+  has:
+    field: name
+    regex: "^(it|test)$"
+  all:
+    - has:
+        field: arguments
+        has:
+          kind: function_definition
+  not:
+    regex: "(?i)(assert|expect|spy|stub|mock|verify|should|error\\()"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

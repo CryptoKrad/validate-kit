@@ -1,0 +1,20 @@
+id: py-no-floating-task
+language: python
+severity: warning
+message: "This task is not kept: the event loop holds only a weak reference, so it can be destroyed before it finishes, and its exception is lost. Keep it (a set, a TaskGroup) and await it."
+note: |
+  The asyncio docs: "Save a reference to the result of this function, to
+  avoid a task disappearing mid-execution." Use `asyncio.TaskGroup` (its
+  `tg.create_task` keeps the task and is left alone), or add the task to a
+  set and discard it when done.
+rule:
+  kind: expression_statement
+  has:
+    kind: call
+    has:
+      field: function
+      regex: "^(asyncio\\.|loop\\.|asyncio\\.get_(event|running)_loop\\(\\)\\.)?(create_task|ensure_future)$"
+metadata:
+  category: correctness
+  autofix: none
+  since: "0.2.5"
