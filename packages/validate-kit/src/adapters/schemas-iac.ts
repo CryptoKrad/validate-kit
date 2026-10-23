@@ -11,10 +11,6 @@ import { scratchOf } from "./base.js";
  * docs/research/lint-toolchain/sota-2026-10-18/schemas-iac.md.
  */
 
-/** Why a check against the main branch did not run, when there is none. */
-export const NO_BASE =
-  "no main branch to compare with (no origin/HEAD, origin/main or origin/master, as in a shallow CI checkout), so nothing was compared: fetch origin's main branch, or pass --trusted-ref";
-
 /**
  * The first changed line of each hunk of a unified diff, by the file its
  * `+++` header names less `prefix` (`b/`, `new/`), counted on the `-` side:

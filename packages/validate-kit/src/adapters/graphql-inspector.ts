@@ -9,10 +9,10 @@ import type {
   ToolAdapter,
   ToolContext,
 } from "../core/types.js";
-import { gitSync, mainBase } from "../detect/git.js";
+import { gitSync, inTree, mainBase, noBase } from "../detect/git.js";
 import { absPosix, finding, toolOptions } from "./base.js";
 import { NOTHING } from "./native.js";
-import { changedAny, existingPaths, NO_BASE } from "./schemas-iac.js";
+import { changedAny, existingPaths } from "./schemas-iac.js";
 
 const Options = z
   .object({
@@ -74,12 +74,15 @@ export const graphqlInspector: ToolAdapter = {
     );
     if (!changedAny(env, (path) => path === schema)) return [];
     const base = mainBase(env.projectRoot, env.trusted?.commit);
+    // No base compares nothing: under `ci` that is an incomplete run, never
+    // a pass.
+    if (!base) return [{ ...seed, cannotRun: noBase(env.trusted?.commit) }];
     // The `git:` loader runs `git show`, whose path is from the top.
     const old = `${(gitSync(env.projectRoot, ["rev-parse", "--show-prefix"]) ?? "").trim()}${schema}`;
-    const task: DiffTask = !base
-      ? { schema, skip: NO_BASE }
-      : gitSync(env.projectRoot, ["cat-file", "-e", `${base}:${old}`]) ===
-          undefined
+    // Only a schema the base surely lacks is new; when git cannot tell, the
+    // diff runs and fails loudly.
+    const task: DiffTask =
+      inTree(env.projectRoot, base, schema) === false
         ? {
             schema,
             skip: `the schema is not on the main branch (${base.slice(0, 12)}) yet: nothing to compare`,

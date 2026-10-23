@@ -152,7 +152,8 @@ export const validateConfigSchema = z
       .object({
         enabled: z.boolean().optional(),
         specs: z.array(z.string()).nonempty().optional(),
-        baseRef: z.string().optional(),
+        // An empty ref (an unset GITHUB_BASE_REF) would read the index.
+        baseRef: z.string().min(1).optional(),
       })
       .strict()
       .optional(),

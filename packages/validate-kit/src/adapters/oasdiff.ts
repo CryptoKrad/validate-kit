@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { closeSync, openSync } from "node:fs";
+import { closeSync, existsSync, openSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { resolveBin } from "../core/exec.js";
+import { gitSync, inTree, mainBase, noBase } from "../detect/git.js";
 import type {
   BuiltCommand,
   RawOutput,
@@ -10,11 +11,17 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { absPosix, finding, parseFindings } from "./base.js";
+import { NOTHING } from "./native.js";
 
 /** One spec to diff against its copy at the base ref. */
 interface ApiDiffTask {
   spec: string;
+  /** The commit to read the base spec from, or the ref as written. */
   baseRef: string;
+  /** How the base is named in a message: the configured ref, or a commit id. */
+  label: string;
+  /** Why nothing is compared: the spec is new since the base. */
+  skip?: string;
 }
 
 const taskOf = (ctx: ToolContext): ApiDiffTask | undefined =>
@@ -54,12 +61,47 @@ export const oasdiff: ToolAdapter = {
   detect: (_detection, config) =>
     config.apiDiff.enabled && config.apiDiff.specs.length > 0,
 
-  // One task per configured spec: each diffs against its own base copy.
-  expand: (seed, env) =>
-    env.config.apiDiff.specs.map((spec) => ({
-      ...seed,
-      options: { spec, baseRef: env.config.apiDiff.baseRef },
-    })),
+  // One task per configured spec: each diffs against its own base copy, at
+  // `apiDiff.baseRef` when the config names one, else the merge base with
+  // the main branch (or the --trusted-ref commit), as buf-breaking and
+  // graphql-inspector compare. No base compares nothing: under `ci` that is
+  // an incomplete run, never a pass.
+  expand(seed, env) {
+    const named = env.config.apiDiff.baseRef;
+    const base = named ?? mainBase(env.projectRoot, env.trusted?.commit);
+    if (base === undefined)
+      return [{ ...seed, cannotRun: noBase(env.trusted?.commit) }];
+    // The ref as a commit: one git does not know stays as written, and
+    // reading the spec there crashes (buildArgs), never passes.
+    const commit =
+      gitSync(env.projectRoot, [
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        `${base}^{commit}`,
+      ])?.trim() || undefined;
+    const label = named ?? commit?.slice(0, 12) ?? base;
+    return env.config.apiDiff.specs.map((spec) => {
+      // A spec the base surely lacks (its first introduction) has no clients
+      // to break; when git cannot tell, or the spec is not on disk either
+      // (a typo), the diff runs and fails loudly.
+      const isNew =
+        commit !== undefined &&
+        existsSync(resolve(env.projectRoot, spec)) &&
+        inTree(env.projectRoot, commit, spec) === false;
+      const task: ApiDiffTask = {
+        spec,
+        baseRef: commit ?? base,
+        label,
+        ...(isNew
+          ? {
+              skip: `${spec} is not on ${label} yet (its first introduction): nothing to compare`,
+            }
+          : {}),
+      };
+      return { ...seed, options: task };
+    });
+  },
 
   buildArgs(ctx: ToolContext): BuiltCommand {
     const cfg = taskOf(ctx);
@@ -68,6 +110,7 @@ export const oasdiff: ToolAdapter = {
         "oasdiff task planned without an apiDiff spec — this is a planner bug",
       );
     }
+    if (cfg.skip) return NOTHING;
     const headSpec = resolve(ctx.cwd, cfg.spec);
     // The run's own scratch folder, removed when the run ends.
     if (!ctx.tempDir)
@@ -91,7 +134,7 @@ export const oasdiff: ToolAdapter = {
       );
     } catch (err) {
       throw new Error(
-        `apiDiff: cannot read base spec '${cfg.spec}' at ref '${cfg.baseRef}' — fetch the base ref, fix apiDiff.baseRef, or disable the gate. (${err instanceof Error ? err.message.split("\n")[0] : String(err)})`,
+        `apiDiff: cannot read base spec '${cfg.spec}' at ref '${cfg.label}' — fetch the base ref, fix apiDiff.baseRef, or disable the gate. (${err instanceof Error ? err.message.split("\n")[0] : String(err)})`,
         { cause: err },
       );
     } finally {
@@ -112,6 +155,28 @@ export const oasdiff: ToolAdapter = {
   },
 
   parseOutput(raw: RawOutput, ctx: ToolContext): RunResult {
+    const task = taskOf(ctx);
+    const spec = task?.spec ?? "openapi.json";
+    if (task?.skip)
+      return {
+        findings: [
+          finding({
+            tool: "oasdiff",
+            layer: "security",
+            file: absPosix(ctx.cwd, spec),
+            line: 1,
+            col: 1,
+            ruleId: "not-compared",
+            severity: "info",
+            message: task.skip,
+            fixable: false,
+          }),
+        ],
+        filesProcessed: 0,
+        fixesApplied: 0,
+        rawExitCode: raw.exitCode,
+        stderr: raw.stderr,
+      };
     if (!raw.stdout.trim() && raw.exitCode !== 0) {
       const firstLine = raw.stderr
         .split(/\r?\n/)
@@ -133,8 +198,6 @@ export const oasdiff: ToolAdapter = {
           "oasdiff output has a change without a string id and text and a numeric level: its output format may have changed; refusing to report it as info.",
         );
     }
-    const task = taskOf(ctx);
-    const spec = task?.spec ?? "openapi.json";
     const findings = changes.map((change) =>
       finding({
         tool: "oasdiff",
@@ -145,7 +208,7 @@ export const oasdiff: ToolAdapter = {
         ruleId: change.id,
         severity:
           change.level >= 3 ? "error" : change.level === 2 ? "warning" : "info",
-        message: `${change.text}${change.operation && change.path ? ` (${change.operation} ${change.path})` : ""} [vs ${task?.baseRef ?? "base"}]`,
+        message: `${change.text}${change.operation && change.path ? ` (${change.operation} ${change.path})` : ""} [vs ${task?.label ?? "base"}]`,
         fixable: false,
       }),
     );

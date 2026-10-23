@@ -12,6 +12,7 @@ import type {
   ToolAdapter,
   ToolContext,
 } from "../core/types.js";
+import { toPosix } from "../detect/languages.js";
 import { absPosix, finding, toolOptions } from "./base.js";
 
 const LAKEFILES = new Set(["lakefile.lean", "lakefile.toml"]);
@@ -454,19 +455,23 @@ function traced(
   line: string,
   projectRoot: string,
 ): { source: string; module: string } | undefined {
-  const o = line.lastIndexOf(" -o ");
-  const right = line.slice(o + 4);
+  // Lake prints paths in the host's separators: on Windows the whole trace is
+  // backslashes, so the `/.lake/build/lib/lean/` marker and the root prefix
+  // never matched. One normal form makes the parse OS-independent.
+  const norm = line.replaceAll("\\", "/");
+  const o = norm.lastIndexOf(" -o ");
+  const right = norm.slice(o + 4);
   const lib = right.indexOf(LAKE_LIB);
   if (o < 0 || lib < 0) return undefined;
   const root = right.slice(0, lib);
-  const at = line.slice(0, o).lastIndexOf(`${root}/`);
+  const at = norm.slice(0, o).lastIndexOf(`${root}/`);
   const modulePath = right
     .slice(lib + LAKE_LIB.length)
     .replace(/\.olean.*$/, "");
   if (at < 0 || !existsSync(join(projectRoot, LAKE_LIB, `${modulePath}.olean`)))
     return undefined;
   return {
-    source: posix.normalize(line.slice(at + root.length + 1, o)),
+    source: posix.normalize(norm.slice(at + root.length + 1, o)),
     module: modulePath.split("/").join("."),
   };
 }
@@ -563,9 +568,10 @@ function lakeFindings(
       );
     return { findings, built };
   }
-  // A file no build target compiled or replayed was never checked.
+  // A file no build target compiled or replayed was never checked. The trace
+  // keys are posix: a Windows `VolumeEngine\Basic.lean` never matches them.
   for (const file of task.files) {
-    if (!built.has(relative(task.root, file)))
+    if (!built.has(toPosix(relative(task.root, file))))
       findings.push(
         report(
           { file, line: 1, col: 1 },
@@ -644,7 +650,8 @@ function parseLake(task: LakeTask, raw: RawOutput): Finding[] {
   const fileOf = new Map(
     [...built].map(([source, module]) => [
       moduleKey(module),
-      join(task.root, source),
+      // POSIX like every other finding's path, on Windows too.
+      posix.join(task.root, source),
     ]),
   );
   return [
@@ -739,8 +746,11 @@ export const lean: ToolAdapter = {
 { lake build --no-ansi -v "$@" 2>&1; echo "$?" > "$scratch/status"; } | tee "$scratch/build.log"
 status=$(cat "$scratch/status"); printf '%s\\n' "$status" >&2
 [ "$status" = 0 ] || exit 0
-sed -n 's#^trace: .* -o .*/\\.lake/build/lib/lean/\\(.*\\)\\.olean -i .*#\\1#p' "$scratch/build.log" > "$scratch/modules"
-export VK_LEAN_AUDIT_ROOT="$PWD" VK_LEAN_AUDIT_LIB="$PWD/.lake/build/lib/lean" VK_LEAN_AUDIT_MODULES="$scratch/modules"
+tr '\\\\' '/' < "$scratch/build.log" | sed -n 's#^trace: .* -o .*/\\.lake/build/lib/lean/\\(.*\\)\\.olean -i .*#\\1#p' > "$scratch/modules"
+# MSYS prints /c/… ; Lean is a Windows binary and needs C:/… (pwd -W exists
+# only under MSYS: elsewhere the plain pwd is the right answer).
+root=$(pwd -W 2>/dev/null || pwd)
+export VK_LEAN_AUDIT_ROOT="$root" VK_LEAN_AUDIT_LIB="$root/.lake/build/lib/lean" VK_LEAN_AUDIT_MODULES="$scratch/modules"
 ${RUN_AUDIT}`,
           "validate-kit",
           scratch,

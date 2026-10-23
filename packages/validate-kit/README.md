@@ -79,8 +79,43 @@ gained a package published inside that wait, looking the date up in the
 registry. The bundled `test-no-assertion` rules report a test that checks
 nothing (a same-file helper that asserts counts). Where a project configured them, the kit also runs dependency-cruiser
 and import-linter (import rules), and, when enabled, lizard (a complexity
-ratchet with the baseline) and diff-cover (changed lines no test runs). The
-repository README has each tool's details.
+ratchet with the baseline) and diff-cover (changed lines no test runs).
+
+## Tools
+
+125 tools. Each is silent when it passes, and a missing one is skipped with a
+note, or leaves the run incomplete (exit 3) under `--profile ci`. Most run
+only where the project chose them: its config file, a dependency that names
+the tool, a task or CI step that runs it, or `tools.<id>.enabled`. `check
+list` shows which would run in a project, and from which folder; `check
+doctor` which this machine can run. `tools.<id>.enabled: false` turns one off.
+
+| Area                   | Tools                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| JS and TS              | prettier, Biome, oxlint, ESLint, tsc, knip, jscpd, dependency-cruiser, size-limit, publint, attw, Stryker                   |
+| Python                 | ruff, ruff format, mypy, basedpyright, ty, deptry, import-linter, vulture, CrossHair, mutmut                                |
+| Rust                   | rustfmt, clippy, cargo-deny, cargo-machete, cargo-hack, cargo-semver-checks, Kani, Miri, cargo-mutants                      |
+| Go                     | gofmt, gofumpt, golangci-lint, deadcode, nilaway, go-race, govulncheck, capslock, gorelease, go-arch-lint, gremlins         |
+| C, C++, Zig            | clang-format, clang-tidy, cppcheck, zig fmt, zig ast-check                                                                  |
+| Java, Kotlin, Scala    | google-java-format, PMD, ktlint, detekt, scalafmt                                                                           |
+| C#, Ruby, PHP, Elixir  | dotnet format, dotnet build, CSharpier, RuboCop, Brakeman, PHPStan, php-cs-fixer, Pint, mix format, Credo                   |
+| Swift, Dart, Lua       | swift-format, SwiftLint, dart format, dart analyze, StyLua, selene                                                          |
+| Haskell, OCaml, Nix    | hlint, ormolu, ocamlformat, nixfmt, statix, deadnix                                                                         |
+| Bazel, Terraform       | buildifier, tofu fmt, tflint, trivy                                                                                         |
+| Schemas and Kubernetes | buf (lint, format, breaking), sqruff, sqlc (vet, diff), squawk, graphql-inspector, oasdiff, kubeconform, kube-linter, pluto |
+| Files around the code  | shellcheck, hadolint, taplo, yamllint, markdownlint-cli2, lychee (offline), ls-lint, reuse, typos, stylelint, html-validate |
+| Solidity               | forge fmt, solhint, Slither, aderyn                                                                                         |
+| Security               | Semgrep, gitleaks, zizmor, osv-scanner, cooldown, policy                                                                    |
+| Formal                 | TLC, Lean, Quint                                                                                                            |
+| The kit's own          | ast-grep rules, blobs, paths, scripts, unicode, migrations, env, file-length, lizard, diff-cover                            |
+
+Tiers decide when a tool runs: a fast one on every commit (`--profile dev`
+runs only those), a verify one also in a default run, and a deep one (mutation
+testing, Kani, Miri, dotnet build, buf-breaking, the API and capability
+checks) only under `--profile ci`, the pre-push run. A tool that would need
+the network in a hook (a plugin download, a schema fetch, a registry call) is
+run offline, or cannot run and says what to fetch first. The source
+repository's README has each tool's details.
 
 ## Included Assets
 

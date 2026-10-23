@@ -310,8 +310,12 @@ export interface ApiDiffConfig {
   enabled: boolean;
   /** OpenAPI spec paths (relative to project root); one task per spec. */
   specs: string[];
-  /** Git ref holding the base spec to diff against. */
-  baseRef: string;
+  /**
+   * Git ref holding the base spec to diff against. Unset: the merge base
+   * with the main branch (origin/HEAD, origin/main or origin/master), or the
+   * `--trusted-ref` commit, as the other API-break checks compare.
+   */
+  baseRef?: string;
 }
 
 /** One unit of planned work, before the adapter has had its say. */

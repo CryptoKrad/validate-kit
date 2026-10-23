@@ -230,7 +230,7 @@ function defaults(): ResolvedConfig {
     skipMinified: true,
     astGrep: { ruleDirs: [], ruleIds: [] },
     vulnAudit: { enabled: false, scanPaths: ["."], offline: false },
-    apiDiff: { enabled: false, specs: [], baseRef: "origin/main" },
+    apiDiff: { enabled: false, specs: [] },
     concurrency: Math.max(1, cpus().length),
     severityOverrides: [],
     policyFiles: [...DEFAULT_POLICY_FILES],

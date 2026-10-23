@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { posix } from "node:path";
 import picomatch from "picomatch";
 import type { Finding } from "../core/types.js";
-import { mainBase } from "../detect/git.js";
+import { mainBase, noBase } from "../detect/git.js";
 import { toPosix } from "../detect/languages.js";
 import { fileFinding, gitSync, ignoredBy, nativeCheck } from "./native.js";
 
@@ -84,6 +84,8 @@ interface MigrationsPlan {
   ignore: string[];
   /** The main branch's commit, to compare committed migrations with. */
   base?: string;
+  /** Why there is none: the note a run without a base reports. */
+  noBase?: string;
 }
 
 /**
@@ -121,10 +123,21 @@ export const migrations = nativeCheck({
       .map((file) => posix.relative(top, file))
       .filter((path) => placed(path) !== undefined);
     const base = mainBase(env.projectRoot, env.trusted?.commit);
-    return { all, ignore: env.config.ignore, ...(base ? { base } : {}) };
+    return {
+      all,
+      ignore: env.config.ignore,
+      ...(base
+        ? { base }
+        : {
+            noBase: noBase(
+              env.trusted?.commit,
+              "an edited migration is not checked",
+            ),
+          }),
+    };
   },
   check(root, task) {
-    const { all, base, ignore } = task.extra as MigrationsPlan;
+    const { all, base, ignore, noBase: why } = task.extra as MigrationsPlan;
     const ignored =
       ignore.length > 0 ? picomatch(ignore, { dot: true }) : () => false;
     const changed = new Set(task.files);
@@ -205,7 +218,7 @@ export const migrations = nativeCheck({
         all[0] ?? task.files[0] ?? ".",
         "no-base",
         "info",
-        "no main branch to compare migrations with (no origin/HEAD, origin/main or origin/master, as in a shallow CI checkout), so an edited migration is not checked: fetch origin's main branch, or pass --trusted-ref",
+        why ?? noBase(undefined, "an edited migration is not checked"),
       );
       return findings;
     }

@@ -10,12 +10,11 @@ import type {
   ToolAdapter,
   ToolContext,
 } from "../core/types.js";
-import { gitSync, mainBase } from "../detect/git.js";
+import { gitSync, inTree, mainBase, noBase } from "../detect/git.js";
 import { toPosix } from "../detect/languages.js";
 import { finding } from "./base.js";
 import { bufAdopted, bufConfigIn, bufFindings, depsMissing } from "./buf.js";
 import { NOTHING } from "./native.js";
-import { NO_BASE } from "./schemas-iac.js";
 
 interface BreakingTask {
   /** The module to compare, relative to where buf runs ("." for all of it). */
@@ -81,20 +80,18 @@ export const bufBreaking: ToolAdapter = {
     const cannotRun = depsMissing(seed.cwd);
     if (cannotRun) return [{ ...seed, cannotRun }];
     const base = mainBase(env.projectRoot, env.trusted?.commit);
+    // No base compares nothing: under `ci` that is an incomplete run, never
+    // a pass.
+    if (!base) return [{ ...seed, cannotRun: noBase(env.trusted?.commit) }];
     const top = gitSync(seed.cwd, ["rev-parse", "--show-toplevel"])?.trim();
     const prefix = (
       gitSync(seed.cwd, ["rev-parse", "--show-prefix"]) ?? ""
     ).trim();
     return modulesIn(seed.cwd).map((module) => {
       const subdir = posix.join(prefix, module).replace(/\/$/, "");
-      const task: BreakingTask = !base
-        ? { module, skip: NO_BASE }
-        : // A module the main branch does not have yet has no clients to break.
-          gitSync(seed.cwd, [
-              "cat-file",
-              "-e",
-              `${base}:./${module === "." ? "" : module}`,
-            ]) === undefined
+      // A module the main branch does not have yet has no clients to break.
+      const task: BreakingTask =
+        inTree(seed.cwd, base, module) === false
           ? {
               module,
               skip: `${module === "." ? "this module" : `module ${module}`} is not on the main branch (${base.slice(0, 12)}) yet: nothing to compare`,

@@ -10,7 +10,7 @@ import type {
   ToolAdapter,
   ToolContext,
 } from "../core/types.js";
-import { gitSync, mainBase } from "../detect/git.js";
+import { gitSync, inTree, mainBase, noBase } from "../detect/git.js";
 import { isUnder, toPosix } from "../detect/languages.js";
 import { absPosix, finding, fromRealCwd } from "./base.js";
 import {
@@ -43,9 +43,6 @@ const ITEM = /^\s+(.+?)(, previously)? in (?:file )?(.+):(\d+)$/;
 const REF = /^\s*ref: (\S+)$/;
 /** The baseline's copy: `<target>/semver-checks/git-<rev>/<sha>/<path in the repo>`. */
 const BASELINE_COPY = /\/semver-checks\/[^/]+\/[0-9a-f]{40}\/(.+)$/;
-
-const NO_BASE =
-  "no main branch to compare the public API with (no origin/HEAD, origin/main or origin/master, as in a shallow CI checkout): fetch origin's default branch (fetch-depth: 0), or pass --trusted-ref";
 
 /**
  * cargo-semver-checks — the crate's public API against the main branch's:
@@ -100,12 +97,20 @@ export const cargoSemverChecks: ToolAdapter = {
     );
     if (libraries.length === 0) return [];
     const base = mainBase(seed.cwd, env.trusted?.commit);
-    if (!base) return [{ ...seed, cannotRun: NO_BASE }];
+    if (!base)
+      return [
+        {
+          ...seed,
+          cannotRun: noBase(
+            env.trusted?.commit,
+            "the public API was not compared",
+          ),
+        },
+      ];
     // A crate the main branch does not have yet (the change that adds it)
     // has no API to keep, and the tool fails on it.
     const crates = libraries.filter(
-      ({ dir }) =>
-        gitSync(dir, ["cat-file", "-e", `${base}:./Cargo.toml`]) !== undefined,
+      ({ dir }) => inTree(dir, base, "Cargo.toml") !== false,
     );
     if (crates.length === 0) return [];
     const task: SemverTask = {

@@ -687,11 +687,16 @@ try {
     "a --lang filter must exclude a tool that serves no language",
   );
   // Fan-out belongs to the adapter (engine-generalisation.md, C2): two specs
-  // are two tasks, each carrying the spec it will diff.
+  // are two tasks, each carrying the spec it will diff. The base is named:
+  // this repository has no main branch, and with none oasdiff cannot run.
   writeFileSync(join(impostorRoot, "second.json"), "{}\n");
   writeImpostorConfig({
     extends: "recommended",
-    apiDiff: { enabled: true, specs: ["openapi.json", "second.json"] },
+    apiDiff: {
+      enabled: true,
+      specs: ["openapi.json", "second.json"],
+      baseRef: "HEAD",
+    },
   });
   const specTasks = parseJsonOutput(
     run(installedKit, ["list", "--json"], { cwd: impostorRoot }),

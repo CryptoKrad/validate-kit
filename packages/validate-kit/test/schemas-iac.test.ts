@@ -15,6 +15,7 @@ import { bufFormat } from "../src/adapters/buf-format.js";
 import { graphqlInspector } from "../src/adapters/graphql-inspector.js";
 import { kubeLinter } from "../src/adapters/kube-linter.js";
 import { kubeconform } from "../src/adapters/kubeconform.js";
+import { oasdiff } from "../src/adapters/oasdiff.js";
 import { pluto } from "../src/adapters/pluto.js";
 import { hunkStarts } from "../src/adapters/schemas-iac.js";
 import { sqlcDiff } from "../src/adapters/sqlc-diff.js";
@@ -22,6 +23,8 @@ import { sqlcVet } from "../src/adapters/sqlc-vet.js";
 import { sqruff } from "../src/adapters/sqruff.js";
 import { tofu } from "../src/adapters/tofu.js";
 import { trivy } from "../src/adapters/trivy.js";
+import { resolveConfig } from "../src/config/resolve.js";
+import { inTree } from "../src/detect/git.js";
 import { toPosix } from "../src/detect/languages.js";
 import type {
   PlanEnv,
@@ -195,16 +198,12 @@ describe("buf", () => {
     );
   });
 
-  it("breaking: with no main branch, an info finding and no buf run", () => {
+  it("breaking: with no main branch it cannot run (incomplete under ci), never an info pass", () => {
     const root = repo({ "buf.yaml": "version: v2\n" }, false);
-    const [task] = expand(bufBreaking, { cwd: root }, env(root));
-    const c = ctx(root, { options: task?.options });
-    expect(bufBreaking.buildArgs(c).bin).toBe(process.execPath);
-    const { findings } = bufBreaking.parseOutput(ran(0), c);
-    expect(findings.map((f) => [f.file, f.severity])).toEqual([
-      [`${root}/buf.yaml`, "info"],
+    const tasks = expand(bufBreaking, { cwd: root }, env(root));
+    expect(tasks.map((t) => t.cannotRun)).toEqual([
+      expect.stringMatching(/no merge base of HEAD/),
     ]);
-    expect(findings[0]?.message).toMatch(/no main branch to compare with/);
   });
 
   it("breaking: a deleted file, which buf reports with no path, is at the buf config", () => {
@@ -553,6 +552,16 @@ describe("graphql-inspector", () => {
         env(root, { ...named, changedPaths: ["README.md"] }),
       ),
     ).toEqual([]);
+    // No main branch compares nothing: incomplete under ci, never a pass.
+    const shallow = repo(
+      { "api/schema.graphql": "type Query { a: Int }\n" },
+      false,
+    );
+    expect(
+      expand(graphqlInspector, { cwd: shallow }, env(shallow, named)).map(
+        (t) => t.cannotRun,
+      ),
+    ).toEqual([expect.stringMatching(/no merge base of HEAD/)]);
   });
 
   it("a breaking change is an error, a dangerous one info; exit 1 without the verdict is a crash", () => {
@@ -592,6 +601,112 @@ describe("graphql-inspector", () => {
         c,
       ),
     ).toThrow("graphql-inspector diff failed: [error] NoTypeDefinitionsFound:");
+  });
+});
+
+/** A plan env whose config enables apiDiff on openapi.json. */
+const apiDiff = (more: Record<string, unknown> = {}): Partial<PlanEnv> =>
+  ({
+    config: {
+      ignore: [],
+      tools: {},
+      apiDiff: { enabled: true, specs: ["openapi.json"], ...more },
+    },
+  }) as unknown as Partial<PlanEnv>;
+
+/** The oasdiff tasks, or why they cannot run, for `more` in apiDiff. */
+const oasdiffTasks = (root: string, more?: Record<string, unknown>) =>
+  expand(oasdiff, { cwd: root }, env(root, apiDiff(more))).map(
+    (t) => t.cannotRun ?? t.options,
+  );
+
+describe("oasdiff's base", () => {
+  it("is the merge base with the main branch unless apiDiff.baseRef names one", () => {
+    const root = repo({ "openapi.json": "{}\n" }, true);
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root })
+      .toString()
+      .trim();
+    expect(oasdiffTasks(root)).toEqual([
+      { spec: "openapi.json", baseRef: head, label: head.slice(0, 12) },
+    ]);
+    // A named ref is read as its commit, and named as written.
+    expect(oasdiffTasks(root, { baseRef: "HEAD" })).toEqual([
+      { spec: "openapi.json", baseRef: head, label: "HEAD" },
+    ]);
+  });
+
+  it("an empty apiDiff.baseRef (an unset GITHUB_BASE_REF) is a config error, never the index", async () => {
+    const root = repo({ "openapi.json": "{}\n" }, true);
+    put(root, {
+      "validate.config.json": JSON.stringify({
+        apiDiff: { enabled: true, specs: ["openapi.json"], baseRef: "" },
+      }),
+    });
+    await expect(resolveConfig(root)).rejects.toThrow(/baseRef/);
+  });
+
+  it("with no main branch it cannot run, never a pass", () => {
+    const root = repo({ "openapi.json": "{}\n" }, false);
+    expect(oasdiffTasks(root)).toEqual([
+      expect.stringMatching(/no merge base of HEAD/),
+    ]);
+  });
+
+  it("a spec the base does not have yet is not compared: info, and oasdiff does not run", () => {
+    const root = repo({ "README.md": "x\n" }, true);
+    put(root, { "openapi.json": "{}\n" });
+    const [task] = expand(oasdiff, { cwd: root }, env(root, apiDiff()));
+    const c = ctx(root, { options: task?.options });
+    expect(oasdiff.buildArgs(c).bin).toBe(process.execPath);
+    const { findings } = oasdiff.parseOutput(ran(0), c);
+    expect(findings.map((f) => [f.ruleId, f.severity])).toEqual([
+      ["not-compared", "info"],
+    ]);
+    expect(findings[0]?.message).toMatch(/its first introduction/);
+    // A ref git does not know is still planned, and its build is a crash.
+    expect(
+      oasdiffTasks(root, { baseRef: "origin/definitely-missing" }),
+    ).toEqual([
+      {
+        spec: "openapi.json",
+        baseRef: "origin/definitely-missing",
+        label: "origin/definitely-missing",
+      },
+    ]);
+    // A spec on neither side (a typo) is not "new": oasdiff runs and fails.
+    const typo = expand(
+      oasdiff,
+      { cwd: root },
+      env(root, {
+        config: {
+          ignore: [],
+          tools: {},
+          apiDiff: { enabled: true, specs: ["openapi.jsn"] },
+        },
+      } as unknown as Partial<PlanEnv>),
+    );
+    expect(typo).toHaveLength(1);
+    expect(typo[0]?.options).not.toHaveProperty("skip");
+  });
+
+  it("inTree: true, false, or undefined when git cannot tell, and never a git planted on PATH", () => {
+    const root = repo({ "openapi.json": "{}\n" }, false);
+    expect(inTree(root, "HEAD", "openapi.json")).toBe(true);
+    expect(inTree(root, "HEAD", "nope.json")).toBe(false);
+    expect(inTree(root, "0".repeat(40), "openapi.json")).toBeUndefined();
+    // A project's own `git` (node_modules/.bin, first on PATH under
+    // `pnpm run`) that answers "absent" for every path would switch the API
+    // checks off: the system git is used.
+    const fake = join(tmp("vk-fake-git-"), "node_modules", ".bin");
+    mkdirSync(fake, { recursive: true });
+    writeFileSync(join(fake, "git"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const path = process.env.PATH;
+    process.env.PATH = `${fake}:${path ?? ""}`;
+    try {
+      expect(inTree(root, "HEAD", "openapi.json")).toBe(true);
+    } finally {
+      process.env.PATH = path;
+    }
   });
 });
 

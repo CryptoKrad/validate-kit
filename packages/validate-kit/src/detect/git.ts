@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { ConfigError } from "../config/schema.js";
-import { run } from "../core/exec.js";
+import { resolveBin, run } from "../core/exec.js";
 import { toPosix } from "./languages.js";
 
 export type ChangedMode = "staged" | "changed" | "since";
@@ -27,7 +27,9 @@ export function gitBytes(
   input?: string,
 ): Buffer | undefined {
   try {
-    return execFileSync("git", args, {
+    // The system git, never one the project puts first on PATH: a planted
+    // one could answer "absent" and switch a check off.
+    return execFileSync(resolveBin("git", root), args, {
       cwd: root,
       maxBuffer: 256 * 1024 * 1024,
       stdio: [input === undefined ? "ignore" : "pipe", "pipe", "ignore"],
@@ -44,6 +46,34 @@ export function gitBytes(
  * `origin/main` or `origin/master`). Undefined when there is none (a
  * shallow CI checkout).
  */
+/**
+ * Why a check against the main branch did not run: there is no merge base
+ * (no main branch fetched, or a shallow one), or none with the trusted ref.
+ */
+export function noBase(
+  trustedCommit?: string,
+  effect = "nothing was compared",
+): string {
+  return trustedCommit === undefined
+    ? `no merge base of HEAD with origin/HEAD, origin/main or origin/master (not fetched, or fetched shallow), so ${effect}: fetch the full history (fetch-depth: 0), or pass --trusted-ref`
+    : `no merge base of HEAD with the --trusted-ref commit ${trustedCommit.slice(0, 12)}, so ${effect}: fetch the full history (fetch-depth: 0)`;
+}
+
+/**
+ * Whether `path` (from `root`) is in `ref`'s tree: undefined when git cannot
+ * tell (a ref it does not know, a path outside the repository, no git), so
+ * a check that skips what the base does not have yet never skips then.
+ * `ls-tree` reads trees only, so a blobless clone answers too.
+ */
+export function inTree(
+  root: string,
+  ref: string,
+  path: string,
+): boolean | undefined {
+  const out = gitSync(root, ["ls-tree", "--name-only", ref, "--", path]);
+  return out === undefined ? undefined : out.trim() !== "";
+}
+
 export function mainBase(
   root: string,
   trustedCommit?: string,

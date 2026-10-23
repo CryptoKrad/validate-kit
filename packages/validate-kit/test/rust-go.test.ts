@@ -499,7 +499,7 @@ Failed in:
     g("commit", "-qm", "v1");
     // No origin: it cannot run, which leaves a ci run incomplete.
     const [unbased] = expand(cargoSemverChecks, lib);
-    expect(unbased?.cannotRun).toMatch(/^no main branch/);
+    expect(unbased?.cannotRun).toMatch(/^no merge base of HEAD/);
     expect(unbased?.options).toBeUndefined();
     g("update-ref", "refs/remotes/origin/main", "HEAD");
     const head = g("rev-parse", "HEAD");
