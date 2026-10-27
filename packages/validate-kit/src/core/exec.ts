@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { accessSync, constants, existsSync, statSync } from "node:fs";
 import {
   basename,
@@ -110,6 +111,33 @@ function envValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
 }
 
 /**
+ * Put `dir` first on PATH, keeping the environment's own spelling of the key
+ * (`Path` on Windows). A system shell found outside PATH — Git for Windows'
+ * usr/bin — brings its sibling utilities (tee, cat, sed) with it; a script it
+ * runs must be able to find them.
+ */
+function withPathPrefix(
+  env: NodeJS.ProcessEnv,
+  dir: string,
+): NodeJS.ProcessEnv {
+  // The spelling Node passes on: the first in sorted order (envValue).
+  const key =
+    Object.keys(env)
+      .toSorted()
+      .find((k) => k.toUpperCase() === "PATH") ?? "PATH";
+  const current = env[key] ?? "";
+  const entries = current
+    .split(delimiter)
+    .map((entry) => entry.replace(/^"(.*)"$/, "$1"));
+  const same = (entry: string): boolean =>
+    WINDOWS
+      ? resolve(entry).toLowerCase() === resolve(dir).toLowerCase()
+      : resolve(entry) === resolve(dir);
+  if (entries.some((entry) => entry !== "" && same(entry))) return env;
+  return { ...env, [key]: `${dir}${delimiter}${current}` };
+}
+
+/**
  * What a PATH search would run: a regular file, executable on POSIX; on
  * Windows the extension decides (X_OK means nothing there), and an App
  * Execution Alias (WindowsApps) runs although stat says EACCES.
@@ -196,13 +224,57 @@ function fromPath(
   throw notFound(`${bin} is not on PATH${why}`);
 }
 
+const gitShells = new Map<string, string | undefined>();
+
+/**
+ * Git for Windows ships the POSIX shell the formal adapters need, but puts it
+ * under `<git>/usr/bin`, which is not on PATH by default. Find it from the
+ * system git's own exec path, never a project-local git: `onPath` already
+ * excludes node_modules and relative PATH entries.
+ */
+function gitShell(env: NodeJS.ProcessEnv): string | undefined {
+  if (!WINDOWS) return undefined;
+  const git = onPath("git", true, env);
+  if (!git) return undefined;
+  // One answer per git: every sh task of a run would otherwise start it.
+  if (!gitShells.has(git)) gitShells.set(git, shellOfGit(git, env));
+  return gitShells.get(git);
+}
+
+function shellOfGit(git: string, env: NodeJS.ProcessEnv): string | undefined {
+  try {
+    const execPath = execFileSync(git, ["--exec-path"], {
+      encoding: "utf8",
+      env,
+      timeout: 10_000,
+      windowsHide: true,
+    }).trim();
+    // <root>/mingw64/libexec/git-core -> <root>/usr/bin/sh.exe
+    let dir = execPath;
+    for (let i = 0; i < 5; i++) {
+      const candidate = join(dir, "usr", "bin", "sh.exe");
+      if (existsSync(candidate)) return candidate;
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    // No git, or a git that cannot report its exec path: fall through.
+  }
+  return undefined;
+}
+
 function systemBin(bin: string, env: NodeJS.ProcessEnv): string {
-  // POSIX puts sh here.
-  if (bin === "sh" && existsSync("/bin/sh")) return "/bin/sh";
-  return fromPath(
-    bin,
-    env,
-    ` (the kit runs the system ${bin}, never a project's)`,
+  // POSIX puts sh here. On Windows "/bin/sh" is a folder of the current drive.
+  if (bin === "sh" && !WINDOWS && existsSync("/bin/sh")) return "/bin/sh";
+  const found = onPath(bin, true, env);
+  if (found) return found;
+  if (bin === "sh") {
+    const git = gitShell(env);
+    if (git) return git;
+  }
+  throw notFound(
+    `${bin} is not on PATH (the kit runs the system ${bin}, never a project's)`,
   );
 }
 
@@ -369,6 +441,13 @@ export async function run(
       opts.pathOnly,
       opts.pythonEnv,
     );
+    // A shell outside PATH (Git for Windows' usr/bin) needs its own directory
+    // on PATH so the script can reach tee/cat/sed. Not on POSIX: /bin first
+    // would put the system's python3 or java ahead of the user's.
+    const toolEnv =
+      WINDOWS && /^sh(\.exe)?$/i.test(basename(resolved))
+        ? withPathPrefix(env, dirname(resolved))
+        : env;
     const timeoutMs = opts.timeoutMs ?? 180_000;
     // Negative-pid group kills are POSIX; elsewhere fall back to execa's own
     // timeout on the direct child.
@@ -376,7 +455,7 @@ export async function run(
     const subprocess = execa(resolved, args, {
       cwd: opts.cwd,
       // The whole environment, so execa adds back nothing it leaves out.
-      env,
+      env: toolEnv,
       extendEnv: false,
       // No input is an empty stdin, never a pipe left open: a tool that
       // asks a question (Mix's "Shall I install Hex? [Yn]") reads the end of

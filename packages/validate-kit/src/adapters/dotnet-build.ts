@@ -123,7 +123,7 @@ export const dotnetBuild: ToolAdapter = {
   buildArgs(ctx: ToolContext): BuiltCommand {
     const { workspace } = ctx.options as BuildTask;
     const scratch = toPosix(scratchOf(ctx));
-    const targets = join(scratch, "error-log.targets");
+    const targets = absPosix(scratch, "error-log.targets");
     writeFileSync(targets, errorLogTargets(scratch));
     return {
       bin: this.bin,

@@ -76,6 +76,29 @@ describe("provider verification (Pact): UsersApi honours the WebApp contract", (
   let app: FastifyInstance;
   let baseUrl: string;
 
+  // Pact's native verifier ignores NO_PROXY and sends the localhost request
+  // through HTTP(S)_PROXY, which answers 502. Clear the proxy for the replay
+  // and put it back afterwards.
+  const proxyKeys = [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+  ] as const;
+  async function withoutProxy<T>(fn: () => Promise<T>): Promise<T> {
+    const saved = proxyKeys.map((key) => [key, process.env[key]] as const);
+    for (const key of proxyKeys) Reflect.deleteProperty(process.env, key);
+    try {
+      return await fn();
+    } finally {
+      for (const [key, value] of saved) {
+        if (value !== undefined) process.env[key] = value;
+      }
+    }
+  }
+
   beforeAll(async () => {
     app = buildApp({});
     await app.ready();
@@ -95,11 +118,13 @@ describe("provider verification (Pact): UsersApi honours the WebApp contract", (
     // The in-memory seed (alice/bob, password "password") already satisfies the
     // pact's provider states ("users exist", "user alice exists"), so no
     // stateHandlers are required. verifyProvider() rejects on any mismatch.
-    const output = await new Verifier({
-      provider: "UsersApi",
-      providerBaseUrl: baseUrl,
-      pactUrls: [pactFile],
-    }).verifyProvider();
+    const output = await withoutProxy(() =>
+      new Verifier({
+        provider: "UsersApi",
+        providerBaseUrl: baseUrl,
+        pactUrls: [pactFile],
+      }).verifyProvider(),
+    );
     expect(output).toBeDefined();
   }, 30_000);
 });

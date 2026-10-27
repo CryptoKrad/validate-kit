@@ -172,7 +172,7 @@ export const attw: ToolAdapter = {
         "-c",
         PACK_AND_CHECK,
         "attw",
-        join(scratchOf(ctx), "pack"),
+        absPosix(scratchOf(ctx), "pack"),
         (ctx.options as AttwTask).packer,
         // The project's attw; a configured one (the planner's object over
         // this one) on PATH only.

@@ -50,9 +50,9 @@ interface SolhintTask {
 function baseConfig(cwd: string, top: string): string | undefined {
   for (const dir of upTo(cwd, top)) {
     const name = CONFIGS.find((n) => existsSync(join(dir, n)));
-    if (name) return join(dir, name);
+    if (name) return absPosix(dir, name);
     if (toolAdopted(dir, dir, { configs: [], key: "solhint" }))
-      return join(dir, "package.json");
+      return absPosix(dir, "package.json");
   }
   return undefined;
 }

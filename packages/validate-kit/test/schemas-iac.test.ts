@@ -1277,7 +1277,7 @@ describe("pluto", () => {
       },
     });
     const built = pluto.buildArgs(c);
-    return { root, c, built, real: realpathSync(built.cwd ?? "") };
+    return { root, c, built, real: toPosix(realpathSync(built.cwd ?? "")) };
   }
 
   it("reads a copy of the scope from inside it, for the target version", () => {

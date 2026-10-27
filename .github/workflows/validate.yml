@@ -128,3 +128,7 @@ jobs:
         run: node scripts/smoke-windows.mjs
       - name: validate-kit core behavioral tests
         run: pnpm --fail-if-no-match --filter validate-kit run test:core
+      # Windows-only paths: a native tool run as itself, not through sh, and
+      # Lake's backslash paths.
+      - name: validate-kit Windows path tests
+        run: pnpm --fail-if-no-match --filter validate-kit exec vitest run test/swift-dart-lua-haskell-nix.test.ts test/lean.test.ts -t "batchThenEach|Windows"

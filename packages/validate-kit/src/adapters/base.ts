@@ -506,8 +506,20 @@ export interface EachRun {
 /** Run by node: the options, then every file; on a failure, each file. */
 const BATCH_THEN_EACH = `
 const { spawnSync } = require("node:child_process");
-const [bin, options, ...files] = process.argv.slice(1);
-const run = (list) => spawnSync(bin, [...JSON.parse(options), ...list], { encoding: "utf8", maxBuffer: 1 << 26 });
+const [shell, bin, options, ...files] = process.argv.slice(1);
+const opts = JSON.parse(options);
+// Windows cannot start a .sh itself: run that through the system shell. The
+// caller resolves it (Git for Windows' usr/bin is not on PATH by default),
+// and its sibling utilities (tee/cat/sed) must be reachable too.
+if (shell) {
+  const { dirname, delimiter } = require("node:path");
+  const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === "PATH") ?? "PATH";
+  process.env[pathKey] =
+    \`\${dirname(shell)}\${delimiter}\${process.env[pathKey] ?? ""}\`;
+}
+const run = (list) => shell
+  ? spawnSync(shell, [bin, ...opts, ...list], { encoding: "utf8", maxBuffer: 1 << 26 })
+  : spawnSync(bin, [...opts, ...list], { encoding: "utf8", maxBuffer: 1 << 26 });
 const all = run(files);
 if (all.status === 0 && !all.stderr && !all.stdout) process.exit(0);
 process.stdout.write(JSON.stringify(files.map((file) => {
@@ -529,9 +541,23 @@ export function batchThenEach(
   options: readonly string[],
   files: readonly string[],
 ): BuiltCommand {
+  // The wrapper runs under node; Windows needs the resolved POSIX shell to
+  // start a .sh tool, and Git for Windows' usr/bin is not on PATH by default.
+  // Only a .sh: `sh ormolu` would read the real ormolu.exe as a script.
+  const shell =
+    process.platform === "win32" && bin.endsWith(".sh")
+      ? resolveBin("sh", process.cwd(), process.env)
+      : "";
   return {
     bin: process.execPath,
-    args: ["-e", BATCH_THEN_EACH, bin, JSON.stringify(options), ...files],
+    args: [
+      "-e",
+      BATCH_THEN_EACH,
+      shell,
+      bin,
+      JSON.stringify(options),
+      ...files,
+    ],
     okExitCodes: "any",
     // A timeout stops the per-file runs too.
     processGroup: true,

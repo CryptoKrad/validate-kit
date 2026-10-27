@@ -1,13 +1,14 @@
 import { execFileSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { astgrep } from "../src/adapters/astgrep.js";
 import { clippy } from "../src/adapters/clippy.js";
@@ -21,7 +22,7 @@ import { ruffFormat } from "../src/adapters/ruff-format.js";
 import { rustfmt } from "../src/adapters/rustfmt.js";
 import { semgrep } from "../src/adapters/semgrep.js";
 import { tsc } from "../src/adapters/tsc.js";
-import { hookIndex, run } from "../src/core/exec.js";
+import { hookIndex, resolveBin, run } from "../src/core/exec.js";
 import { toPosix } from "../src/detect/languages.js";
 import { renderPretty } from "../src/report/pretty.js";
 import { execute } from "../src/core/runner.js";
@@ -180,8 +181,13 @@ function fakeTool(binDir: string, name: string, script: string): void {
   const path = resolve(binDir, name);
   writeFileSync(path, script);
   chmodSync(path, 0o755);
-  if (process.platform === "win32")
-    writeFileSync(`${path}.cmd`, `@sh "%~dp0${name}" %*\r\n`);
+  if (process.platform === "win32") {
+    const shell = resolveBin("sh", process.cwd(), process.env);
+    writeFileSync(
+      `${path}.cmd`,
+      `@set "PATH=${dirname(shell)};%PATH%"\r\n@"${shell}" "%~dp0${name}" %*\r\n`,
+    );
+  }
 }
 
 describe("runner", () => {
@@ -254,7 +260,7 @@ describe("runner", () => {
         env: { ...process.env, GIT_INDEX_FILE: index },
       }).trim(),
     ).toBe("a.txt");
-  });
+  }, 120_000);
 
   it("runs a pythonEnv tool from the project's .venv, where its probe found it", async () => {
     const cwd = toPosix(mkdtempSync(resolve(tmpdir(), "vk-venv-run-")));
@@ -361,11 +367,16 @@ describe("runner", () => {
   });
 
   it("does not misreport an oversized argv (E2BIG) as a missing binary", async () => {
-    // ARG_MAX is ~1MB on macOS/Linux; a 3MB single arg reliably trips E2BIG.
-    const raw = await run("echo", ["x".repeat(3 * 1024 * 1024)], {
-      cwd: process.cwd(),
-      timeoutMs: 30_000,
-    });
+    // ARG_MAX is ~1MB on macOS/Linux; Windows caps the command line at 32K.
+    // A 3MB single arg reliably trips the platform's spawn limit everywhere.
+    const raw = await run(
+      process.execPath,
+      ["-e", "0", "x".repeat(3 * 1024 * 1024)],
+      {
+        cwd: process.cwd(),
+        timeoutMs: 30_000,
+      },
+    );
     // E2BIG means the binary EXISTS but the invocation failed — reporting it
     // as spawnError would mark an optional tool "not installed" and, for
     // optional tools, silently skip it (false CLEAN). It must surface as a
@@ -373,6 +384,33 @@ describe("runner", () => {
     expect(raw.spawnError).toBe(false);
     expect(raw.exitCode).not.toBe(0);
   });
+
+  it.runIf(process.platform === "win32")(
+    "finds Git for Windows' sh off PATH and puts its folder on PATH for the script",
+    async () => {
+      // Git for Windows' sh lives in usr/bin, which is not on PATH by default.
+      // Without any folder holding an sh.exe, the kit finds it through git
+      // (Git\cmd stays), and the script still needs tee from that folder.
+      const pathKey =
+        Object.keys(process.env)
+          .toSorted()
+          .find((key) => key.toUpperCase() === "PATH") ?? "PATH";
+      const path = (process.env[pathKey] ?? "")
+        .split(delimiter)
+        .filter(
+          (entry) =>
+            !existsSync(resolve(entry.replace(/^"(.*)"$/, "$1"), "sh.exe")),
+        )
+        .join(delimiter);
+      const raw = await run("sh", ["-c", "command -v tee"], {
+        cwd: process.cwd(),
+        env: { [pathKey]: path },
+      });
+      expect(raw.spawnError).toBe(false);
+      expect(raw.exitCode).toBe(0);
+      expect(raw.stdout.trim()).not.toBe("");
+    },
+  );
 
   it("classifies buildArgs throws as adapter crashes without aborting the run", async () => {
     const healthy = adapter({

@@ -207,12 +207,12 @@ export function compileErrors(
 /** The query files a config names: each file, and the `.sql` files of each folder. */
 function queryFiles(ctx: ToolContext, project: SqlcProject): string[] {
   return project.queries.flatMap((query) => {
-    const path = join(ctx.cwd, query);
+    const path = absPosix(ctx.cwd, query);
     try {
       return statSync(path).isDirectory()
         ? readdirSync(path)
             .filter((name) => name.endsWith(".sql"))
-            .map((name) => join(path, name))
+            .map((name) => absPosix(path, name))
         : [path];
     } catch {
       return [];

@@ -10,7 +10,7 @@ Install from a tarball packed from this monorepo:
 ```bash
 pnpm --filter validate-kit pack --pack-destination ~/
 cd /path/to/other-repo
-pnpm add -D ~/validate-kit-0.2.4.tgz
+pnpm add -D ~/validate-kit-0.2.5.tgz
 ```
 
 > **Never install this kit by name from the public npm registry.** The
@@ -21,7 +21,7 @@ pnpm add -D ~/validate-kit-0.2.4.tgz
 With pnpm ≥ 10, allow the ast-grep postinstall in the same command:
 
 ```bash
-pnpm add -D --allow-build=@ast-grep/cli ~/validate-kit-0.2.4.tgz
+pnpm add -D --allow-build=@ast-grep/cli ~/validate-kit-0.2.5.tgz
 ```
 
 > pnpm ≥ 10 blocks `@ast-grep/cli`'s postinstall by default and hard-fails

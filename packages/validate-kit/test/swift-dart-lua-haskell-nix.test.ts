@@ -546,8 +546,8 @@ describe("batchThenEach", () => {
         '#!/bin/sh\necho "$*" >> calls.log\nfor f; do case $f in bad*) echo "$f: no" >&2; exit 4;; esac; done\n',
     });
     chmodSync(tool, 0o755);
-    const call = (list: string[]) => {
-      const cmd = batchThenEach(tool, ["--check"], list);
+    const call = (list: string[], bin = tool, options = ["--check"]) => {
+      const cmd = batchThenEach(bin, options, list);
       const out = spawnSync(cmd.bin, cmd.args, { cwd: root, encoding: "utf8" });
       return eachRun("tool", {
         stdout: out.stdout,
@@ -559,6 +559,15 @@ describe("batchThenEach", () => {
     expect(call(["a.ml", "bad.ml"])).toEqual([
       { file: "a.ml", status: 0, out: "" },
       { file: "bad.ml", status: 4, out: "bad.ml: no\n" },
+    ]);
+    // A native tool runs as itself, on Windows too: never `sh node.exe`.
+    const native = [
+      "-e",
+      'process.exit(process.argv.some((f) => f.startsWith("bad")) ? 4 : 0)',
+    ];
+    expect(call(["a.ml", "bad.ml"], process.execPath, native)).toEqual([
+      { file: "a.ml", status: 0, out: "" },
+      { file: "bad.ml", status: 4, out: "" },
     ]);
   });
 });

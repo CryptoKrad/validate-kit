@@ -1,13 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ConfigError, parseConfig } from "../src/config/schema.js";
 import { resolveConfig } from "../src/config/resolve.js";
 import { osvScanner } from "../src/adapters/osv.js";
 import { runCheck } from "../src/index.js";
 import { EXIT } from "../src/core/exit-codes.js";
+import { resolveBin } from "../src/core/exec.js";
 import type { ToolContext } from "../src/core/types.js";
 
 function oasSpec(paths: Record<string, unknown>): string {
@@ -140,6 +141,14 @@ describe("vulnAudit plugin (osv-scanner)", () => {
       `#!/usr/bin/env sh\nif [ "$1" = "--version" ]; then echo "osv-scanner version: 2.3.8"; exit 0; fi\ncat <<'JSON'\n${osvJson("HIGH")}\nJSON\nexit 1\n`,
     );
     chmodSync(fake, 0o755);
+    // A Windows process starts the .cmd shim, never the POSIX script.
+    if (process.platform === "win32") {
+      const shell = resolveBin("sh", process.cwd(), process.env);
+      writeFileSync(
+        `${fake}.cmd`,
+        `@set "PATH=${dirname(shell)};%PATH%"\r\n@"${shell}" "%~dp0osv-scanner" %*\r\n`,
+      );
+    }
 
     // Disabled (default): the gate must not run — explicitly requesting the
     // tool while the gate is off fails loud via the no-matching-tasks guard.
@@ -162,7 +171,7 @@ describe("vulnAudit plugin (osv-scanner)", () => {
     expect(vuln.severity).toBe("error");
     expect(vuln.file.endsWith("package-lock.json")).toBe(true);
     expect(on.summary.exitCode).toBe(EXIT.FINDINGS);
-  });
+  }, 120_000);
 });
 
 describe("apiDiff plugin (oasdiff)", () => {

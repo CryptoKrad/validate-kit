@@ -1,4 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
+import { resolveBin } from "../core/exec.js";
 import type {
   BuiltCommand,
   Finding,
@@ -71,7 +72,8 @@ export const ocamlformat: ToolAdapter = {
   buildArgs(ctx: ToolContext): BuiltCommand {
     return {
       ...batchThenEach(
-        this.bin,
+        // Resolved: Windows would run an ocamlformat.exe in the project folder first.
+        resolveBin(this.bin, ctx.cwd, process.env, this !== ocamlformat),
         [ctx.fix ? "--inplace" : "--check", ...ctx.extraArgs],
         relativeFiles(ctx, "ocamlformat"),
       ),

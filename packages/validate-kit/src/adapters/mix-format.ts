@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join, posix } from "node:path";
+import { isAbsolute, join, posix } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import type {
   BuiltCommand,
@@ -163,7 +163,7 @@ export const mixFormat: ToolAdapter = {
       };
       for (const line of lines.slice(listed + 1)) {
         // Each file is named by its absolute path, then its diff.
-        if (posix.isAbsolute(toPosix(line.trim())) && !DIFF.test(line)) {
+        if (isAbsolute(toPosix(line.trim())) && !DIFF.test(line)) {
           flush();
           file = toPosix(line.trim());
           diff = [];

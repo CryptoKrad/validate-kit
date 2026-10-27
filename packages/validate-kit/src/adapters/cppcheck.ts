@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import type {
   BuiltCommand,
   Finding,
@@ -119,7 +118,7 @@ export const cppcheck: ToolAdapter = {
         // --project takes no file arguments: it narrows to them by filter.
         ...(db
           ? [
-              `--project=${join(db, "compile_commands.json")}`,
+              `--project=${absPosix(db, "compile_commands.json")}`,
               ...files.map((file) => `--file-filter=${file}`),
             ]
           : files),

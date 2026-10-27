@@ -247,11 +247,17 @@ describe("packing (publint, attw)", () => {
       }),
     });
     const out = tmp("vk-pack-out-");
-    execFileSync("npm", ["pack", "--pack-destination", out], {
-      cwd: root,
-      env: { ...process.env, ...PACK_ENV },
-      stdio: "ignore",
-    });
+    execFileSync(
+      process.platform === "win32" ? "npm.cmd" : "npm",
+      ["pack", "--pack-destination", out],
+      {
+        cwd: root,
+        env: { ...process.env, ...PACK_ENV },
+        stdio: "ignore",
+        // A .cmd shim is a batch file, which only cmd.exe can start.
+        shell: process.platform === "win32",
+      },
+    );
     expect(readdirSync(root).toSorted()).toEqual(["package.json"]);
     expect(readdirSync(out)).toEqual(["p-1.0.0.tgz"]);
   });

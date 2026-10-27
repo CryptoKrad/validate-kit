@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { cargoMachete } from "../src/adapters/cargo-machete.js";
 import { cooldown } from "../src/adapters/cooldown.js";
@@ -308,7 +308,7 @@ describe("deptry", () => {
     mkdirSync(join(site, "PyYAML-6.0.3.dist-info"), { recursive: true });
     mkdirSync(join(site, "click"), { recursive: true });
     const path =
-      deptry.buildArgs(ctx(root)).env?.PYTHONPATH?.split(/[:;]/)[0] ?? "";
+      deptry.buildArgs(ctx(root)).env?.PYTHONPATH?.split(delimiter)[0] ?? "";
     expect(readdirSync(path)).toEqual(["PyYAML-6.0.3.dist-info"]);
     expect(deptry.buildArgs(ctx(tmp("vk-deptry-bare-"))).env).toBeUndefined();
   });

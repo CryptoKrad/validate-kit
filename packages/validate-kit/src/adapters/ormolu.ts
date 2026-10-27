@@ -1,3 +1,4 @@
+import { resolveBin } from "../core/exec.js";
 import type {
   BuiltCommand,
   Finding,
@@ -75,7 +76,8 @@ export const ormolu: ToolAdapter = {
 
   buildArgs(ctx: ToolContext): BuiltCommand {
     return batchThenEach(
-      this.bin,
+      // Resolved: Windows would run an ormolu.exe in the project folder first.
+      resolveBin(this.bin, ctx.cwd, process.env, this !== ormolu),
       [
         "--mode",
         ctx.fix ? "inplace" : "check",

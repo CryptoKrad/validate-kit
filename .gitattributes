@@ -1,0 +1,5 @@
+# Keep source and scripts LF on every platform. This repository has shell
+# scripts that shellcheck rejects when checked out with CRLF, and Prettier
+# treats CRLF as unformatted. Windows-specific .cmd/.bat files, if added,
+# should override this with `text eol=crlf`.
+* text=auto eol=lf

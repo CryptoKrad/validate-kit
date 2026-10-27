@@ -85,8 +85,13 @@ const AWS =
   'plugin "aws" {\n  enabled = false # still looked for\n  version = "0.49.0"\n  source  = "github.com/terraform-linters/tflint-ruleset-aws"\n}\n';
 
 // No config, plugin folder or HOME of this machine reaches a test.
+let fakeHome = "";
 beforeEach(() => {
-  vi.stubEnv("HOME", tmp());
+  fakeHome = tmp();
+  // Node reads HOME on POSIX and USERPROFILE on Windows: stub both, so
+  // homedir() never reaches the real user's .tflint.hcl.
+  vi.stubEnv("HOME", fakeHome);
+  vi.stubEnv("USERPROFILE", fakeHome);
   vi.stubEnv("TFLINT_CONFIG_FILE", "");
   vi.stubEnv("TFLINT_PLUGIN_DIR", "");
 });
@@ -263,7 +268,7 @@ describe("tflint", () => {
       { module: "sub" },
     ]);
     // With none passed, tflint reads ~/.tflint.hcl: its plugins count too.
-    const home = process.env.HOME ?? "";
+    const home = toPosix(fakeHome);
     put(home, { ".tflint.hcl": AWS });
     expect(tasks()[1]?.cannotRun).toMatch(
       new RegExp(

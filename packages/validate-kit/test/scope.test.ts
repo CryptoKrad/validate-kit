@@ -260,6 +260,32 @@ describe("scope and profile planning", () => {
     expect(total).toBe(1000);
   });
 
+  it("splits a list under the count limit when its paths are long", async () => {
+    // 399 files, ~500 characters each here: past the 180,000-character
+    // budget. On Windows (260-character paths) shorter names do it, against
+    // the 7,000 a .cmd shim's escaped command line leaves.
+    const root = mkdtempSync(resolve(tmpdir(), "validate-kit-long-"));
+    const dir =
+      process.platform === "win32"
+        ? root
+        : resolve(root, "d".repeat(200), "e".repeat(200));
+    mkdirSync(dir, { recursive: true });
+    const files: string[] = [];
+    for (let i = 0; i < 399; i += 1) {
+      const file = resolve(dir, `${"f".repeat(40)}${i}.ts`);
+      writeFileSync(file, "export {};\n");
+      files.push(file);
+    }
+
+    const detection = await detectLanguages(root);
+    const tasks = await buildPlan(detection, baseConfig(), root, [oxlint], {
+      scopedFiles: files,
+    });
+
+    expect(tasks.length).toBeGreaterThan(1);
+    expect(tasks.reduce((n, t) => n + (t.files?.length ?? 0), 0)).toBe(399);
+  });
+
   it("runs crate-scoped tools once per cargo workspace, not per member", async () => {
     const root = mkdtempSync(resolve(tmpdir(), "validate-kit-ws-"));
     writeFileSync(

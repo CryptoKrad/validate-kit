@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { posix } from "node:path";
+import { isAbsolute, posix } from "node:path";
 import pLimit from "p-limit";
 import { run } from "../core/exec.js";
 import type {
@@ -131,8 +131,11 @@ function extendsOf(path: string, json: Record<string, unknown>): string[] {
   const list = Array.isArray(raw) ? raw : raw === undefined ? [] : [raw];
   return list.flatMap((ext) => {
     if (typeof ext !== "string") return [];
-    if (ext.startsWith(".") || posix.isAbsolute(ext))
-      return [real(withJson(posix.resolve(posix.dirname(path), ext)))];
+    // `path` is POSIX-spelled, but on Windows its drive letter is not a
+    // POSIX-absolute path: posix.resolve() would prepend the cwd to it and
+    // never find the file (a tsconfig.base.json then ran as a project).
+    if (ext.startsWith(".") || isAbsolute(ext))
+      return [real(withJson(absPosix(posix.dirname(path), ext)))];
     for (let at = posix.dirname(path); ; at = posix.dirname(at)) {
       const abs = withJson(posix.join(at, "node_modules", ext));
       if (existsSync(abs)) return [real(abs)];

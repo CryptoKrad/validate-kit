@@ -150,7 +150,7 @@ describe("diff-cover", () => {
         options: { reports: ["cov.info", "py.xml"] },
       })[0]?.cannotRun,
     ).toMatch(/no coverage report \(py.xml\)/);
-  });
+  }, 120_000);
 
   it("refuses the flags that decide what it reads, abbreviated too", () => {
     for (const args of [

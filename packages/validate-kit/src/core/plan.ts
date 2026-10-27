@@ -32,12 +32,45 @@ import { LANGUAGE_SPECS, LAYERS } from "./types.js";
  */
 export const FILE_ARG_CHUNK = 400;
 
+/**
+ * cmd.exe truncates a Windows command line at 8,191 characters, so a count
+ * of 400 paths is not safe there even though it is far below POSIX ARG_MAX.
+ * Budget the paths themselves and leave room for the binary and its flags.
+ */
+const FILE_ARG_BUDGET = process.platform === "win32" ? 7_000 : 180_000;
+
+// cmd.exe's metacharacters, as execa escapes them (execa/lib/arguments/command-file.js).
+const CMD_META = /[()\][%!^"`<>&|;, *?]/g;
+
+/**
+ * A path's share of the command line. For a .cmd shim (prettier, eslint)
+ * execa quotes each argument and caret-escapes it twice: 8 characters for
+ * the quotes and 3 more per metacharacter (a space too), then the separator.
+ */
+function argCost(file: string): number {
+  if (process.platform !== "win32") return file.length + 1;
+  return file.length + 9 + 3 * (file.match(CMD_META)?.length ?? 0);
+}
+
 function chunkFiles(files: string[]): string[][] {
-  if (files.length <= FILE_ARG_CHUNK) return [files];
+  if (files.length === 0) return [files];
   const chunks: string[][] = [];
-  for (let i = 0; i < files.length; i += FILE_ARG_CHUNK) {
-    chunks.push(files.slice(i, i + FILE_ARG_CHUNK));
+  let chunk: string[] = [];
+  let size = 0;
+  for (const file of files) {
+    const add = argCost(file);
+    if (
+      chunk.length > 0 &&
+      (chunk.length >= FILE_ARG_CHUNK || size + add > FILE_ARG_BUDGET)
+    ) {
+      chunks.push(chunk);
+      chunk = [];
+      size = 0;
+    }
+    chunk.push(file);
+    size += add;
   }
+  if (chunk.length > 0) chunks.push(chunk);
   return chunks;
 }
 
