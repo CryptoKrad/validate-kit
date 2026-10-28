@@ -128,7 +128,10 @@ jobs:
         run: node scripts/smoke-windows.mjs
       - name: validate-kit core behavioral tests
         run: pnpm --fail-if-no-match --filter validate-kit run test:core
-      # Windows-only paths: a native tool run as itself, not through sh, and
-      # Lake's backslash paths.
-      - name: validate-kit Windows path tests
-        run: pnpm --fail-if-no-match --filter validate-kit exec vitest run test/swift-dart-lua-haskell-nix.test.ts test/lean.test.ts -t "batchThenEach|Windows"
+      # Windows-only paths: Lake's backslash paths, and a native tool run as
+      # itself, not through sh. One step each: a `|` in a -t pattern reaches
+      # cmd.exe (it runs the vitest.cmd shim), which reads it as a pipe.
+      - name: validate-kit Lean Windows paths
+        run: pnpm --fail-if-no-match --filter validate-kit exec vitest run test/lean.test.ts
+      - name: validate-kit batchThenEach on Windows
+        run: pnpm --fail-if-no-match --filter validate-kit exec vitest run test/swift-dart-lua-haskell-nix.test.ts -t batchThenEach
