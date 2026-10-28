@@ -10,6 +10,7 @@ import {
 
 export type ValidationProfile = "default" | "dev" | "ci" | "fixtures";
 
+/** @public scripts/validate-user-stories.mjs reads this list from the source. */
 export const PROFILES = [
   "default",
   "dev",
@@ -17,7 +18,7 @@ export const PROFILES = [
   "fixtures",
 ] as const satisfies readonly ValidationProfile[];
 
-export const CHANGED_MODES = ["changed", "staged", "since"] as const;
+const CHANGED_MODES = ["changed", "staged", "since"] as const;
 
 /** What a profile changes about a run; every profile rule lives here. */
 export interface ProfileSettings {

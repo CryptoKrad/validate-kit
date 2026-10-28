@@ -37,7 +37,7 @@ import { sgconfigDirs } from "./sgconfig.js";
 import { PRESETS } from "./presets.js";
 import { fixAdapterIdentity, IdentityError } from "../core/evidence.js";
 
-export const CONFIG_NAMES = [
+const CONFIG_NAMES = [
   "validate.config.ts",
   "validate.config.mts",
   "validate.config.mjs",
@@ -487,7 +487,7 @@ function validateSeverityOverrides(
  * adapter may not reuse an id: silently replacing a built-in would change
  * what a known tool name means.
  */
-export function resolveAdapters(
+function resolveAdapters(
   projectAdapters: readonly ToolAdapter[],
 ): ToolAdapter[] {
   const all = [...TOOL_REGISTRY];

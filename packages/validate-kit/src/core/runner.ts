@@ -38,7 +38,7 @@ export interface CrashIssue {
  * could not cover part of its scope. Only `pass` means the tool vouches for
  * the code.
  */
-export type ToolStatus = "pass" | "fail" | "inconclusive" | "not_run";
+type ToolStatus = "pass" | "fail" | "inconclusive" | "not_run";
 
 export interface RunSummary {
   scope: RunScope;

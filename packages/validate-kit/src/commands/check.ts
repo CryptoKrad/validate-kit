@@ -78,7 +78,7 @@ export function resolveCwd(paths: string[]): string {
   return resolveProjectRoot(first);
 }
 
-export function resolveSarifPath(path: string): string {
+function resolveSarifPath(path: string): string {
   const abs = resolve(path);
   if (existsSync(abs) && statSync(abs).isDirectory()) {
     throw new ConfigError(`SARIF output path must be a file: ${abs}`);

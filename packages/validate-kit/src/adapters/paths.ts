@@ -1,5 +1,6 @@
+import picomatch from "picomatch";
 import type { Finding } from "../core/types.js";
-import { toPosix } from "../detect/languages.js";
+import { DEFAULT_SKIPPED_FOLDERS, toPosix } from "../detect/languages.js";
 import { fileFinding, gitFiles, ignoredBy, nativeCheck } from "./native.js";
 
 /**
@@ -11,6 +12,24 @@ const RESERVED =
 
 /** Characters a Windows file name cannot hold, besides control characters. */
 const INVALID = /[<>:"|?*\\]/;
+
+/** A backup or merge copy: an editor's, `patch`'s, `git mergetool`'s. */
+const LEFTOVER = /\.(?:orig|rej|bak|swp|swo)$|~$/;
+
+/**
+ * Folders whose backups are meant: vendored code ships its own (a crate's
+ * Cargo.toml.orig), a patch tool's fixtures hold them, and archives and
+ * backups are out of scope by default.
+ */
+const KEPT_BACKUPS = picomatch([
+  "vendor",
+  "node_modules",
+  "third_party",
+  "testdata",
+  "fixtures",
+  "__fixtures__",
+  ...DEFAULT_SKIPPED_FOLDERS,
+]);
 
 /** One spelling of a name: where to report it, and how many paths use it. */
 interface Spelling {
@@ -40,8 +59,10 @@ function windowsProblem(part: string): string | undefined {
  * or only in Unicode form (NFC against NFD), which macOS does, so one
  * overwrites the other; and names Windows cannot hold (a device name such as
  * `aux`, a trailing dot or space, `:` or `?`), which git refuses to check out
- * there. Read from git's file list, dotfiles included, less the config's
- * `ignore`; in a changed-file run, only problems that involve a changed path.
+ * there. A backup or merge leftover git tracks (`.bak`, `.orig`, `.rej`, an
+ * editor's swap or `~` file) is a warning.
+ * Read from git's file list, dotfiles included, less the config's `ignore`;
+ * in a changed-file run, only problems that involve a changed path.
  */
 export const paths = nativeCheck({
   id: "paths",
@@ -58,13 +79,15 @@ export const paths = nativeCheck({
     const all = task.extra as string[];
     const changed = new Set(task.changed ? task.files : []);
     const findings: Finding[] = [];
-    const at = (path: string, ruleId: string, message: string) =>
+    let tracked: Set<string> | undefined;
+    const at = (
+      path: string,
+      ruleId: string,
+      message: string,
+      severity: Finding["severity"] = "error",
+    ) =>
       findings.push(
-        fileFinding("paths", "lint", root, path, {
-          ruleId,
-          severity: "error",
-          message,
-        }),
+        fileFinding("paths", "lint", root, path, { ruleId, severity, message }),
       );
     // Each file and folder by its folded name: every spelling, whether it is
     // a folder, how many paths use it, and the file to report it at (a
@@ -88,6 +111,20 @@ export const paths = nativeCheck({
           });
       }
       if (task.changed && !changed.has(path)) continue;
+      // Tracked only: an untracked .rej can be the one copy of a hunk that
+      // did not apply.
+      const leftover = LEFTOVER.exec(path);
+      if (
+        leftover &&
+        !parts.slice(0, -1).some((dir) => KEPT_BACKUPS(dir)) &&
+        (tracked ??= new Set(gitFiles(root, true))).has(path)
+      )
+        at(
+          path,
+          "leftover",
+          `a backup or merge leftover tracked by git (\`${leftover[0]}\`): \`git rm --cached\` takes it out of the repository and keeps the file on disk`,
+          "warning",
+        );
       for (const part of parts) {
         const problem = windowsProblem(part);
         if (problem) {

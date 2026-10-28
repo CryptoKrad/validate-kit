@@ -25,14 +25,14 @@ export interface AiAssistReport {
   findings: AiFinding[];
 }
 
-export interface AiRange {
+interface AiRange {
   startLine: number;
   startColumn: number;
   endLine: number;
   endColumn: number;
 }
 
-export interface AiFinding {
+interface AiFinding {
   /** Stable within a run; used by MCP get_finding. */
   id: string;
   /** Survives line drift and reruns: hash(ruleId + file + normalized snippet). */
@@ -72,7 +72,7 @@ const CONTEXT_LINES = 2;
 const CREDENTIAL_RE =
   /((?:password|passwd|pwd|api_key|apikey|api_token|secret|secret_key|access_token|auth_token|bearer_token|client_secret|private_key|db_password|database_url|connection_string|aws_secret_access_key)\s*[:=]\s*["'])([^"'\n]{6,})(["'])/gi;
 
-export function redactSecrets(text: string): string {
+function redactSecrets(text: string): string {
   return text.replace(CREDENTIAL_RE, "$1«redacted»$3");
 }
 

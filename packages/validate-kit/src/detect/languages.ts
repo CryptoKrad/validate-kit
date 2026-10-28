@@ -18,7 +18,7 @@ import type {
 } from "../core/types.js";
 import { LANGUAGE_SPECS, LANGUAGES } from "../core/types.js";
 
-export const IGNORE_GLOBS = [
+const IGNORE_GLOBS = [
   "**/node_modules/**",
   "**/target/**",
   "**/dist/**",

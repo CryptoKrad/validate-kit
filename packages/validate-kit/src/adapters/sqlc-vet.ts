@@ -62,11 +62,7 @@ interface SqlEntry {
  * `schema` and `path`. A config that does not parse names none of them;
  * sqlc itself reports why.
  */
-export function sqlcProject(
-  dir: string,
-  config: string,
-  vetRuns = true,
-): SqlcProject {
+function sqlcProject(dir: string, config: string, vetRuns = true): SqlcProject {
   let parsed: unknown;
   try {
     // JSON is YAML.

@@ -165,7 +165,7 @@ export function stableJson(value: unknown): string {
   return json ?? "null";
 }
 
-export function configDigest(config: ResolvedConfig): string {
+function configDigest(config: ResolvedConfig): string {
   const { concurrency: _execution, adapters, ...policy } = config;
   return sha256(
     stableJson({

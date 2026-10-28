@@ -60,8 +60,27 @@ const ran = (exitCode: number, stdout = "", stderr = ""): RawOutput => ({
   exitCode,
 });
 
+/** dependency-cruiser's report of `modules`, with its TypeScript compiler found or not. */
+const compiler = (available: boolean) => ({
+  environment: {
+    transpilersFound: [
+      { name: "typescript", version: ">=2.0.0 <7.0.0", available },
+    ],
+  },
+});
+const cruised = (modules: string[], available: boolean) =>
+  JSON.stringify({
+    modules: modules.map((source) => ({ source })),
+    summary: { violations: [], ...compiler(available) },
+  });
+
 describe("dependency-cruiser", () => {
   const report = {
+    modules: [
+      { source: "src/ui/page.ts" },
+      { source: "src/lib/a.ts" },
+      { source: "src/lib/b.ts" },
+    ],
     summary: {
       violations: [
         {
@@ -206,6 +225,29 @@ describe("dependency-cruiser", () => {
     expect(() =>
       dependencyCruiser.parseOutput(ran(0, "{}"), ctx(root, task)),
     ).toThrow(/no summary.violations/);
+    // With TypeScript 7 only, 18.6.0 cruised no module of a .ts cycle and
+    // reported none (docs/research/agent-tooling-gaps/gemini-2026-10-27).
+    const both = { paths: ["src/"], scope: ["src/a.ts", "src/b.ts"] };
+    expect(() =>
+      dependencyCruiser.parseOutput(
+        ran(0, cruised([], false)),
+        ctx(root, both),
+      ),
+    ).toThrow(/read none of the TypeScript files under src\/: .*>=2\.0\.0 <7/);
+    // A report from before the environment block: cruising no .ts says it.
+    expect(() =>
+      dependencyCruiser.parseOutput(
+        ran(0, '{"modules":[],"summary":{"violations":[]}}'),
+        ctx(root, both),
+      ),
+    ).toThrow(/read none of the TypeScript files/);
+    // The config's own exclude leaving the .ts tests out is a real run.
+    expect(
+      dependencyCruiser.parseOutput(
+        ran(0, cruised(["src/a.js"], true)),
+        ctx(root, { paths: ["src"], scope: ["src/a.js", "src/a.test.ts"] }),
+      ).findings,
+    ).toEqual([]);
     expect(dependencyCruiser.refuseArgs?.(["--output-type", "err"])).toMatch(
       /JSON report/,
     );

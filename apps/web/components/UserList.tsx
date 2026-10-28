@@ -43,5 +43,3 @@ export function UserList(): React.JSX.Element {
     </ul>
   );
 }
-
-export default UserList;

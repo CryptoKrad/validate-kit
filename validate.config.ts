@@ -31,6 +31,20 @@ export default defineConfig({
     // Evidence: model files and results from runs on other repositories.
     "docs/evidence/**",
   ],
+  tools: {
+    // The parts whose boundaries .dependency-cruiser.cjs states; scripts/
+    // and the tests are tooling around them.
+    "dependency-cruiser": {
+      options: {
+        paths: [
+          "apps/api/src",
+          "apps/web",
+          "packages/contracts/src",
+          "packages/validate-kit/src",
+        ],
+      },
+    },
+  },
   severityOverrides: [
     // This repo's plain-JS surface (.mjs) is exclusively Node CLI tooling in
     // scripts/ whose console output IS the user interface; js-no-console

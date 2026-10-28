@@ -27,7 +27,7 @@ interface BufAnnotation {
 }
 
 /** buf's own config names: a v2 `buf.yaml`, or a v1 `buf.work.yaml`. */
-export const BUF_CONFIGS = ["buf.yaml", "buf.work.yaml"];
+const BUF_CONFIGS = ["buf.yaml", "buf.work.yaml"];
 
 export const bufAdopted = (root: string, projectRoot: string): boolean =>
   toolAdopted(root, projectRoot, { configs: BUF_CONFIGS });

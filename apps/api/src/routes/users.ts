@@ -2,7 +2,7 @@
 import { UsersSchema } from "contracts";
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 
-export interface UserRow {
+interface UserRow {
   id: number;
   email: string;
 }

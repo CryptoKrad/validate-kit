@@ -4340,6 +4340,12 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     "bin/tool": "#!/usr/bin/env bash\necho $1\n",
     "bin/crlf": "#!/bin/sh\r\necho hi\r\n",
     "bin/ok": '#!/bin/sh\necho "ok"\n',
+    // A backup left tracked is a warning; a vendored crate's own, a patch
+    // tool's fixture and one in a backups folder are not.
+    "src/scraper.ts.bak": "export const old = 1;\n",
+    "vendor/crate/Cargo.toml.orig": '[package]\nname = "crate"\n',
+    "testdata/input.orig": "line\n",
+    "backups/settings.json.bak": "{}\n",
   };
   for (const [path, body] of Object.entries(storedFiles)) {
     mkdirSync(dirname(join(storedRoot, path)), { recursive: true });
@@ -4376,6 +4382,8 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       `100644,${twin},${name}`,
     ]);
   storedGit(["commit", "--quiet", "-m", "base"]);
+  // Untracked: a hunk that did not apply, which may be its only copy.
+  writeFileSync(join(storedRoot, "src/patch.rej"), "@@ -1 +1 @@\n-a\n+b\n");
   const storedTools = ["blobs", "paths", "scripts", "unicode"];
   const withShellcheck = hasTool("shellcheck", ["--version"]);
   const stored = parseJsonOutput(
@@ -4411,6 +4419,7 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     "crlf-shebang bin/crlf:1",
     "invisible src/names.ts:1",
     "large assets/big.dat:1",
+    "leftover src/scraper.ts.bak:1",
     "mixed-script src/names.ts:2",
     "not-executable bin/tool:1",
     "not-in-lfs assets/model.bin:1",

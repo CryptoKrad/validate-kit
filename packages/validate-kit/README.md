@@ -69,7 +69,8 @@ runs each Go module's tests under the race detector (`go-race`).
 
 Also on by default, with nothing to install: `blobs` (compiled output and an
 LFS path stored whole in git), `paths` (names that differ only in case, names
-Windows cannot check out), `scripts` (a `#!` script that cannot start or is not
+Windows cannot check out, and a backup or merge leftover left tracked: `.bak`,
+`.orig`, `.rej`), `scripts` (a `#!` script that cannot start or is not
 executable) and `unicode` (Trojan Source characters and look-alike letters in
 code). An extensionless script with a shell `#!` line is shellcheck's.
 
@@ -78,7 +79,8 @@ use waits before installing a new release. It also reports a lockfile that
 gained a package published inside that wait, looking the date up in the
 registry. The bundled `test-no-assertion` rules report a test that checks
 nothing (a same-file helper that asserts counts). Where a project configured them, the kit also runs dependency-cruiser
-and import-linter (import rules), and, when enabled, lizard (a complexity
+(it needs the project's `typescript` below 7; a run that read no TypeScript
+file is a crash, not a pass) and import-linter (import rules), and, when enabled, lizard (a complexity
 ratchet with the baseline) and diff-cover (changed lines no test runs).
 
 ## Tools

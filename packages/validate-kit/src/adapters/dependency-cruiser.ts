@@ -34,7 +34,15 @@ interface Violation {
 }
 
 interface Report {
+  modules?: { source?: string }[];
   summary?: {
+    environment?: {
+      transpilersFound?: {
+        name?: string;
+        version?: string;
+        available?: boolean;
+      }[];
+    };
     violations?: Violation[];
     ruleSetUsed?: {
       forbidden?: { name?: string; comment?: string }[];
@@ -56,6 +64,9 @@ interface CruiseTask {
   /** The TS/JS files in the kit's scope, relative: a finding elsewhere is not the kit's. */
   scope: string[];
 }
+
+/** A TypeScript source, not a declaration file. */
+const isTs = (file: string): boolean => /(?<!\.d)\.[cm]?tsx?$/.test(file);
 
 const SEVERITY: Record<string, Severity> = {
   error: "error",
@@ -198,6 +209,25 @@ export const dependencyCruiser: ToolAdapter = {
     if (!summary || !Array.isArray(summary.violations))
       throw new Error(
         "dependency-cruiser's report has no summary.violations: its output format may have changed; refusing to report it.",
+      );
+    // It parses TypeScript with the project's `typescript`, below 7 only.
+    // Without one it skips every .ts file and reports no violations: a pass
+    // that checked nothing (TypeScript 7 is npm's latest). Its report says
+    // whether it found one; a report without that says it by cruising none.
+    const under = (file: string) =>
+      task.paths.some((path) => {
+        const top = posix.normalize(path).replace(/(.)\/+$/, "$1");
+        return top === "." || file === top || file.startsWith(`${top}/`);
+      });
+    const compiler = summary.environment?.transpilersFound?.find(
+      (t) => t.name === "typescript",
+    );
+    const unread = compiler
+      ? compiler.available === false
+      : !(report.modules ?? []).some((m) => isTs(m.source ?? ""));
+    if (unread && task.scope.some((file) => isTs(file) && under(file)))
+      throw new Error(
+        `dependency-cruiser read none of the TypeScript files under ${task.paths.join(", ")}: it needs the project's \`typescript\` ${compiler?.version ?? "below 7"}, and found none it can use`,
       );
     const reasons = new Map(
       [

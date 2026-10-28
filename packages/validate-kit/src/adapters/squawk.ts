@@ -28,7 +28,7 @@ interface SquawkViolation {
  * a down migration, whose whole purpose is dropping (squawk-cli.md, 4).
  * Views, seeds and other dialects' SQL only add noise.
  */
-export function isMigration(file: string, root: string): boolean {
+function isMigration(file: string, root: string): boolean {
   const parts = posix.relative(toPosix(root), toPosix(file)).split("/");
   const name = parts.at(-1) ?? "";
   return (

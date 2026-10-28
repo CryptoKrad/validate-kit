@@ -90,5 +90,3 @@ export function LoginForm({ onSubmit }: LoginFormProps): React.JSX.Element {
     </form>
   );
 }
-
-export default LoginForm;

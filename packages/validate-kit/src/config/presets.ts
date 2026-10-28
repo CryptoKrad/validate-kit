@@ -21,7 +21,7 @@ function readPresetRuleIds(name: PresetName): string[] {
     .filter((line) => line && !line.startsWith("#"));
 }
 
-export const PRESET_RULE_IDS: Record<PresetName, string[]> = {
+const PRESET_RULE_IDS: Record<PresetName, string[]> = {
   recommended: readPresetRuleIds("recommended"),
   strict: readPresetRuleIds("strict"),
   security: readPresetRuleIds("security"),

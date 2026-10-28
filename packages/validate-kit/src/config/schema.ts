@@ -116,7 +116,7 @@ const severityOverride = z
   })
   .strict();
 
-export const validateConfigSchema = z
+const validateConfigSchema = z
   .object({
     // `extends: []` is the DOCUMENTED opt-out: no preset baseline at all
     // (for repos bringing their own sgconfig/rule library). Omitting the key

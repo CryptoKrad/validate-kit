@@ -532,21 +532,3 @@ export async function run(
     };
   }
 }
-
-/** Quick version probe. Returns undefined if the binary cannot be spawned. */
-export async function probeVersion(
-  bin: string,
-  args: readonly string[] = ["--version"],
-  cwd: string = process.cwd(),
-): Promise<string | undefined> {
-  const raw = await run(bin, [...args], { cwd, timeoutMs: 15_000 });
-  if (raw.spawnError) return undefined;
-  return `${raw.stdout}\n${raw.stderr}`.trim();
-}
-
-const SEMVER = /(\d+\.\d+\.\d+)/;
-
-/** Default semver extractor — first x.y.z in the output. */
-export function firstSemver(text: string): string | undefined {
-  return SEMVER.exec(text)?.[1];
-}

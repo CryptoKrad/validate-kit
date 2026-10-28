@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": ["docs/**", "packages/validate-kit/samples/**"],
+  "ignoreBinaries": ["go", "tsup", "ast-grep", "oasdiff", "mise", "k6"],
+  "workspaces": {
+    ".": {
+      "entry": ["validate.config.ts", "scripts/**/*.mjs", "perf/k6/*.js"],
+      "ignoreDependencies": ["@biomejs/biome", "@typescript/native", "k6"]
+    },
+    "packages/validate-kit": {
+      "ignoreDependencies": ["@ast-grep/cli", "oxlint", "prettier"]
+    }
+  }
+}

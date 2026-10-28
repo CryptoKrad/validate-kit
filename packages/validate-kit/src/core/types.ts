@@ -306,7 +306,7 @@ export interface VulnAuditConfig {
 }
 
 /** Resolved apiDiff gate config (opt-in; oasdiff breaking-change gate). */
-export interface ApiDiffConfig {
+interface ApiDiffConfig {
   enabled: boolean;
   /** OpenAPI spec paths (relative to project root); one task per spec. */
   specs: string[];
@@ -646,7 +646,7 @@ export interface LayerConfig {
   enabled?: boolean;
 }
 
-export interface SeverityOverride {
+interface SeverityOverride {
   tool: string;
   ruleId: string;
   severity: Severity | "off";
