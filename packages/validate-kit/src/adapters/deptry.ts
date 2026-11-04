@@ -194,6 +194,37 @@ export const deptry: ToolAdapter = {
 
   parseOutput(raw: RawOutput, ctx: ToolContext): RunResult {
     const report = join(scratchOf(ctx), "deptry.json");
+    // No [project], [tool.poetry] or [tool.pdm] list in pyproject.toml and no
+    // requirements.txt (a setup.py project, or one with tool settings only):
+    // deptry has nothing to check the imports against, and stops.
+    if (
+      !existsSync(report) &&
+      raw.stderr.includes("DependencySpecificationNotFoundError")
+    )
+      return {
+        findings: [
+          finding({
+            tool: "deptry",
+            layer: "lint",
+            language: "python",
+            file: posix.join(
+              toPosix(ctx.cwd),
+              PY_MARKERS.find((m) => existsSync(join(ctx.cwd, m))) ?? "",
+            ),
+            line: 1,
+            col: 1,
+            ruleId: "no-dependency-list",
+            severity: "info",
+            message:
+              "deptry did not run: it reads dependencies from pyproject.toml ([project], [tool.poetry] or [tool.pdm]) or requirements.txt, and this project has none",
+            fixable: false,
+          }),
+        ],
+        filesProcessed: 0,
+        fixesApplied: 0,
+        rawExitCode: raw.exitCode,
+        stderr: raw.stderr,
+      };
     if (!existsSync(report))
       throw new Error(
         `deptry wrote no report (exit ${raw.exitCode}): ${`${raw.stderr}\n${raw.stdout}`.trim().split("\n").at(-1) ?? ""}`,

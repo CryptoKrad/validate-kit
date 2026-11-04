@@ -32,6 +32,12 @@ export default defineConfig({
     "docs/evidence/**",
   ],
   tools: {
+    // Shell scripts formatted as shfmt (and .editorconfig) would write them.
+    shfmt: { enabled: true },
+    // JSON is not a scoped language: name the spec spectral lints (.spectral.yaml).
+    spectral: { options: { documents: ["apps/api/openapi.json"] } },
+    // The agent files (AGENTS.md, .claude/, .mcp.json) as Claude Code reads them.
+    agnix: { enabled: true },
     // The parts whose boundaries .dependency-cruiser.cjs states; scripts/
     // and the tests are tooling around them.
     "dependency-cruiser": {

@@ -14,7 +14,10 @@ rule:
   not:
     any:
       - inside:
-          kind: mod_item
+          any:
+            - kind: mod_item
+            - kind: function_item
+            - kind: impl_item
           stopBy: end
           follows:
             kind: attribute_item

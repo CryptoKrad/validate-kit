@@ -15,6 +15,7 @@ import type {
 import { toolAdopted } from "../detect/adoption.js";
 import { languageForFile, toPosix } from "../detect/languages.js";
 import { absPosix, escapeRegex, finding, toolOptions } from "./base.js";
+import { installedFor, ownFiles, ownProjects } from "./native.js";
 
 /** The config files `--config` finds without a name (dependency-cruiser 16+). */
 const CONFIGS = [
@@ -53,15 +54,15 @@ interface Report {
 
 const Options = z
   .object({
-    /** What to cruise, relative to the project root (default: src/). */
+    /** What the root's run cruises, relative to it (default: src/). */
     paths: z.array(z.string()).optional(),
   })
   .strict();
 
 interface CruiseTask {
-  /** What dependency-cruiser starts from, relative to the project root. */
+  /** What dependency-cruiser starts from, relative to the folder it runs in. */
   paths: string[];
-  /** The TS/JS files in the kit's scope, relative: a finding elsewhere is not the kit's. */
+  /** The TS/JS files in the kit's scope, relative to it too: a finding elsewhere is not the kit's. */
   scope: string[];
 }
 
@@ -120,63 +121,82 @@ export const dependencyCruiser: ToolAdapter = {
   minVersion: "18.0.0",
   installHint: "pnpm add -D dependency-cruiser",
   // A config file adopts it: the package alone, hoisted to a monorepo's
-  // root, leaves `--config` nothing to read.
+  // root, leaves `--config` nothing to read. At the root, or in a package
+  // below with a config of its own.
   adoptedAt: (root, projectRoot) =>
-    toolAdopted(root, projectRoot, { configs: CONFIGS }),
+    toolAdopted(root, projectRoot, { configs: CONFIGS }) ||
+    ownProjects(root, CONFIGS).length > 0,
 
+  // One run per project: the root's, and each package below with its own
+  // config, in its folder with its own install. The root leaves those
+  // packages' files to them.
   expand(seed: TaskSeed, env: PlanEnv): TaskSeed[] {
     const root = toPosix(env.projectRoot);
-    const scope = env.scopedFiles
-      .map(toPosix)
-      .filter((file) => {
-        const language = languageForFile(file);
-        return language === "ts" || language === "js";
-      })
-      .map((file) =>
-        file.startsWith(`${root}/`) ? file.slice(root.length + 1) : file,
+    const tool = env.config.tools["dependency-cruiser"];
+    const config = tool?.configPath;
+    const roots = [
+      ...(config !== undefined ||
+      tool?.enabled === true ||
+      toolAdopted(seed.cwd, env.projectRoot, { configs: CONFIGS })
+        ? [toPosix(seed.cwd)]
+        : []),
+      ...(config === undefined ? ownProjects(root, CONFIGS, env) : []),
+    ];
+    const code = env.scopedFiles.map(toPosix).filter((file) => {
+      const language = languageForFile(file);
+      return language === "ts" || language === "js";
+    });
+    return roots.flatMap((cwd): TaskSeed[] => {
+      const scope = ownFiles(cwd, roots, code).map((file) =>
+        file.slice(cwd.length + 1),
       );
-    if (scope.length === 0) return [];
-    const config = env.config.tools["dependency-cruiser"]?.configPath;
-    if (!config && !CONFIGS.some((name) => existsSync(join(seed.cwd, name))))
-      return [
-        {
-          ...seed,
-          cannotRun: `no ${CONFIGS.join(", ")} here and no tools.dependency-cruiser.configPath: it has no rules to check`,
-        },
-      ];
-    // A .ts file is parsed by the project's own TypeScript; without the
-    // installed packages it is skipped and the run is clean for nothing.
-    if (!existsSync(join(seed.cwd, "node_modules")))
-      return [
-        {
-          ...seed,
-          cannotRun:
-            "the dependencies are not installed (no node_modules): dependency-cruiser parses TypeScript and resolves imports through them",
-        },
-      ];
-    // Where to start: what the project names, else src/, else each
-    // top-level folder that holds code. Never every file: a root config
-    // file passed by name is an orphan, and a large project's list does not
-    // fit on a command line.
-    const isDir = (path: string) => {
-      try {
-        return statSync(join(seed.cwd, path)).isDirectory();
-      } catch {
-        return false;
-      }
-    };
-    const named = toolOptions(env, "dependency-cruiser", Options).paths;
-    const tops = [
-      ...new Set(
-        scope
-          .filter((file) => file.includes("/"))
-          .map((file) => file.split("/")[0] ?? ""),
-      ),
-    ].toSorted();
-    const paths = named ?? (isDir("src") ? ["src"] : tops);
-    if (paths.length === 0) return [];
-    const task: CruiseTask = { paths, scope };
-    return [{ ...seed, options: task }];
+      if (scope.length === 0) return [];
+      if (!config && !CONFIGS.some((name) => existsSync(join(cwd, name))))
+        return [
+          {
+            ...seed,
+            cwd,
+            cannotRun: `no ${CONFIGS.join(", ")} here and no tools.dependency-cruiser.configPath: it has no rules to check`,
+          },
+        ];
+      // A .ts file is parsed by the project's own TypeScript; without the
+      // installed packages it is skipped and the run is clean for nothing.
+      if (!installedFor(cwd, env.projectRoot))
+        return [
+          {
+            ...seed,
+            cwd,
+            cannotRun:
+              "the dependencies are not installed (no node_modules): dependency-cruiser parses TypeScript and resolves imports through them",
+          },
+        ];
+      // Where to start: what the project names (for the root's run), else
+      // src/, else each top-level folder that holds code. Never every file:
+      // a root config file passed by name is an orphan, and a large
+      // project's list does not fit on a command line.
+      const isDir = (path: string) => {
+        try {
+          return statSync(join(cwd, path)).isDirectory();
+        } catch {
+          return false;
+        }
+      };
+      const named =
+        cwd === root
+          ? toolOptions(env, "dependency-cruiser", Options).paths
+          : undefined;
+      const tops = [
+        ...new Set(
+          scope
+            .filter((file) => file.includes("/"))
+            .map((file) => file.split("/")[0] ?? ""),
+        ),
+      ].toSorted();
+      const paths = named ?? (isDir("src") ? ["src"] : tops);
+      if (paths.length === 0) return [];
+      const task: CruiseTask = { paths, scope };
+      return [{ ...seed, cwd, options: task }];
+    });
   },
 
   refuseArgs: (extraArgs) =>

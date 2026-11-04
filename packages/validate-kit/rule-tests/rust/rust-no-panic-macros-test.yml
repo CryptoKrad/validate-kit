@@ -5,7 +5,9 @@ valid:
   - "#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() { panic!(\"expected in test\"); }\n}"
   - "#[test]\nfn t() { unreachable!() }"
   - "#[test]\n#[ignore]\nfn t() { panic!(\"x\"); }"
+  - "#[cfg(test)]\nfn helper() { panic!(\"in test\") }"
 invalid:
+  - "#[cfg(not(test))]\nfn f() { panic!(\"x\") }"
   - "fn f() { todo!() }"
   - "fn f() { panic!(\"boom\") }"
   - "fn f() { unimplemented!() }"

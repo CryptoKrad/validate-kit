@@ -25,7 +25,7 @@ jobs:
           python-version: "3.12"
       - name: Install semgrep (pinned, same as validate.yml)
         env:
-          SEMGREP_VERSION: "1.163.0"
+          SEMGREP_VERSION: "1.183.0"
         run: python -m pip install "semgrep==${SEMGREP_VERSION}"
       - name: Semgrep custom rules (gate)
         run: semgrep --config packages/validate-kit/semgrep/custom.yml --error --disable-version-check .

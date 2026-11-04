@@ -306,6 +306,7 @@ export async function checkAvailability(
     timeoutMs: 15_000,
     pathOnly,
     ...(adapter.pythonEnv ? { pythonEnv: true } : {}),
+    ...(adapter.composerVendor ? { composerVendor: true } : {}),
     ...(adapter.versionEnv ? { env: { ...adapter.versionEnv } } : {}),
   });
   const out = `${raw.stdout}\n${raw.stderr}`.trim();
@@ -359,6 +360,7 @@ async function availabilityFrom(
         process.env,
         pathOnly,
         adapter.pythonEnv,
+        adapter.composerVendor,
       );
       return isAbsolute(bin) ? realpathSync(bin) : bin;
     } catch {

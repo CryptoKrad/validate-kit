@@ -20,6 +20,9 @@ import { LANGUAGE_SPECS, LANGUAGES } from "../core/types.js";
 
 const IGNORE_GLOBS = [
   "**/node_modules/**",
+  // Composer's and Go's vendored dependencies: third-party code, and each
+  // package's composer.json would otherwise root a PHP task of its own.
+  "**/vendor/**",
   "**/target/**",
   "**/dist/**",
   "**/build/**",
@@ -48,8 +51,9 @@ export const DEFAULT_SKIPPED_FOLDERS = [
  * operator's decision R3, 2026-10-04). Limits and rules from
  * docs/research/scope/size-and-generated-files.md: Biome's 1 MiB default;
  * oxlint's minified names; GitHub Linguist's JavaScript average line over 110
- * characters; any line over 10,000 bytes. Files no larger than one such line
- * are not read: they cannot hold one, nor flood a tool's output.
+ * characters; any line over 10,000 bytes, except in a test (a fixture is
+ * written into one by hand). Files no larger than one such line are not
+ * read: they cannot hold one, nor flood a tool's output.
  */
 export const DEFAULT_MAX_FILE_BYTES = 1_048_576;
 const LONG_LINE_BYTES = 10_000;
@@ -250,14 +254,15 @@ export async function scanScope(
   // First, so an extensionless shell script is held to the size limit too.
   noteShebangs(all);
   for (const file of all) {
-    const dirs = toPosix(relative(root, file)).split("/").slice(0, -1);
+    const rel = toPosix(relative(root, file));
+    const dirs = rel.split("/").slice(0, -1);
     const hit = skippers.find(({ match }) => dirs.some((dir) => match(dir)));
     if (hit) {
       skippedFiles.push(file);
       folders.add(hit.folder);
       continue;
     }
-    const made = machineMade(file, limit, scope.skipMinified ?? true);
+    const made = machineMade(file, rel, limit, scope.skipMinified ?? true);
     if (made === "oversized") oversized.push(file);
     else if (made !== undefined) {
       minified.push(file);
@@ -278,6 +283,32 @@ export async function scanScope(
   return { files: kept, skipped };
 }
 
+const JS_TESTS =
+  /(?:^|\/)(?:tests?|__tests__|__mocks__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$|\.d\.[cm]?ts$/;
+
+/**
+ * Each language's tests, test data and declarations: nothing to mutate. A
+ * test is written by hand, so its long fixture line is no sign of a
+ * minified file.
+ */
+const TEST_FILES: Partial<Record<Language, RegExp>> = {
+  ts: JS_TESTS,
+  js: JS_TESTS,
+  rust: /(?:^|\/)(?:tests|benches|examples)\//,
+  python:
+    /(?:^|\/)(?:tests?|__tests__)\/|(?:^|\/)(?:test_[^/]*|[^/]*_test|conftest)\.py$/,
+  go: /_test\.go$|(?:^|\/)testdata\//,
+};
+
+/**
+ * A test of its language, by its path relative to the project or the task's
+ * folder (an absolute one would match a checkout under a tests/ folder).
+ */
+export function isTestFile(path: string): boolean {
+  const lang = languageForFile(path);
+  return lang !== undefined && (TEST_FILES[lang]?.test(path) ?? false);
+}
+
 /**
  * Why a source file is out of scope by size or form, if it is; for a
  * minified one, what gave it away (said in the note, so a hand-written file
@@ -285,6 +316,7 @@ export async function scanScope(
  */
 function machineMade(
   file: string,
+  rel: string,
   limit: number,
   skipMinified: boolean,
 ): "oversized" | { why: string } | undefined {
@@ -299,7 +331,12 @@ function machineMade(
   if (limit > 0 && size > limit) return "oversized";
   if (!skipMinified) return undefined;
   if (MINIFIED_NAME.test(basename(file))) return { why: "a .min. name" };
-  if (size <= LONG_LINE_BYTES) return undefined;
+  // A test's fixture line is written by hand; a declaration file is not.
+  if (
+    size <= LONG_LINE_BYTES ||
+    (isTestFile(rel) && !/\.d\.[cm]?ts$/.test(rel))
+  )
+    return undefined;
   const lines = head(file).split("\n");
   const long = lines.findIndex(
     (line) => Buffer.byteLength(line) > LONG_LINE_BYTES,
@@ -381,6 +418,34 @@ export async function detectLanguages(
   return detectFromFiles(rootDir, await listScopedFiles(rootDir, scope));
 }
 
+/**
+ * Package/config context for scoped JS/TS files. A source-only include must
+ * not hide the package that owns its ESLint config. Inspect each ancestor
+ * once, stop at the validation root, and never add these files to lint input.
+ */
+function ancestorMarkers(
+  root: string,
+  files: readonly string[],
+  names: readonly string[],
+): string[] {
+  const visited = new Set<string>();
+  const markers: string[] = [];
+  for (const file of files) {
+    let dir = toPosix(dirname(file));
+    while (isUnder(dir, root) && !visited.has(dir)) {
+      visited.add(dir);
+      for (const name of names) {
+        const marker = toPosix(resolve(dir, name));
+        if (lstatSync(marker, { throwIfNoEntry: false })?.isFile())
+          markers.push(marker);
+      }
+      if (dir === root) break;
+      dir = toPosix(dirname(dir));
+    }
+  }
+  return markers;
+}
+
 /** `detectLanguages` over a scoped file list the caller already has. */
 export function detectFromFiles(
   rootDir: string,
@@ -395,9 +460,13 @@ export function detectFromFiles(
     );
     if (extFiles.length === 0) continue;
 
-    const markerFiles = scopedFiles.filter((file) =>
-      LANGUAGE_SPECS[lang].markers.includes(basename(file)),
-    );
+    const names = LANGUAGE_SPECS[lang].markers;
+    const markerFiles = unique([
+      ...scopedFiles.filter((file) => names.includes(basename(file))),
+      ...(lang === "js" || lang === "ts"
+        ? ancestorMarkers(root, extFiles, names)
+        : []),
+    ]);
 
     const roots =
       markerFiles.length > 0

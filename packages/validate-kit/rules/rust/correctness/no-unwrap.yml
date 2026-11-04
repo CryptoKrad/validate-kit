@@ -10,14 +10,17 @@ rule:
     - pattern: $RECV.unwrap()
     - pattern: $RECV.expect($MSG)
   # Test code is exempt (matches the note): matches inside a `#[cfg(test)]`
-  # mod or a `#[test]`/`#[tokio::test]`/`#[rstest]`/`#[test_case]` fn are
-  # idiomatic. `follows` walks back only through the attributes and comments
-  # stacked on this item (`#[tokio::test] #[ignore] /// doc fn`), so an
+  # mod, fn or impl, or a `#[test]`/`#[tokio::test]`/`#[rstest]`/`#[test_case]`
+  # fn, are idiomatic. `follows` walks back only through the attributes and
+  # comments stacked on this item (`#[tokio::test] #[ignore] /// doc fn`), so an
   # attribute of an earlier item never exempts it.
   not:
     any:
       - inside:
-          kind: mod_item
+          any:
+            - kind: mod_item
+            - kind: function_item
+            - kind: impl_item
           stopBy: end
           follows:
             kind: attribute_item

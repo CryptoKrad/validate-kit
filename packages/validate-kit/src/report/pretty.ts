@@ -3,7 +3,7 @@ import pc from "picocolors";
 import { EXIT } from "../core/exit-codes.js";
 import { isGating, type RunSummary } from "../core/runner.js";
 import { countsBySeverity } from "./json.js";
-import type { Severity } from "../core/types.js";
+import type { Finding, Severity } from "../core/types.js";
 import { groupBy } from "../core/group.js";
 
 const SEV_COLOR: Record<Severity, (s: string) => string> = {
@@ -141,6 +141,7 @@ export function renderPretty(
   } else {
     out.push(parts.join(pc.dim(" · ")) + pc.dim(`  (${secs}s${debt})`));
   }
+  for (const line of summary.baseline?.over ?? []) out.push(pc.dim(line));
   if (summary.crashed.length > 0) {
     out.push(
       pc.red(
@@ -174,6 +175,24 @@ export function toolProblems(summary: RunSummary): string[] {
   ];
 }
 
+/** The findings that fail the run, errors first, then by place. */
+export function gatingFindings(summary: RunSummary): Finding[] {
+  return summary.findings
+    .filter((f) => !f.baselined && isGating(f))
+    .toSorted(
+      (a, b) =>
+        Number(b.severity === "error") - Number(a.severity === "error") ||
+        a.file.localeCompare(b.file) ||
+        a.line - b.line ||
+        a.col - b.col,
+    );
+}
+
+/** `path:line:col severity tool/rule message`, one finding on one line. */
+export function quietLine(f: Finding, projectRoot: string): string {
+  return `${relative(projectRoot, f.file) || f.file}:${f.line}:${f.col} ${f.severity} ${ruleName(f)} ${f.message.replace(/\s+/g, " ").trim()}${f.fixable ? " [fixable]" : ""}`;
+}
+
 /** Above this many, the rest are counted: `--ai-json -` lists them all. */
 const QUIET_FINDINGS = 50;
 
@@ -186,26 +205,15 @@ const QUIET_FINDINGS = 50;
  */
 export function renderQuiet(summary: RunSummary, projectRoot: string): string {
   if (summary.exitCode === EXIT.CLEAN) return "";
-  const gating = summary.findings
-    .filter((f) => !f.baselined && isGating(f))
-    .toSorted(
-      (a, b) =>
-        Number(b.severity === "error") - Number(a.severity === "error") ||
-        a.file.localeCompare(b.file) ||
-        a.line - b.line ||
-        a.col - b.col,
-    );
+  const gating = gatingFindings(summary);
   const lines = gating
     .slice(0, QUIET_FINDINGS)
-    .map(
-      (f) =>
-        `${relative(projectRoot, f.file) || f.file}:${f.line}:${f.col} ${f.severity} ${ruleName(f)} ${f.message.replace(/\s+/g, " ").trim()}${f.fixable ? " [fixable]" : ""}`,
-    );
+    .map((f) => quietLine(f, projectRoot));
   if (gating.length > QUIET_FINDINGS)
     lines.push(
       `... ${gating.length - QUIET_FINDINGS} more: run with --ai-json - for all`,
     );
-  lines.push(...toolProblems(summary));
+  lines.push(...(summary.baseline?.over ?? []), ...toolProblems(summary));
   for (const [id, n] of Object.entries(summary.fixesByTool))
     if (n > 0)
       lines.push(`${id}: fixed ${n} finding(s), files changed on disk`);

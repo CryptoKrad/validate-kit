@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import type {
@@ -12,7 +12,7 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { isUnder, toPosix } from "../detect/languages.js";
-import { absPosix, finding } from "./base.js";
+import { absPosix, finding, scratchOf } from "./base.js";
 import { gitFiles, ignoredBy } from "./native.js";
 
 /** `mod.py:5: unused function 'unused_helper' (60% confidence)`, `, 2 lines` under --sort-by-size. */
@@ -20,6 +20,55 @@ const LINE = /^(.+?):(\d+): (.+) \((\d+)% confidence(?:, \d+ lines?)?\)$/;
 
 /** Folders that hold a Python project of their own. */
 const MARKERS = new Set(["pyproject.toml", "setup.py", "setup.cfg"]);
+
+/**
+ * ast.NodeVisitor calls `visit_<node>` by name, so vulture lists those
+ * methods as used (whitelists/ast_whitelist.py); 2.16's list stops before
+ * AnnAssign, match statements, f-string parts and type parameters. These
+ * are Python 3.15's other node types, given to vulture in a whitelist file
+ * with the names below.
+ */
+const AST_VISITS =
+  "Add And AnnAssign AugLoad AugStore BitAnd BitOr BitXor Break Continue " +
+  "Del Div Eq FloorDiv FormattedValue FunctionType Gt GtE In Interpolation " +
+  "Invert Is IsNot JoinedStr LShift Load Lt LtE MatMult Match MatchAs " +
+  "MatchMapping MatchOr MatchSequence MatchSingleton MatchStar MatchValue " +
+  "Mod Mult NamedExpr Not NotEq NotIn Or Param ParamSpec Pass Pow RShift " +
+  "Store Sub TemplateStr TryStar TypeAlias TypeIgnore TypeVar TypeVarTuple " +
+  "UAdd USub boolop cmpop excepthandler expr expr_context match_case mod " +
+  "operator pattern slice stmt type_ignore type_param unaryop withitem";
+
+/**
+ * unittest finds a TestCase subclass by its type, whatever its name; vulture
+ * keeps a class only when its name holds "Test" (core.py, _ignore_class).
+ */
+const TEST_CASE = /^\s*class\s+(\w+)\s*\([^)]*TestCase\b[^)]*\)/gm;
+/**
+ * http.server calls a request handler's do_<METHOD> and log_* methods by
+ * name; vulture has no whitelist for it.
+ */
+const HTTP_HANDLER = /\b(?:Base|Simple|CGI)HTTPRequestHandler\b/;
+const HTTP_CALLED =
+  "do_GET do_HEAD do_POST do_PUT do_DELETE do_PATCH do_OPTIONS do_CONNECT " +
+  "do_TRACE log_message log_request log_error";
+
+/** The whitelist lines for names the files' own frameworks call. */
+function calledByName(cwd: string, files: readonly string[]): string[] {
+  const names = new Set<string>();
+  for (const file of files) {
+    let text: string;
+    try {
+      text = readFileSync(join(cwd, file), "utf8");
+    } catch {
+      continue;
+    }
+    for (const match of text.matchAll(TEST_CASE))
+      if (match[1]) names.add(match[1]);
+    if (HTTP_HANDLER.test(text))
+      for (const name of HTTP_CALLED.split(" ")) names.add(name);
+  }
+  return [...names].toSorted().map((name) => `_.${name}\n`);
+}
 
 interface VultureTask {
   /**
@@ -138,6 +187,20 @@ export const vulture: ToolAdapter = {
 
   buildArgs(ctx: ToolContext): BuiltCommand {
     const files = (ctx.options as VultureTask | undefined)?.files ?? [];
+    // Beside the kit's files only: a path given here replaces the config's
+    // `paths`.
+    const whitelist =
+      files.length > 0
+        ? join(scratchOf(ctx), "vulture_called_by_name.py")
+        : undefined;
+    if (whitelist)
+      writeFileSync(
+        whitelist,
+        [
+          ...AST_VISITS.split(" ").map((node) => `_.visit_${node}\n`),
+          ...calledByName(ctx.cwd, files),
+        ].join(""),
+      );
     // shortcut: every file on one command line (vulture reads no file list);
     // a package whose paths pass ARG_MAX (~1 MB) needs `paths` in its config.
     return {
@@ -145,7 +208,7 @@ export const vulture: ToolAdapter = {
       args: [
         ...(ctx.configPath ? ["--config", ctx.configPath] : []),
         ...ctx.extraArgs,
-        ...(files.length > 0 ? ["--", ...files] : []),
+        ...(whitelist ? ["--", ...files, whitelist] : []),
       ],
       okExitCodes: [0, 3],
     };

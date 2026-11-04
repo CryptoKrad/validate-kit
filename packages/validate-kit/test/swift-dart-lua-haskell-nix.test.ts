@@ -191,7 +191,7 @@ describe("swift-format", () => {
     files(root, { "a.swift": 'let s = "ééé";\nvar Bad_Name = 2\n' });
     // A symlinked spelling of the folder: swift-format prints the real one.
     const link = `${tmp()}/link`;
-    symlinkSync(root, link);
+    symlinkSync(root, link, process.platform === "win32" ? "junction" : "dir");
     const result = swiftFormat.parseOutput(
       ran(
         1,
@@ -661,7 +661,13 @@ describe("ocamlformat", () => {
         ctx(root, []),
       ),
     ).toThrow(/Ocamlformat disabled/);
-    expect(ocamlformat.buildArgs(ctx(root, [`${root}/bad.ml`])).env).toEqual({
+    // Inspect its environment without requiring an installed ocamlformat.
+    expect(
+      ocamlformat.buildArgs.call(
+        { ...ocamlformat, bin: process.execPath },
+        ctx(root, [`${root}/bad.ml`]),
+      ).env,
+    ).toEqual({
       OCAMLFORMAT: "",
     });
   });

@@ -43,6 +43,39 @@ const READS: Partial<Record<string, RegExp[]>> = {
 };
 READS.js = READS.ts;
 
+/**
+ * A read the code does without (a debug or ops toggle), told by what follows
+ * it: a fallback (`?? "d"`, `|| "d"`, `or "d"`, `.unwrap_or(..)`), a
+ * comparison with a value (`== "1"`, `in (..)`), or a default as the next
+ * argument of Python's get (`os.environ.get("X", "d")`). A comparison with
+ * nothing (`== ""`, `=== undefined`, `is None`) is the guard of a required
+ * one, and `env!("X", "msg")`'s second argument is its error.
+ */
+const VALUE = String.raw`(?:"[^"]+"|'[^']+'|\x60[^\x60]+\x60|\d|true\b|false\b)`;
+const OPTIONAL_AFTER = new RegExp(
+  String.raw`^\s*\)?\s*(?:\?\?|\|\||or\b|(?:not\s+)?in\b|\.(?:unwrap_or\w*|ok|is_ok|is_err)\b|[!=]==?\s*${VALUE})`,
+);
+/** ...or what comes before it: `"1" != os.Getenv("X")`, a Go flag's default. */
+const OPTIONAL_BEFORE = new RegExp(
+  String.raw`(?:${VALUE}\s*[!=]==?\s*|\bflag\.\w+\(\s*"[^"]*"\s*,\s*)$`,
+);
+/** An API that answers "not set" itself. */
+const OPTIONAL_API = /\bLookupEnv\(|\boption_env!\(/;
+/** Python's get, whose second argument is the default. */
+const PY_GET = /\b(?:os\.environ\.get|os\.getenv|environ\.get|getenv)\(/;
+
+function optional(line: string, at: number, found: string): boolean {
+  // Python's `environ["X"]` raises when X is unset, compared or not.
+  if (/\benviron\[/.test(found)) return false;
+  const rest = line.slice(at + found.length);
+  return (
+    OPTIONAL_API.test(found) ||
+    OPTIONAL_AFTER.test(rest) ||
+    (PY_GET.test(found) && /^\s*,/.test(rest)) ||
+    OPTIONAL_BEFORE.test(line.slice(0, at))
+  );
+}
+
 /** `const { A, B: b } = process.env`: the names read. */
 const DESTRUCTURED = /\{([^{}]*)\}\s*=\s*process\.env\b/g;
 
@@ -52,11 +85,13 @@ const DESTRUCTURED = /\{([^{}]*)\}\s*=\s*process\.env\b/g;
  * have no underscore after the prefix (GOPATH, PYTHONPATH).
  */
 const PLATFORM =
-  /^(?:CI|HOME|PATH|PWD|USER|USERNAME|SHELL|TERM|LANG|LC_\w+|TZ|TMPDIR|TEMP|TMP|HOSTNAME|NODE_ENV|NODE_OPTIONS|DEBUG|NO_COLOR|FORCE_COLOR|EDITOR|XDG_\w+|GITHUB_\w+|RUNNER_\w+|VERCEL\w*|NETLIFY\w*|NEXT_RUNTIME|NEXT_PHASE|npm_\w+|PYTHON[A-Z0-9]*|VIRTUAL_ENV|GO[A-Z0-9]*|CARGO\w*|RUST_\w+)$/;
+  /^(?:CI|HOME|PATH|PWD|USER|USERNAME|SHELL|TERM|LANG|LC_\w+|TZ|TMPDIR|TEMP|TMP|HOSTNAME|NODE_ENV|NODE_OPTIONS|DEBUG|NO_COLOR|FORCE_COLOR|EDITOR|XDG_\w+|GITHUB_\w+|RUNNER_\w+|VERCEL\w*|NETLIFY\w*|NEXT_RUNTIME|NEXT_PHASE|npm_\w+|PYTHON[A-Z0-9]*|VIRTUAL_ENV|GO[A-Z0-9]*|CARGO\w*|RUST_\w+|DOCKER_\w+|TESTCONTAINERS_\w+)$/;
 
 /** Test code reads the variables its own runs set. */
 const TEST =
   /(?:^|\/)(?:tests?|__tests__|e2e)\/|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|\/)test_[^/]*\.py$|_test\.(?:py|go)$|(?:^|\/)conftest\.py$/;
+/** A Go test helper outside a _test.go file imports "testing". */
+const GO_TESTING = /^import\s*(?:\([^)]*"testing"|(?:\w+\s+)?"testing")/m;
 
 interface Example {
   path: string;
@@ -108,8 +143,9 @@ function read(file: string): string | undefined {
  * documents them in, where it has one: a variable read in code that the
  * nearest example file above it does not list (`env/undeclared`, a warning
  * at the read), and a listed one that no other tracked file names
- * (`env/unused`, info: an SDK may read it by itself). Platform and CI
- * variables, writes, and reads in test code are left out.
+ * (`env/unused`, info: an SDK may read it by itself). Platform, CI and
+ * Docker variables, writes, reads with a fallback or a default, and reads
+ * in test code (a Go test helper too) are left out.
  */
 export const env = nativeCheck({
   id: "env",
@@ -205,16 +241,19 @@ export const env = nativeCheck({
       const keys = new Set(example.keys.map(([key]) => key));
       const text = read(posix.join(root, path));
       if (text === undefined) continue;
+      if (path.endsWith(".go") && GO_TESTING.test(text)) continue;
       const reported = new Set<string>();
       text.split("\n").forEach((line, index) => {
         const reads: [string, number][] = [];
         for (const pattern of patterns)
           for (const match of line.matchAll(pattern))
-            reads.push([match[1] ?? "", match.index]);
+            if (!optional(line, match.index, match[0]))
+              reads.push([match[1] ?? "", match.index]);
         if (patterns === READS.ts)
           for (const match of line.matchAll(DESTRUCTURED))
             for (const part of (match[1] ?? "").split(","))
-              if (/^\s*[A-Z_][A-Z0-9_]*\s*(?::|=|$)/.test(part))
+              // `{ PORT = "3000" }` has a default: optional.
+              if (/^\s*[A-Z_][A-Z0-9_]*\s*(?::[^=]*)?$/.test(part))
                 reads.push([part.trim().split(/[:=\s]/)[0] ?? "", match.index]);
         for (const [name, column] of reads) {
           if (

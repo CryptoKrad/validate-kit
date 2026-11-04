@@ -1,4 +1,4 @@
-import { closeSync, openSync, readSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync } from "node:fs";
 import { posix } from "node:path";
 import picomatch from "picomatch";
 import type {
@@ -12,8 +12,9 @@ import type {
   ToolAdapter,
   ToolContext,
 } from "../core/types.js";
+import { upTo } from "../detect/adoption.js";
 import { gitSync } from "../detect/git.js";
-import { toPosix } from "../detect/languages.js";
+import { isUnder, languageForFile, toPosix } from "../detect/languages.js";
 import { finding } from "./base.js";
 
 export { gitSync };
@@ -91,6 +92,67 @@ export function gitFiles(root: string, staged: boolean): string[] | undefined {
   if (listed === undefined) return undefined;
   const gone = new Set(staged ? [] : (list(["--deleted"]) ?? []));
   return [...new Set(listed)].filter((path) => !gone.has(path)).toSorted();
+}
+
+/**
+ * Folders below the project root that are a JS project of their own for a
+ * tool that reads a whole project (knip, dependency-cruiser): one of the
+ * tool's `configs` beside a package.json (so a source file named knip.ts is
+ * no config), with TS or JS files in the kit's scope (so a fixture under an
+ * ignored folder is none). With no `env`, every such folder git lists.
+ */
+export function ownProjects(
+  root: string,
+  configs: readonly string[],
+  env?: PlanEnv,
+): string[] {
+  const top = toPosix(root);
+  const dirs = new Set<string>();
+  for (const path of gitFiles(top, env?.changedMode === "staged") ?? []) {
+    const dir = posix.dirname(path);
+    if (
+      dir !== "." &&
+      configs.includes(posix.basename(path)) &&
+      existsSync(posix.join(top, dir, "package.json"))
+    )
+      dirs.add(posix.join(top, dir));
+  }
+  return [...dirs]
+    .filter(
+      (dir) =>
+        env === undefined ||
+        env.scopedFiles.some((file) => {
+          const language = languageForFile(file);
+          return (
+            (language === "ts" || language === "js") &&
+            isUnder(toPosix(file), dir)
+          );
+        }),
+    )
+    .toSorted();
+}
+
+/**
+ * Whether a JS project's dependencies are installed for it: a node_modules
+ * in its folder or above it up to the project root (a workspace hoists
+ * them).
+ */
+export function installedFor(dir: string, projectRoot: string): boolean {
+  return upTo(dir, projectRoot).some((folder) =>
+    existsSync(posix.join(toPosix(folder), "node_modules")),
+  );
+}
+
+/** The files under `cwd` that no other of `roots` below it holds. */
+export function ownFiles(
+  cwd: string,
+  roots: readonly string[],
+  files: readonly string[],
+): string[] {
+  const inner = roots.filter((root) => root !== cwd && isUnder(root, cwd));
+  return files.filter(
+    (file) => isUnder(file, cwd) && !inner.some((root) => isUnder(file, root)),
+  );
 }
 
 /** The config's `ignore`, as a test of a project-relative path. */

@@ -1,6 +1,8 @@
 # typos reads the kit's scope (validate-kit's check runs it because this file
 # exists). Words below are spelled as this repository means them.
 [default.extend-words]
+# sherif: the workspace linter (QuiiBz/sherif).
+sherif = "sherif"
 # Used throughout for input a parser rejects.
 unparseable = "unparseable"
 # `PROPERT(Y|IES)`: a regex fragment in the TLC adapter.

@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -207,10 +208,52 @@ describe("dependency-cruiser", () => {
       "src/a.ts": "",
     });
     expect(dependencyCruiser.adoptedAt?.(root, root)).toBe(false);
-    const [seed] = cruisePlan(root, ["src/a.ts"]);
+    expect(cruisePlan(root, ["src/a.ts"])).toEqual([]);
+    // Turned on by the kit's config, it has no rules to read.
+    const enabled = env(root, ["src/a.ts"]);
+    enabled.config.tools["dependency-cruiser"] = { enabled: true };
+    const [seed] = (dependencyCruiser.expand?.({ cwd: root }, enabled) ??
+      []) as TaskSeed[];
     expect(seed?.cannotRun).toMatch(/no .dependency-cruiser.js/);
     write(root, { ".dependency-cruiser.cjs": "module.exports = {};\n" });
     expect(dependencyCruiser.adoptedAt?.(root, root)).toBe(true);
+  });
+
+  it("runs in a package below that has its own config and install, and the root leaves its files to it", () => {
+    const root = tmp("vk-depcruise-");
+    write(root, {
+      "go.mod": "module m\n",
+      "tools/x.ts": "",
+      "frontend/package.json": "{}\n",
+      "frontend/.dependency-cruiser.cjs": "module.exports = {};\n",
+      "frontend/node_modules/.keep": "",
+      "frontend/src/a.ts": "",
+      // A config with no package.json beside it, or no code in scope.
+      "lib/.dependency-cruiser.cjs": "module.exports = {};\n",
+      "lib/a.ts": "",
+      "empty/package.json": "{}\n",
+      "empty/.dependency-cruiser.cjs": "module.exports = {};\n",
+    });
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    const scoped = ["tools/x.ts", "frontend/src/a.ts", "lib/a.ts"];
+    expect(dependencyCruiser.adoptedAt?.(root, root)).toBe(true);
+    const plan = () =>
+      cruisePlan(root, scoped).map((seed) => [seed.cwd, seed.options]);
+    expect(plan()).toEqual([
+      [`${root}/frontend`, { paths: ["src"], scope: ["src/a.ts"] }],
+    ]);
+    write(root, {
+      ".dependency-cruiser.cjs": "module.exports = {};\n",
+      "node_modules/.keep": "",
+    });
+    const both = [
+      [root, { paths: ["lib", "tools"], scope: ["tools/x.ts", "lib/a.ts"] }],
+      [`${root}/frontend`, { paths: ["src"], scope: ["src/a.ts"] }],
+    ];
+    expect(plan()).toEqual(both);
+    // A workspace whose packages' dependencies are hoisted to the root.
+    rmSync(join(root, "frontend/node_modules"), { recursive: true });
+    expect(plan()).toEqual(both);
   });
 
   it("refuses a report it cannot read, and the flags that change it", () => {

@@ -37,6 +37,8 @@ export interface RunOptions {
    * else.
    */
   pythonEnv?: boolean;
+  /** A Composer project's tool: a `vendor/bin` on the way up is searched first. */
+  composerVendor?: boolean;
 }
 
 function killGroup(pid: number): void {
@@ -298,6 +300,7 @@ export function resolveBin(
   env: NodeJS.ProcessEnv = process.env,
   pathOnly = false,
   pythonEnv = false,
+  composerVendor = false,
 ): string {
   const pathLike =
     bin.includes("/") || (WINDOWS && bin.includes("\\")) || isAbsolute(bin);
@@ -318,7 +321,11 @@ export function resolveBin(
     const found =
       (pythonEnv
         ? existing(join(dir, ".venv", WINDOWS ? "Scripts" : "bin", bin), env)
-        : undefined) ?? existing(join(dir, "node_modules", ".bin", bin), env);
+        : undefined) ??
+      (composerVendor
+        ? existing(join(dir, "vendor", "bin", bin), env)
+        : undefined) ??
+      existing(join(dir, "node_modules", ".bin", bin), env);
     if (found) return found;
     const parent = dirname(dir);
     if (parent === dir) break;
@@ -440,6 +447,7 @@ export async function run(
       env,
       opts.pathOnly,
       opts.pythonEnv,
+      opts.composerVendor,
     );
     // A shell outside PATH (Git for Windows' usr/bin) needs its own directory
     // on PATH so the script can reach tee/cat/sed. Not on POSIX: /bin first
@@ -517,6 +525,8 @@ export async function run(
       stdout: stdout ?? "",
       stderr: stderr ?? "",
       exitCode: exitNum ?? 127,
+      ...(result.signal ? { signal: result.signal } : {}),
+      ...(code ? { errorCode: code } : {}),
       spawnError,
       timedOut,
     };
@@ -528,6 +538,7 @@ export async function run(
       // A thrown non-Error has no message.
       stderr: err.message ?? String(error),
       exitCode: 127,
+      ...(err.code ? { errorCode: err.code } : {}),
       spawnError,
     };
   }

@@ -1,6 +1,24 @@
 id: rust-no-unwrap
 snapshots:
   ? |-
+    #[cfg(not(test))]
+    fn f() { x.unwrap(); }
+  : labels:
+    - source: x.unwrap()
+      style: primary
+      start: 27
+      end: 37
+  ? |-
+    #[cfg(test)]
+    fn helper() {}
+
+    fn f() { x.unwrap(); }
+  : labels:
+    - source: x.unwrap()
+      style: primary
+      start: 38
+      end: 48
+  ? |-
     #[test]
     fn t() {}
 

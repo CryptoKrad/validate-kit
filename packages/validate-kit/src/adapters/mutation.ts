@@ -9,7 +9,12 @@ import type {
   TaskSeed,
   ToolContext,
 } from "../core/types.js";
-import { isUnder, languageForFile, toPosix } from "../detect/languages.js";
+import {
+  isTestFile,
+  isUnder,
+  languageForFile,
+  toPosix,
+} from "../detect/languages.js";
 import { absPosix, finding } from "./base.js";
 
 /**
@@ -35,25 +40,6 @@ export interface MutationTask {
   targets?: string[];
   /** Files whose surviving mutants count (absolute, POSIX): the kit's scope. */
   scope: string[];
-}
-
-const JS_TESTS =
-  /(?:^|\/)(?:tests?|__tests__|__mocks__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$|\.d\.[cm]?ts$/;
-
-/** Each language's tests, test data and declarations: nothing to mutate. */
-const TEST_FILES: Partial<Record<Language, RegExp>> = {
-  ts: JS_TESTS,
-  js: JS_TESTS,
-  rust: /(?:^|\/)(?:tests|benches|examples)\//,
-  python:
-    /(?:^|\/)(?:tests?|__tests__)\/|(?:^|\/)(?:test_[^/]*|[^/]*_test|conftest)\.py$/,
-  go: /_test\.go$|(?:^|\/)testdata\//,
-};
-
-/** A test of its language, by its path relative to the task's folder. */
-export function isTestFile(path: string): boolean {
-  const lang = languageForFile(path);
-  return lang !== undefined && (TEST_FILES[lang]?.test(path) ?? false);
 }
 
 /** A file's name without its extension or test marks: what a test is named after. */

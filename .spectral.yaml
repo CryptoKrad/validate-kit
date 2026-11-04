@@ -1,0 +1,3 @@
+# Spectral lints the OpenAPI description (apps/api/openapi.json) on its own;
+# oasdiff compares it with the base. The recommended OpenAPI rules.
+extends: ["spectral:oas"]

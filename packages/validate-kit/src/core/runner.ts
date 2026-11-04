@@ -58,7 +58,12 @@ export interface RunSummary {
   /** What the run was produced from; collected only when a caller asks. */
   evidence?: RunEvidence;
   /** Set when a baseline judged the run: how many findings it accepted. */
-  baseline?: { baselined: number; stale: number };
+  baseline?: {
+    baselined: number;
+    stale: number;
+    /** `file tool/rule: …` for each count a file is over. */
+    over?: string[];
+  };
 }
 
 export interface RunScope {
@@ -495,6 +500,7 @@ async function executeTasks(
       // The probe found it in the project's .venv: the run must look there
       // too, or it spawns a bare name PATH does not have.
       ...(task.adapter.pythonEnv ? { pythonEnv: true } : {}),
+      ...(task.adapter.composerVendor ? { composerVendor: true } : {}),
       timeoutMs,
     });
     if (raw.spawnError)
@@ -508,21 +514,33 @@ async function executeTasks(
         findings: [],
         crashed: {
           id: task.adapter.id,
-          stderr: `${task.adapter.id} timed out after ${timeoutMs < 1000 ? `${timeoutMs}ms` : `${Math.round(timeoutMs / 1000)}s`} (scope down, raise concurrency limits, or split the run)`,
+          stderr: `${task.adapter.id} timed out after ${timeoutMs < 1000 ? `${timeoutMs}ms` : `${Math.round(timeoutMs / 1000)}s`}${ctx.files ? ` on ${ctx.files.length} file(s)` : ""}: a large tree may need longer, set by tools.${task.adapter.id}.timeoutMs in the validate config`,
         },
         filesScanned: ctx.files?.length ?? 0,
       };
     }
+    // Accepted numeric exits never cover OS failures or signal termination.
     const ok =
-      raw.exitCode === 0 ||
-      cmd.okExitCodes === "any" ||
-      (cmd.okExitCodes ?? [0]).includes(raw.exitCode);
+      !raw.signal &&
+      !raw.errorCode &&
+      (raw.exitCode === 0 ||
+        cmd.okExitCodes === "any" ||
+        (cmd.okExitCodes ?? [0]).includes(raw.exitCode));
     if (!ok) {
+      const output = raw.stderr.trim() ? raw.stderr : raw.stdout;
+      const termination = raw.signal
+        ? `terminated by ${raw.signal}`
+        : raw.errorCode
+          ? `could not run (${raw.errorCode})`
+          : `exited with code ${raw.exitCode}`;
       return {
         findings: [],
         crashed: {
           id: task.adapter.id,
-          stderr: (raw.stderr || raw.stdout).slice(0, 2000),
+          stderr: (output.trim()
+            ? output
+            : `${task.adapter.id} ${termination} without stdout or stderr`
+          ).slice(0, 2000),
         },
         filesScanned: ctx.files?.length ?? 0,
       };

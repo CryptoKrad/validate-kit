@@ -123,17 +123,24 @@ export const migrations = nativeCheck({
       .map((file) => posix.relative(top, file))
       .filter((path) => placed(path) !== undefined);
     const base = mainBase(env.projectRoot, env.trusted?.commit);
+    // A repository with no remote has no deployed branch to compare with:
+    // saying so on every run is noise (Discount-Hunter).
+    const remote =
+      env.trusted !== undefined ||
+      (gitSync(env.projectRoot, ["remote"])?.trim() ?? "") !== "";
     return {
       all,
       ignore: env.config.ignore,
       ...(base
         ? { base }
-        : {
-            noBase: noBase(
-              env.trusted?.commit,
-              "an edited migration is not checked",
-            ),
-          }),
+        : remote
+          ? {
+              noBase: noBase(
+                env.trusted?.commit,
+                "an edited migration is not checked",
+              ),
+            }
+          : {}),
     };
   },
   check(root, task) {
@@ -214,12 +221,8 @@ export const migrations = nativeCheck({
         );
       }
     if (!base) {
-      at(
-        all[0] ?? task.files[0] ?? ".",
-        "no-base",
-        "info",
-        why ?? noBase(undefined, "an edited migration is not checked"),
-      );
+      if (why !== undefined)
+        at(all[0] ?? task.files[0] ?? ".", "no-base", "info", why);
       return findings;
     }
     // Committed on the main branch, and different now or deleted: one diff

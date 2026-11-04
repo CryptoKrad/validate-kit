@@ -186,7 +186,11 @@ describe("taplo", () => {
     // taplo prints the real path (/private/var for /var on macOS).
     const real = toPosix(realpathSync(root));
     const stderr = [
-      `ERROR the file is not properly formatted path="${real}/fixture/unformatted.toml"`,
+      // RUST_LOG unset: an INFO line, and the span before the message.
+      ` INFO taplo:format_files:collect_files: found files total=3 excluded=0 files=["${real}/fixture/plain.toml"] cwd="${real}"`,
+      `ERROR taplo:format_files: the file is not properly formatted path="${real}/fixture/unformatted.toml"`,
+      // RUST_LOG=warn: no span.
+      `ERROR the file is not properly formatted path="${real}/fixture/plain.toml"`,
       "error: invalid TOML",
       `  ┌─ ${real}/fixture/syntax.toml:1:9`,
       "  │  ",
@@ -211,6 +215,14 @@ describe("taplo", () => {
     ).toEqual([
       [
         `${root}/fixture/unformatted.toml`,
+        1,
+        1,
+        "warning",
+        "File is not taplo-formatted",
+        true,
+      ],
+      [
+        `${root}/fixture/plain.toml`,
         1,
         1,
         "warning",

@@ -4,6 +4,7 @@ import { Command, CommanderError } from "commander";
 import { baselineCommand, type BaselineFlags } from "./commands/baseline.js";
 import { checkCommand, type CheckFlags } from "./commands/check.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { hookClaudeCommand } from "./commands/hook.js";
 import { initCommand } from "./commands/init.js";
 import { listCommand } from "./commands/list.js";
 import { mcpCommand } from "./commands/mcp.js";
@@ -210,22 +211,39 @@ program
 program
   .command("init")
   .description(
-    "scaffold a validate config, the MCP entry and lefthook pre-commit and pre-push hooks",
+    "scaffold a validate config, the MCP entry, Claude Code's stop hooks and lefthook pre-commit and pre-push hooks",
   )
   .option("--force", "overwrite an existing config")
   .option("--no-hook", "skip lefthook.yml and `lefthook install`")
   .option("--no-mcp", "skip the .mcp.json entry")
+  .option(
+    "--no-claude",
+    "skip Claude Code's stop hooks in .claude/settings.json",
+  )
   .option("--dry-run", "print what init would write, and write nothing")
   .action(
     async (opts: {
       force?: boolean;
       hook?: boolean;
       mcp?: boolean;
+      claude?: boolean;
       dryRun?: boolean;
     }) => {
       process.exitCode = await initCommand(opts);
     },
   );
+
+program
+  .command("hook")
+  .description("answer an agent tool's hook event")
+  .command("claude")
+  .description(
+    "Claude Code's UserPromptSubmit, Stop, SubagentStart and SubagentStop hook: sends an agent back once when the files it changed have findings (init registers it)",
+  )
+  .option("--profile <profile>", "validation profile (default: dev)")
+  .action(async (opts: { profile?: string }) => {
+    process.exitCode = await hookClaudeCommand(opts);
+  });
 
 const rules = program
   .command("rules")

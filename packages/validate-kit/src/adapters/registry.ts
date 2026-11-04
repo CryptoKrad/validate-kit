@@ -1,5 +1,7 @@
 import type { ToolAdapter } from "../core/types.js";
+import { actionlint } from "./actionlint.js";
 import { aderyn } from "./aderyn.js";
+import { agnix } from "./agnix.js";
 import { astgrep } from "./astgrep.js";
 import { attw } from "./attw.js";
 import { basedpyright } from "./basedpyright.js";
@@ -7,6 +9,7 @@ import { biome, biomeFormat } from "./biome.js";
 import { blobs } from "./blobs.js";
 import { brakeman } from "./brakeman.js";
 import { capslock } from "./capslock.js";
+import { checkJsonschema } from "./check-jsonschema.js";
 import { buildifier } from "./buildifier.js";
 import { buf } from "./buf.js";
 import { bufBreaking } from "./buf-breaking.js";
@@ -18,7 +21,9 @@ import { cargoMutants } from "./cargo-mutants.js";
 import { clangFormat } from "./clang-format.js";
 import { clangTidy } from "./clang-tidy.js";
 import { cargoSemverChecks } from "./cargo-semver-checks.js";
+import { cargoShear } from "./cargo-shear.js";
 import { clippy } from "./clippy.js";
+import { composerDependencyAnalyser } from "./composer-dependency-analyser.js";
 import { cooldown } from "./cooldown.js";
 import { crosshair } from "./crosshair.js";
 import { credo } from "./credo.js";
@@ -29,16 +34,20 @@ import { deadnix } from "./deadnix.js";
 import { deadcode } from "./deadcode.js";
 import { dependencyCruiser } from "./dependency-cruiser.js";
 import { deptry } from "./deptry.js";
+import { editorconfigChecker } from "./editorconfig-checker.js";
 import { detekt } from "./detekt.js";
 import { diffCover } from "./diff-cover.js";
 import { dotnetBuild } from "./dotnet-build.js";
 import { dotnetFormat } from "./dotnet-format.js";
 import { env } from "./env.js";
+import { errorProne } from "./error-prone.js";
 import { forgeFmt } from "./forge-fmt.js";
+import { forgeLint } from "./forge-lint.js";
 import { eslint } from "./eslint.js";
 import { fileLength } from "./file-length.js";
 import { gitleaks } from "./gitleaks.js";
 import { gofmt } from "./gofmt.js";
+import { goModTidy } from "./go-mod-tidy.js";
 import { gofumpt } from "./gofumpt.js";
 import { goArchLint } from "./go-arch-lint.js";
 import { graphqlInspector } from "./graphql-inspector.js";
@@ -52,6 +61,7 @@ import { hadolint } from "./hadolint.js";
 import { htmlValidate } from "./html-validate.js";
 import { hlint } from "./hlint.js";
 import { importLinter } from "./import-linter.js";
+import { infection } from "./infection.js";
 import { jscpd } from "./jscpd.js";
 import { kani } from "./kani.js";
 import { knip } from "./knip.js";
@@ -76,6 +86,7 @@ import { osvScanner } from "./osv.js";
 import { oxlint } from "./oxlint.js";
 import { pmd } from "./pmd.js";
 import { paths } from "./paths.js";
+import { periphery } from "./periphery.js";
 import { phpCsFixer } from "./php-cs-fixer.js";
 import { phpstan } from "./phpstan.js";
 import { pint } from "./pint.js";
@@ -94,6 +105,7 @@ import { semgrep } from "./semgrep.js";
 import { shellcheck } from "./shellcheck.js";
 import { sizeLimit } from "./size-limit.js";
 import { slither } from "./slither.js";
+import { sobelow } from "./sobelow.js";
 import { solhint } from "./solhint.js";
 import { sqlcDiff } from "./sqlc-diff.js";
 import { sqlcVet } from "./sqlc-vet.js";
@@ -102,6 +114,7 @@ import { squawk } from "./squawk.js";
 import { statix } from "./statix.js";
 import { stylua } from "./stylua.js";
 import { stryker } from "./stryker.js";
+import { strykerNet } from "./stryker-net.js";
 import { taplo } from "./taplo.js";
 import { stylelint } from "./stylelint.js";
 import { swiftFormat } from "./swift-format.js";
@@ -115,8 +128,12 @@ import { tofu } from "./tofu.js";
 import { trivy } from "./trivy.js";
 import { tsc } from "./tsc.js";
 import { ty } from "./ty.js";
+import { sherif } from "./sherif.js";
+import { spectral } from "./spectral.js";
+import { shfmt } from "./shfmt.js";
 import { typos } from "./typos.js";
 import { unicode } from "./unicode.js";
+import { uvLock } from "./uv-lock.js";
 import { vulture } from "./vulture.js";
 import { yamllint } from "./yamllint.js";
 import { zigAstCheck, zigFmt } from "./zig.js";
@@ -134,9 +151,17 @@ export const TOOL_REGISTRY: ToolAdapter[] = [
   ruffFormat,
   rustfmt,
   gofmt,
+  goModTidy,
   gofumpt,
   taplo,
   forgeFmt,
+  forgeLint,
+  errorProne,
+  sobelow,
+  periphery,
+  composerDependencyAnalyser,
+  infection,
+  strykerNet,
   dotnetFormat,
   csharpier,
   phpCsFixer,
@@ -189,7 +214,9 @@ export const TOOL_REGISTRY: ToolAdapter[] = [
   jscpd,
   typos,
   deptry,
+  uvLock,
   cargoMachete,
+  cargoShear,
   dependencyCruiser,
   importLinter,
   lizard,
@@ -240,6 +267,13 @@ export const TOOL_REGISTRY: ToolAdapter[] = [
   semgrep,
   gitleaks,
   zizmor,
+  actionlint,
+  sherif,
+  spectral,
+  agnix,
+  checkJsonschema,
+  shfmt,
+  editorconfigChecker,
   unicode,
   cooldown,
   policy,

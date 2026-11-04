@@ -1,5 +1,13 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, posix } from "node:path";
+import {
+  copyFileSync,
+  existsSync,
+  linkSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, posix, resolve } from "node:path";
 import picomatch from "picomatch";
 import { parse as parseToml } from "smol-toml";
 import { hookIndex, run } from "../core/exec.js";
@@ -117,6 +125,30 @@ function prefixedIgnore(text: string, prefix: string): string {
     .join("\n");
 }
 
+/**
+ * Hard links (copies across volumes) of the files that exist among `files`
+ * (absolute, POSIX), at their paths from `root`, under `dir`.
+ */
+function mirror(files: readonly string[], root: string, dir: string): void {
+  mkdirSync(dir, { recursive: true });
+  for (const file of files) {
+    const rel = posix.relative(toPosix(root), file);
+    if (rel.startsWith("../")) continue;
+    try {
+      if (!statSync(file).isFile()) continue;
+    } catch {
+      continue; // deleted: nothing to scan
+    }
+    const copy = join(dir, rel);
+    mkdirSync(dirname(copy), { recursive: true });
+    try {
+      linkSync(file, copy);
+    } catch {
+      copyFileSync(file, copy);
+    }
+  }
+}
+
 /** gitleaks — secrets in the files a commit or a run covers. */
 export const gitleaks: ToolAdapter = {
   id: "gitleaks",
@@ -166,8 +198,11 @@ export const gitleaks: ToolAdapter = {
       throw new Error(
         "gitleaks: git cannot place the project in its work tree",
       );
+    // Absolute: a changed-file run scans from its scratch folder.
     const projectConfig =
-      env.toolConfig.configPath ??
+      (env.toolConfig.configPath !== undefined
+        ? resolve(root, env.toolConfig.configPath)
+        : undefined) ??
       (existsSync(join(root, ".gitleaks.toml"))
         ? join(root, ".gitleaks.toml")
         : undefined);
@@ -192,21 +227,23 @@ export const gitleaks: ToolAdapter = {
             changed: env.changedPaths.map((path) => toPosix(join(root, path))),
           }
         : {}),
-      // Outside a repository nothing is pruned: `dir` walks every file.
-      ignored: staged
-        ? []
-        : (
-            (await git([
-              "ls-files",
-              "--others",
-              "--ignored",
-              "--exclude-standard",
-              "--directory",
-              "-z",
-            ])) ?? ""
-          )
-            .split("\0")
-            .filter((path) => path !== ""),
+      // Outside a repository nothing is pruned: `dir` walks every file. A
+      // changed-file run reads its files only, none of them ignored.
+      ignored:
+        staged || env.changedPaths
+          ? []
+          : (
+              (await git([
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "--directory",
+                "-z",
+              ])) ?? ""
+            )
+              .split("\0")
+              .filter((path) => path !== ""),
       ...(projectConfig ? { projectConfig } : {}),
       extendsPath,
       ignore: [...env.config.ignore],
@@ -267,10 +304,26 @@ export const gitleaks: ToolAdapter = {
       writeFileSync(config, scopeConfig(task));
       args = ["dir", ...COMMON, "--config", config];
     }
+    // A changed-file run reads the changed files only, from a mirror of
+    // them, scanned from there so paths and .gitleaksignore fingerprints
+    // read as from the project (`dir .` read the whole tree: 7 minutes on
+    // 17,000 files, in one consumer's repository).
+    let cwd: string | undefined;
+    if (task.changed) {
+      cwd = join(scratch(), "changed");
+      mirror(task.changed, ctx.cwd, cwd);
+      const own = join(ctx.cwd, ".gitleaksignore");
+      if (
+        existsSync(own) &&
+        !ctx.extraArgs.some((arg) => arg.startsWith("--gitleaks-ignore-path"))
+      )
+        args.push("--gitleaks-ignore-path", own);
+    }
     args.push(...ctx.extraArgs, ".");
     return {
       bin: this.bin,
       args,
+      ...(cwd ? { cwd } : {}),
       okExitCodes: [0, 3],
       // A config named by the environment would replace the project's; a
       // staged scan reads the index the hook's commit is made from.

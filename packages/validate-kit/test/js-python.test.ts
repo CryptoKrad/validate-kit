@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -356,7 +362,9 @@ describe("attw", () => {
     // Packed into the task's scratch folder, never beside the user's own
     // tarball, by the repository's package manager.
     const scratch = tmp("vk-attw-scratch-");
-    const built = attw.buildArgs(
+    // Only inspect the pack command; attw itself is not run in this fixture.
+    const built = attw.buildArgs.call(
+      { ...attw, bin: process.execPath },
       ctx(root, { options: { packer: "pnpm" }, tempDir: () => scratch }),
     );
     expect(built.bin).toBe("sh");
@@ -577,9 +585,37 @@ describe("vulture", () => {
       options?: unknown;
     }[];
     expect(task?.options).toEqual({ files: ["mod.py", "pkg/a.py"] });
+    // With vulture's ast whitelist completed (visit_AnnAssign and the
+    // rest), and the names unittest and http.server call: a TestCase
+    // subclass not named Test*, a handler's do_POST.
+    writeFileSync(
+      join(root, "mod.py"),
+      "class PartialMonthRegression(unittest.TestCase):\n    pass\n\nclass Plain:\n    pass\n",
+    );
+    mkdirSync(join(root, "pkg"), { recursive: true });
+    writeFileSync(
+      join(root, "pkg/a.py"),
+      "class H(http.server.BaseHTTPRequestHandler):\n    def do_POST(self): ...\n",
+    );
+    const scratch = tmp("vk-vulture-scratch-");
     expect(
-      vulture.buildArgs(ctx(root, { options: task?.options })).args,
-    ).toEqual(["--", "mod.py", "pkg/a.py"]);
+      vulture.buildArgs(
+        ctx(root, { options: task?.options, tempDir: () => scratch }),
+      ).args,
+    ).toEqual([
+      "--",
+      "mod.py",
+      "pkg/a.py",
+      join(scratch, "vulture_called_by_name.py"),
+    ]);
+    const whitelist = readFileSync(
+      join(scratch, "vulture_called_by_name.py"),
+      "utf8",
+    );
+    expect(whitelist).toContain("_.visit_AnnAssign\n");
+    expect(whitelist).toContain("_.PartialMonthRegression\n");
+    expect(whitelist).toContain("_.do_POST\n");
+    expect(whitelist).not.toContain("Plain");
     writeFileSync(
       join(root, "pyproject.toml"),
       '[tool.vulture]\npaths = ["mod.py"]\n',

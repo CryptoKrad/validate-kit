@@ -142,16 +142,31 @@ function countFindings(
   return byFile;
 }
 
-/** The findings of each file and rule that are within the recorded count. */
-function acceptedBy(baseline: Baseline, current: Counted): Set<Finding> {
+/**
+ * The findings of each file and rule that are within the recorded count, and
+ * a line for each count a file went over: a count cannot say which finding
+ * is the new one, so all of them show.
+ */
+function acceptedBy(
+  baseline: Baseline,
+  current: Counted,
+): { accepted: Set<Finding>; over: string[] } {
   const accepted = new Set<Finding>();
+  const over: string[] = [];
   for (const [file, byRule] of current) {
     for (const [key, findings] of byRule) {
-      if (findings.length > (baseline.counts[file]?.[key] ?? 0)) continue;
+      const allowed = baseline.counts[file]?.[key] ?? 0;
+      if (findings.length > allowed) {
+        if (allowed > 0)
+          over.push(
+            `${file} ${key}: ${findings.length} here, ${allowed} baselined, so all ${findings.length} show until there are ${allowed} again`,
+          );
+        continue;
+      }
       for (const finding of findings) accepted.add(finding);
     }
   }
-  return accepted;
+  return { accepted, over };
 }
 
 interface ApplyOptions {
@@ -214,7 +229,7 @@ export function applyBaseline(
   opts: ApplyOptions,
 ): RunSummary {
   const current = countFindings(summary.findings, opts.projectRoot);
-  const accepted = acceptedBy(baseline, current);
+  const { accepted, over } = acceptedBy(baseline, current);
   const stale = staleCounts(baseline, current, summary, opts);
   const findings = [
     ...summary.findings.map((finding) =>
@@ -237,7 +252,11 @@ export function applyBaseline(
     toolStatus,
     ranTools:
       stale.length > 0 ? [...summary.ranTools, "baseline"] : summary.ranTools,
-    baseline: { baselined: accepted.size, stale: stale.length },
+    baseline: {
+      baselined: accepted.size,
+      stale: stale.length,
+      ...(over.length > 0 ? { over } : {}),
+    },
     exitCode: exitCodeOf(fresh, summary.crashed, summary.incomplete),
   };
 }
@@ -246,12 +265,21 @@ export interface BaselineUpdate {
   baseline: Baseline;
   /** `file tool/rule: before → now` for each count that would grow. */
   refused: string[];
+  /** Of `refused`, those `adoptNewRules` would accept: an upgrade's new rules. */
+  adoptable: number;
   adopted: string[];
   lowered: number;
   /** Tools the previous baseline recorded that the kit and config no longer have. */
   dropped: string[];
-  /** Gating findings that cannot be debt (gates, formal checks, verdicts). */
-  unrecordable: number;
+  /**
+   * Gating findings that cannot be debt (gates, tests, formal checks, a
+   * verdict at the root), as `tool/rule file:line`.
+   */
+  verdicts: string[];
+  /** Security findings left out without `includeSecurity`. */
+  security: number;
+  /** Findings in files git does not track. */
+  untracked: number;
 }
 
 interface UpdateOptions {
@@ -266,6 +294,8 @@ interface UpdateOptions {
    * missing from a baseline is one the kit did not have when it was written.
    */
   knownTools: readonly string[];
+  /** The files git tracks (project-relative); absent outside a work tree. */
+  tracked?: ReadonlySet<string>;
 }
 
 /** What happens to one count: kept (or lowered), adopted, or refused. */
@@ -311,11 +341,20 @@ export function updateBaseline(
   const current = countFindings(summary.findings, opts.projectRoot);
   const counts: Baseline["counts"] = {};
   const refused: string[] = [];
+  let adoptable = 0;
   const adopted: string[] = [];
   let securitySkipped = 0;
+  let untracked = 0;
   for (const [file, byRule] of current) {
     for (const [key, findings] of byRule) {
       const now = findings.length;
+      // The baseline is committed: a file only this machine has (a local
+      // build, a file not yet added) is never debt, and a clone's run would
+      // call its count stale.
+      if (opts.tracked && !opts.tracked.has(file)) {
+        untracked += now;
+        continue;
+      }
       const before = previous?.counts[file]?.[key];
       if (
         findings[0]?.layer === "security" &&
@@ -328,6 +367,13 @@ export function updateBaseline(
       const verdict = verdictFor(previous, key, now, before, summary, opts);
       if (verdict === "refuse") {
         refused.push(`${file} ${key}: ${before ?? 0} → ${now}`);
+        if (
+          verdictFor(previous, key, now, before, summary, {
+            ...opts,
+            adoptNewRules: true,
+          }) === "adopt"
+        )
+          adoptable += 1;
         continue;
       }
       if (verdict === "adopt") adopted.push(`${file} ${key}`);
@@ -367,9 +413,17 @@ export function updateBaseline(
     const live = ran(summary, tool) ? summary.toolVersions[tool] : undefined;
     tools[tool] = live ?? tools[tool] ?? "";
   }
-  let debt = 0;
-  for (const byRule of current.values())
-    for (const list of byRule.values()) debt += list.length;
+  const toRelative = relativeTo(opts.projectRoot);
+  const verdicts = summary.findings.flatMap((finding) => {
+    const file = toRelative(finding.file);
+    return isGating(finding) &&
+      !RUN_TOOLS.has(finding.tool) &&
+      !recordable(finding, file)
+      ? [
+          `${finding.tool}${finding.ruleId && finding.ruleId !== finding.tool ? `/${finding.ruleId}` : ""} ${file ? `${file}:${finding.line}` : "(the project)"}`,
+        ]
+      : [];
+  });
   return {
     baseline: {
       schemaVersion: 1,
@@ -379,16 +433,13 @@ export function updateBaseline(
       counts,
     },
     refused,
+    adoptable,
     adopted,
     lowered,
     dropped,
-    // Stale counts are the baseline's own; everything else not counted as
-    // debt still fails the run.
-    unrecordable:
-      summary.findings.filter((f) => isGating(f) && f.tool !== "baseline")
-        .length -
-      debt +
-      securitySkipped,
+    verdicts,
+    security: securitySkipped,
+    untracked,
   };
 }
 

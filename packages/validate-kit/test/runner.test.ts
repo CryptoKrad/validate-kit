@@ -330,17 +330,85 @@ describe("runner", () => {
     ]);
   });
 
-  it("classifies unexpected tool exits as adapter crashes", async () => {
+  it.each([false, true])(
+    "reports silent unexpected tool exits as crashes (optional: %s)",
+    async (optional) => {
+      const summary = await execute({
+        projectRoot: process.cwd(),
+        config: config(),
+        tasks: [task(adapter({ id: "crashy", crash: true, optional }))],
+        fix: false,
+        scope: { profile: "test", mode: "full", files: null },
+      });
+
+      expect(summary.exitCode).toBe(EXIT.INTERNAL);
+      expect(summary.crashed).toEqual([
+        {
+          id: "crashy",
+          stderr: "crashy exited with code 7 without stdout or stderr",
+        },
+      ]);
+      expect(summary.toolStatus.crashy).toBe("inconclusive");
+      expect(renderPretty(summary, process.cwd())).toContain(
+        "exited with code 7",
+      );
+      expect(summary.skippedOptional).toEqual([]);
+    },
+  );
+
+  it.runIf(process.platform !== "win32")(
+    "retains a termination signal and rejects it even when any exit code is accepted",
+    async () => {
+      const args = ["-e", 'process.kill(process.pid, "SIGTERM")'];
+      const raw = await run(process.execPath, args, { cwd: process.cwd() });
+      expect(raw.signal).toBe("SIGTERM");
+      expect(raw.spawnError).toBe(false);
+      const killed = adapter({ id: "killed", optional: true });
+      killed.buildArgs = () => ({
+        bin: process.execPath,
+        args,
+        okExitCodes: "any",
+      });
+      const summary = await execute({
+        projectRoot: process.cwd(),
+        config: config(),
+        tasks: [task(killed)],
+        fix: false,
+        scope: { profile: "test", mode: "full", files: null },
+      });
+      expect(summary.exitCode).toBe(EXIT.INTERNAL);
+      expect(summary.crashed).toEqual([
+        {
+          id: "killed",
+          stderr: "killed terminated by SIGTERM without stdout or stderr",
+        },
+      ]);
+      expect(summary.toolStatus.killed).toBe("inconclusive");
+    },
+  );
+
+  it("retains useful stdout when a crashing tool writes only whitespace to stderr", async () => {
     const summary = await execute({
       projectRoot: process.cwd(),
       config: config(),
-      tasks: [task(adapter({ id: "crashy", crash: true }))],
+      tasks: [
+        task(
+          adapter({
+            id: "whitespace-stderr",
+            argsFor: () => [
+              "-e",
+              'process.stderr.write("\\n"); process.stdout.write("actionable error"); process.exit(7)',
+            ],
+          }),
+        ),
+      ],
       fix: false,
       scope: { profile: "test", mode: "full", files: null },
     });
-
     expect(summary.exitCode).toBe(EXIT.INTERNAL);
-    expect(summary.crashed[0]?.id).toBe("crashy");
+    expect(summary.crashed).toEqual([
+      { id: "whitespace-stderr", stderr: "actionable error" },
+    ]);
   });
 
   it("classifies execution-time spawn failures as incomplete coverage", async () => {
@@ -383,6 +451,25 @@ describe("runner", () => {
     // crash-classifiable failure instead.
     expect(raw.spawnError).toBe(false);
     expect(raw.exitCode).not.toBe(0);
+    expect(raw.errorCode).toEqual(expect.any(String));
+
+    const oversized = adapter({ id: "oversized", optional: true });
+    oversized.buildArgs = () => ({
+      bin: process.execPath,
+      args: ["-e", "0", "x".repeat(3 * 1024 * 1024)],
+      okExitCodes: "any",
+    });
+    const summary = await execute({
+      projectRoot: process.cwd(),
+      config: config(),
+      tasks: [task(oversized)],
+      fix: false,
+      scope: { profile: "test", mode: "full", files: null },
+    });
+    expect(summary.exitCode).toBe(EXIT.INTERNAL);
+    expect(summary.crashed[0]?.stderr).toContain(raw.errorCode);
+    expect(summary.toolStatus.oversized).toBe("inconclusive");
+    expect(summary.skippedOptional).toEqual([]);
   });
 
   it.runIf(process.platform === "win32")(

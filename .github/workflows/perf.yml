@@ -29,6 +29,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: grafana/setup-k6-action@db07bd9765aac508ef18982e52ab937fe633a065 # v1.2.1
         with:
-          k6-version: v2.0.0 # mirror mise.toml k6 = 2.0.0
+          k6-version: 2.0.0
       - name: k6 smoke
         run: pnpm run workflow:perf-local

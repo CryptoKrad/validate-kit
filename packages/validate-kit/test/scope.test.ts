@@ -1,5 +1,14 @@
+import "./isolated-git.js";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +18,7 @@ import { oxlint } from "../src/adapters/oxlint.js";
 import { ConfigError } from "../src/config/schema.js";
 import { parseConcurrency } from "../src/commands/check.js";
 import { buildPlan, FILE_ARG_CHUNK } from "../src/core/plan.js";
+import { run } from "../src/core/exec.js";
 import type { ResolvedConfig } from "../src/core/types.js";
 import { LANGUAGES } from "../src/core/types.js";
 import { changedFiles } from "../src/detect/git.js";
@@ -58,6 +68,59 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
 
 describe("scope and profile planning", () => {
+  it("blocks a new-remote push even when tracking refs show no changed files", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "validate-kit-push-"));
+    git(root, "init", "--bare", "first.git");
+    git(root, "init", "--bare", "second.git");
+    const project = resolve(root, "project");
+    mkdirSync(resolve(project, "scripts"), { recursive: true });
+    git(project, "init", "-q", "-b", "main");
+    cpSync(resolve(repoRoot, "lefthook.yml"), resolve(project, "lefthook.yml"));
+    if (existsSync(resolve(repoRoot, ".lefthook")))
+      cpSync(resolve(repoRoot, ".lefthook"), resolve(project, ".lefthook"), {
+        recursive: true,
+      });
+    writeFileSync(
+      resolve(project, "scripts", "verify-clean.sh"),
+      '#!/bin/sh\nprintf "%s\\n" "$1" > .git/preflight-args\ncat > .git/push-stdin\nexit 17\n',
+      { mode: 0o755 },
+    );
+    git(project, "add", ".");
+    git(project, "commit", "-qm", "fixture");
+    git(project, "remote", "add", "origin", resolve(root, "first.git"));
+    git(project, "push", "-qu", "origin", "main");
+    // A relocated clone keeps origin/main at HEAD although the new remote
+    // has never seen it. A commit gate must use Git's pushed refs on stdin.
+    git(project, "remote", "set-url", "origin", resolve(root, "second.git"));
+    execFileSync(
+      process.execPath,
+      [
+        resolve(repoRoot, "node_modules/lefthook/bin/index.js"),
+        "install",
+        "pre-push",
+      ],
+      { cwd: project, stdio: "pipe" },
+    );
+
+    const pushed = await run("git", ["push", "origin", "main"], {
+      cwd: project,
+      timeoutMs: 15_000,
+    });
+
+    expect(pushed.spawnError).toBe(false);
+    expect(pushed.exitCode).not.toBe(0);
+    expect(readFileSync(resolve(project, ".git/preflight-args"), "utf8")).toBe(
+      "--pushed\n",
+    );
+    const sha = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: project,
+      encoding: "utf8",
+    }).trim();
+    expect(readFileSync(resolve(project, ".git/push-stdin"), "utf8")).toBe(
+      `refs/heads/main ${sha} refs/heads/main ${"0".repeat(40)}\n`,
+    );
+  });
+
   it("applies ignore globs during language detection", async () => {
     const detection = await detectLanguages(repoRoot, {
       // The repo's own ignores (validate.config.ts) for fixtures and records.
@@ -75,6 +138,83 @@ describe("scope and profile planning", () => {
     expect(detection.has("rust")).toBe(false);
     expect(detection.has("go")).toBe(false);
     expect(detection.has("python")).toBe(false);
+  });
+
+  it.each(["js", "ts"])(
+    "keeps ESLint in each package when include names only its %s source directory",
+    async (extension) => {
+      const root = mkdtempSync(resolve(tmpdir(), "validate-kit-eslint-scope-"));
+      writeFileSync(resolve(root, "package.json"), '{"private":true}\n');
+      for (const app of ["frontend", "storefront", "outside"]) {
+        mkdirSync(resolve(root, app, "src"), { recursive: true });
+        writeFileSync(resolve(root, app, "package.json"), "{}\n");
+        writeFileSync(
+          resolve(root, app, "eslint.config.mjs"),
+          "export default [];\n",
+        );
+        writeFileSync(
+          resolve(root, app, "src", `index.${extension}`),
+          "export {};\n",
+        );
+        writeFileSync(
+          resolve(root, app, "src", `ignored.${extension}`),
+          "export {};\n",
+        );
+        writeFileSync(
+          resolve(root, app, `outside.${extension}`),
+          "export {};\n",
+        );
+      }
+      writeFileSync(
+        resolve(root, "validate.config.json"),
+        JSON.stringify({
+          include: ["frontend/src", "storefront/src"],
+          ignore: ["**/ignored.*"],
+        }),
+      );
+
+      const planned = await planCheck({ cwd: root, onlyTools: ["eslint"] });
+
+      expect(planned.tasks.map(({ cwd, files }) => ({ cwd, files }))).toEqual(
+        ["frontend", "storefront"].map((app) => ({
+          cwd: toPosix(resolve(root, app)),
+          files: [toPosix(resolve(root, app, "src", `index.${extension}`))],
+        })),
+      );
+    },
+  );
+
+  it("discovers TypeScript project context outside include without adding it to scope", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "validate-kit-ts-scope-"));
+    mkdirSync(resolve(root, "app", "src"), { recursive: true });
+    const config = toPosix(resolve(root, "app", "tsconfig.json"));
+    const source = toPosix(resolve(root, "app", "src", "index.ts"));
+    writeFileSync(config, "{}\n");
+    writeFileSync(source, "export {};\n");
+    const scope = { include: ["app/src"] };
+
+    const detection = await detectLanguages(root, scope);
+
+    expect(detection.get("ts")?.roots).toEqual([toPosix(resolve(root, "app"))]);
+    expect(detection.get("ts")?.markerFiles).toEqual([config]);
+    expect(await listScopedFiles(root, scope)).toEqual([source]);
+  });
+
+  it("does not discover package context above the validation root", async () => {
+    const outside = mkdtempSync(
+      resolve(tmpdir(), "validate-kit-context-boundary-"),
+    );
+    const root = resolve(outside, "project");
+    mkdirSync(resolve(root, "src"), { recursive: true });
+    writeFileSync(resolve(outside, "package.json"), "{}\n");
+    writeFileSync(resolve(root, "src", "index.js"), "export {};\n");
+
+    const detection = await detectLanguages(root, { include: ["src"] });
+
+    expect(detection.get("js")).toMatchObject({
+      roots: [toPosix(root)],
+      markerFiles: [],
+    });
   });
 
   it("fixtures profile scopes to intentional failure fixtures", async () => {
@@ -231,7 +371,11 @@ describe("scope and profile planning", () => {
     writeFileSync(resolve(outside, "escaped.ts"), "export const x = 1;\n");
     const root = mkdtempSync(resolve(tmpdir(), "validate-kit-symlink-"));
     writeFileSync(resolve(root, "inside.ts"), "export const y = 1;\n");
-    symlinkSync(outside, resolve(root, "linked"), "dir");
+    symlinkSync(
+      outside,
+      resolve(root, "linked"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
 
     const files = await listScopedFiles(root);
     expect(files.some((f) => f.endsWith("inside.ts"))).toBe(true);

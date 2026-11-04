@@ -71,13 +71,26 @@ jobs:
           python-version: "3.12"
       - name: Install semgrep (pinned, same as security.yml and mise.toml)
         env:
-          SEMGREP_VERSION: "1.163.0"
+          SEMGREP_VERSION: "1.183.0"
         run: python -m pip install "semgrep==${SEMGREP_VERSION}"
       # The gate also runs zizmor (.github/zizmor.yml) and typos (_typos.toml),
       # the versions this machine runs.
       - name: Install zizmor and typos (pinned)
         # zizmor: ignore[adhoc-packages] an exact version, as the lockfile would pin it
-        run: python -m pip install "zizmor==1.30.1" "typos==1.51.1"
+        run: python -m pip install "zizmor==1.32.0" "typos==1.51.1"
+      - name: Install check-jsonschema (pinned; renovate.json is here)
+        run: python -m pip install "check-jsonschema==0.39.0"
+      - name: Install shfmt (pinned; validate.config.ts enables it for this repo)
+        run: go install mvdan.cc/sh/v3/cmd/shfmt@v3.14.1
+      # validate.config.ts enables agnix here. The release binary, checksum-pinned
+      # (the digest is the one published beside the asset, recomputed on download
+      # on 2026-11-04); ~/.local/bin is on PATH from the TLC step.
+      - name: Install agnix 0.60.3 (checksum-pinned)
+        run: |
+          curl -fsSL -o /tmp/agnix.tar.gz https://github.com/agent-sh/agnix/releases/download/v0.60.3/agnix-x86_64-unknown-linux-gnu.tar.gz
+          echo "1b77da21721cb0c65a6013c9947c6b8da780673f82e1d082e16906f5497019ae  /tmp/agnix.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/agnix.tar.gz -C "$HOME/.local/bin" agnix
+          chmod +x "$HOME/.local/bin/agnix"
       - name: Doctor (every tool the strict gate plans is installed)
         run: pnpm exec check doctor --profile ci
       - name: ast-grep rule snapshot tests

@@ -9,13 +9,13 @@ import type {
   ToolAdapter,
   ToolContext,
 } from "../core/types.js";
+import { isTestFile } from "../detect/languages.js";
 import { escapeRegex, findingsArray, scratchOf } from "./base.js";
 import {
   configIn,
   excerpt,
   failureLine,
   formatChanged,
-  isTestFile,
   type MutantKind,
   type MutationTask,
   MUTATION_TOOL,

@@ -1,4 +1,12 @@
-import { existsSync, readFileSync, realpathSync, renameSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+} from "node:fs";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import pc from "picocolors";
 import { parse as parseToml } from "smol-toml";
@@ -50,6 +58,29 @@ const CONFIG_NAMES = [".yml", ".yaml", ".json", ".jsonc", ".toml"].flatMap(
 
 // Absolute, so a hook run from a linked worktree finds the folder git uses.
 const HOOKS_DIR = "$(git rev-parse --path-format=absolute --git-path hooks)";
+const PUSH_SCRIPT = "validate-kit-preflight.sh";
+const OLD_PUSH_SCRIPT = "validate-kit-existing.sh";
+const PUSH_RC = ".lefthook/validate-kit-rc.sh";
+const PUSH_RC_BODY = `#!/bin/sh
+# Written by validate-kit init. Sourced by Git's hook before lefthook starts.
+VALIDATE_KIT_PUSH_ARG1=\${1-}
+VALIDATE_KIT_PUSH_ARG2=\${2-}
+VALIDATE_KIT_PUSH_ARGS=1
+export VALIDATE_KIT_PUSH_ARG1 VALIDATE_KIT_PUSH_ARG2 VALIDATE_KIT_PUSH_ARGS
+`;
+const PUSH_SCRIPTS: Record<string, string> = {
+  [PUSH_SCRIPT]: '#!/bin/sh\n# Written by validate-kit init.\nexec "$@"\n',
+  [OLD_PUSH_SCRIPT]: `#!/bin/sh
+# Written by validate-kit init.
+old="${HOOKS_DIR}/pre-push.old"
+[ -x "$old" ] || exit 0
+if [ "\${VALIDATE_KIT_PUSH_ARGS-}" != 1 ]; then
+  echo 'Missing Git hook arguments: run lefthook install pre-push, then retry.' >&2
+  exit 2
+fi
+exec "$old" "$VALIDATE_KIT_PUSH_ARG1" "$VALIDATE_KIT_PUSH_ARG2"
+`,
+};
 
 const TOP = `# Written by validate-kit init.
 assert_lefthook_installed: true
@@ -82,34 +113,49 @@ output:
 /**
  * The hook init moved aside, run first in every clone that has one. A
  * pre-push hook gets git's two arguments and the pushed refs on stdin.
- * lefthook pastes `{N}` into the command as it is, so a remote path with a
- * space needs the quotes (lefthook-existing-hooks.md, 2).
+ * Git's hook captures the arguments through lefthook's rc before the job
+ * shell starts: raw `{N}` substitution loses quoting, especially on Windows.
  */
-function oldJob(hook: Hook): string {
+function oldJob(hook: Hook, scripts = true): string {
   const old = `${HOOKS_DIR}/${hook}.old`;
   const push = hook === "pre-push";
   return `    - name: existing ${hook} hook
       # The ${hook} hook this clone had before validate-kit init, kept as
       # ${hook}.old in the git hooks folder. Clones without it skip this job.
-      run: '"${old}"${push ? ' "{1}" "{2}"' : ""}'
-${push ? "      use_stdin: true\n" : ""}      only:
-        - run: 'test -x "${old}"'
-`;
+${push && scripts ? `      script: ${OLD_PUSH_SCRIPT}\n      runner: sh\n      args: --` : `      run: '"${old}"${push ? ' "{1}" "{2}"' : ""}'`}
+${push ? "      use_stdin: true\n" : ""}${push && scripts ? "" : `      only:\n        - run: 'test -x "${old}"'\n`}`;
 }
 
-const kitJob = (hook: Hook, kit: string, root?: string): string =>
+const kitJob = (
+  hook: Hook,
+  kit: string,
+  root?: string,
+  scripts = true,
+): string =>
   `    - name: ${hook === "pre-commit" ? "validate" : "preflight"}
-${root ? `      root: ${root}\n` : ""}      run: ${kit} ${COMMANDS[hook]}
+${root ? `      root: ${root}\n` : ""}${hook === "pre-push" && scripts ? `      script: ${PUSH_SCRIPT}\n      runner: sh\n      args:` : "      run:"} ${kit} ${COMMANDS[hook]}
 `;
 
-const section = (hook: Hook, kit: string, keepOld: boolean): string =>
-  `\n${hook}:\n  parallel: false\n  jobs:\n${keepOld ? oldJob(hook) : ""}${kitJob(hook, kit)}`;
+const section = (
+  hook: Hook,
+  kit: string,
+  keepOld: boolean,
+  scripts = true,
+): string =>
+  `\n${hook}:\n  parallel: false\n  jobs:\n${keepOld ? oldJob(hook, scripts) : ""}${kitJob(hook, kit, undefined, scripts)}`;
 
 /** `kept`: the hooks whose moved-aside hook the config runs first. */
-const initConfig = (kit: string, kept: readonly Hook[] = []): string =>
+const initConfig = (
+  kit: string,
+  kept: readonly Hook[] = [],
+  scripts = true,
+): string =>
   TOP +
+  (scripts && kept.includes("pre-push") ? `rc: ${PUSH_RC}\n` : "") +
   OUTPUT +
-  HOOKS.map((hook) => section(hook, kit, kept.includes(hook))).join("");
+  HOOKS.map((hook) => section(hook, kit, kept.includes(hook), scripts)).join(
+    "",
+  );
 
 /** What init wrote before 0.2.2. */
 const legacyConfig = (kit: string): string => `pre-commit:
@@ -121,7 +167,7 @@ const legacyConfig = (kit: string): string => `pre-commit:
 
 /** A config text with the kit's path taken out of its commands. */
 const canonical = (text: string): string =>
-  text.replace(/^(\s*run: )\S*\/(validate-kit )/gm, "$1$2");
+  text.replace(/^(\s*(?:run|args): )\S*\/(validate-kit )/gm, "$1$2");
 
 /** A config as init wrote it before `--quiet`: no output block. */
 const loud = (text: string): string =>
@@ -134,8 +180,8 @@ const loud = (text: string): string =>
  */
 function isInitConfig(text: string): boolean {
   const kit = "validate-kit";
-  const current = ([[], ["pre-commit"], ["pre-push"], HOOKS] as const).map(
-    (kept) => initConfig(kit, kept),
+  const current = ([[], ["pre-commit"], ["pre-push"], HOOKS] as const).flatMap(
+    (kept) => [initConfig(kit, kept), initConfig(kit, kept, false)],
   );
   return [
     ...current,
@@ -158,23 +204,47 @@ const RUNS: Record<Hook, RegExp> = {
 };
 
 /**
- * The `run` commands a lefthook config gives `hook`, so a job under another
- * hook does not count; the whole text when the config does not parse.
+ * Recognized jobs under this hook. Pre-push run commands cannot count:
+ * lefthook can skip them when its inferred push-file list is empty.
  */
-function hookRuns(text: string, path: string, hook: Hook): string[] {
+function hookRuns(
+  root: string,
+  text: string,
+  path: string,
+  hook: Hook,
+): string[] {
   let config: unknown;
   try {
     config = path.endsWith(".toml") ? parseToml(text) : parseYaml(text);
   } catch {
-    return [text];
+    return hook === "pre-push" ? [] : [text];
   }
   const runs: string[] = [];
   const walk = (node: unknown): void => {
     if (Array.isArray(node)) for (const item of node) walk(item);
     else if (node && typeof node === "object")
       for (const [key, value] of Object.entries(node))
-        if (key === "run" && typeof value === "string") runs.push(value);
-        else walk(value);
+        if (key === "run" && typeof value === "string" && hook !== "pre-push")
+          runs.push(value);
+        else if (
+          key === "script" &&
+          hook === "pre-push" &&
+          typeof value === "string" &&
+          Object.hasOwn(PUSH_SCRIPTS, value)
+        ) {
+          const script = join(root, ".lefthook", "pre-push", value);
+          const stat = lstatSync(script, { throwIfNoEntry: false });
+          if (
+            stat?.isFile() &&
+            readFileSync(script, "utf8") === PUSH_SCRIPTS[value]
+          ) {
+            if (value === OLD_PUSH_SCRIPT) runs.push(PUSH_SCRIPTS[value] ?? "");
+            else {
+              const args = (node as { args?: unknown }).args;
+              if (typeof args === "string") runs.push(args);
+            }
+          }
+        } else walk(value);
   };
   walk((config as Record<string, unknown> | null)?.[hook]);
   return runs;
@@ -228,6 +298,78 @@ function printJobs(
       )
       .join(""),
   );
+  if (hooks.includes("pre-push")) {
+    refuse(
+      "Pre-push checks must use script jobs: lefthook can skip run jobs when its inferred push-file list is empty. Keep custom jobs and merge these scripts explicitly:",
+    );
+    for (const name of [
+      PUSH_SCRIPT,
+      ...(kept.includes("pre-push") ? [OLD_PUSH_SCRIPT] : []),
+    ])
+      process.stderr.write(
+        `.lefthook/pre-push/${name}:\n${PUSH_SCRIPTS[name]}`,
+      );
+    if (kept.includes("pre-push")) {
+      refuse(
+        `Also source ${PUSH_RC} from Git's pre-push hook before lefthook starts. With lefthook's generated hook, add top-level \`rc: ${PUSH_RC}\` and run \`lefthook install pre-push\`; merge an existing rc explicitly.`,
+      );
+      process.stderr.write(`${PUSH_RC}:\n${PUSH_RC_BODY}`);
+    }
+  }
+}
+
+/** Own only the exact scripts init writes; reject collisions before any writes. */
+function writePushScripts(
+  root: string,
+  kept: readonly Hook[],
+  out: Writer,
+): boolean {
+  const dirs = [join(root, ".lefthook"), join(root, ".lefthook", "pre-push")];
+  const scripts = [
+    [
+      join(root, ".lefthook", "pre-push", PUSH_SCRIPT),
+      PUSH_SCRIPTS[PUSH_SCRIPT],
+    ],
+    ...(kept.includes("pre-push")
+      ? [
+          [
+            join(root, ".lefthook", "pre-push", OLD_PUSH_SCRIPT),
+            PUSH_SCRIPTS[OLD_PUSH_SCRIPT],
+          ],
+          [join(root, PUSH_RC), PUSH_RC_BODY],
+        ]
+      : []),
+  ] as [string, string][];
+  for (const dir of dirs) {
+    const stat = lstatSync(dir, { throwIfNoEntry: false });
+    if (stat && !stat.isDirectory()) {
+      refuse(
+        `${dir} is not a regular directory: no hook files changed. Move or merge it explicitly, then run init again`,
+      );
+      return false;
+    }
+  }
+  for (const [path, body] of scripts) {
+    const stat = lstatSync(path, { throwIfNoEntry: false });
+    if (stat && (!stat.isFile() || readFileSync(path, "utf8") !== body)) {
+      refuse(
+        `${path} was not written by init or was edited: no hook files changed. Move or merge it explicitly, then run init again`,
+      );
+      return false;
+    }
+  }
+  for (const [path, body] of scripts) {
+    if (existsSync(path)) continue;
+    if (!out.dryRun)
+      mkdirSync(join(root, ".lefthook", "pre-push"), { recursive: true });
+    out.write(
+      path,
+      body,
+      "pre-push script; commit this file with lefthook.yml",
+    );
+    if (!out.dryRun) chmodSync(path, 0o755);
+  }
+  return true;
 }
 
 interface HookState {
@@ -240,6 +382,16 @@ interface HookState {
   hasOld: boolean;
   /** Present and not lefthook's: the user's own. */
   custom: boolean;
+}
+
+/** Routed old pre-push jobs need Git's argument capture in every hooks folder. */
+function missingPushCapture(state: HookState): boolean {
+  return (
+    state.hook === "pre-push" &&
+    state.routed &&
+    state.hasOld &&
+    !readFileSync(state.path, "utf8").includes(`. ${PUSH_RC}`)
+  );
 }
 
 /**
@@ -279,7 +431,8 @@ export async function scaffoldHook(
   const configText = config ? readFileSync(config, "utf8") : undefined;
   const ours = configText === undefined || isInitConfig(configText);
   const target = config ?? join(root, "lefthook.yml");
-  const writeConfig = (kept: readonly Hook[] = []): void => {
+  const writeConfig = (kept: readonly Hook[] = []): boolean => {
+    if (!writePushScripts(root, kept, out)) return false;
     const text = initConfig(kit, kept);
     if (configText !== text)
       out.write(
@@ -290,11 +443,12 @@ export async function scaffoldHook(
             `${hook}: ${kept.includes(hook) ? "the existing hook, then " : ""}${COMMANDS[hook]}`,
         ).join("; "),
       );
+    return true;
   };
 
   const top = await git(root, ["rev-parse", "--show-toplevel"]);
   if (top === undefined) {
-    if (ours) writeConfig();
+    if (ours && !writeConfig()) return EXIT.CONFIG;
     say(
       pc.dim(
         "Not a git repository: no hook installed; run init again after `git init`",
@@ -350,7 +504,7 @@ export async function scaffoldHook(
   // is installed there runs for every repository, or is tracked.
   if (real(hooks) !== real(ownHooks)) {
     const where = `Hooks folder: ${hooks} (core.hooksPath=${setting}, ${local ? "local" : "global"})`;
-    if (ours) writeConfig();
+    if (ours && !writeConfig()) return EXIT.CONFIG;
     for (const hook of HOOKS) {
       const ignored = join(ownHooks, hook);
       if (existsSync(ignored))
@@ -363,11 +517,24 @@ export async function scaffoldHook(
       ? []
       : HOOKS.filter(
           (hook) =>
-            !hookRuns(configText, target, hook).some((line) =>
+            !hookRuns(root, configText, target, hook).some((line) =>
               RUNS[hook].test(line),
             ),
         );
-    if (unrouted.length === 0 && missing.length === 0) {
+    const uncaptured = ours
+      ? []
+      : states.filter(
+          (state) =>
+            missingPushCapture(state) &&
+            hookRuns(root, configText, target, state.hook).some((line) =>
+              line.includes(`${state.hook}.old`),
+            ),
+        );
+    if (
+      unrouted.length === 0 &&
+      missing.length === 0 &&
+      uncaptured.length === 0
+    ) {
       say(where);
       say(
         `pre-commit and pre-push run through ${hooks}, where both call lefthook: nothing installed`,
@@ -375,6 +542,10 @@ export async function scaffoldHook(
       return undefined;
     }
     refuse(where);
+    for (const state of uncaptured)
+      refuse(
+        `${state.path} must source ${PUSH_RC} before calling lefthook to preserve Git's arguments; merge the rc into this external wrapper explicitly. Its config and hooks are unchanged`,
+      );
     if (unrouted.length > 0) {
       const tracked =
         local && (await git(root, ["ls-files", "--", local]))
@@ -415,7 +586,7 @@ export async function scaffoldHook(
     const kept: Hook[] = [];
     for (const state of states) {
       const { hook, path, old } = state;
-      const lines = hookRuns(configText, target, hook);
+      const lines = hookRuns(root, configText, target, hook);
       const keepsOld = lines.some((line) => line.includes(`${hook}.old`));
       const runs = lines.some((line) => RUNS[hook].test(line));
       if (!runs)
@@ -430,6 +601,10 @@ export async function scaffoldHook(
         );
       else if (state.hasOld && !keepsOld)
         problems.push(`${old} is run by nothing`);
+      else if (missingPushCapture(state))
+        problems.push(
+          `${path} must source ${PUSH_RC} before calling lefthook to preserve Git's arguments; merge the rc into your wrapper or run \`lefthook install pre-push\` for lefthook's generated hook`,
+        );
       else if (!state.present)
         problems.push(`No ${hook} hook is installed: run \`lefthook install\``);
       const keepOld = !keepsOld && (state.hasOld || state.custom);
@@ -476,9 +651,19 @@ export async function scaffoldHook(
   // too: lefthook also runs `git lfs pre-push` where git-lfs is installed,
   // and the second run finds nothing left to upload, but only the carried
   // hook still stops a push where git-lfs is missing.
-  writeConfig(
-    states.filter((state) => state.custom || state.hasOld).map((s) => s.hook),
-  );
+  if (
+    !writeConfig(
+      states.filter((state) => state.custom || state.hasOld).map((s) => s.hook),
+    )
+  )
+    return EXIT.CONFIG;
+  const push = states.find(missingPushCapture);
+  if (push) {
+    refuse(
+      `${push.path} must source ${PUSH_RC} before calling lefthook to preserve Git's arguments. The config and scripts are ready; the existing hook is unchanged. For lefthook's generated hook run \`lefthook install pre-push\`, or add the source line to your custom wrapper, then run init again`,
+    );
+    return EXIT.CONFIG;
+  }
   if (states.every((state) => state.routed)) {
     say(
       `pre-commit and pre-push already call lefthook, which reads ${target}: nothing installed`,

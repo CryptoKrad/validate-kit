@@ -9,6 +9,9 @@ brew "golangci-lint"
 brew "gofumpt"
 brew "semgrep"
 brew "shellcheck"
+brew "shfmt"         # shell format, where tools.shfmt.enabled is (this repo)
+brew "editorconfig-checker"  # .editorconfig, where its config is
+brew "cargo-shear"   # unused Cargo deps and orphan .rs files, where [package.metadata.cargo-shear] is
 brew "gitleaks"
 brew "mypy"          # where a project configures it
 brew "cargo-deny"    # where a crate has deny.toml
@@ -22,6 +25,7 @@ brew "go-gremlins/tap/gremlins"  # Go mutation, where a module has .gremlins.yam
 brew "zizmor"         # GitHub Actions security, where a zizmor.yml is (this repo: .github/zizmor.yml)
 brew "typos-cli"      # misspellings, where a typos config is (this repo: _typos.toml)
 # uv tool install deptry           (Python imports vs declared deps; or the project's dev dep)
+# uv tool install check-jsonschema==0.39.0  (Renovate, Dependabot, Compose, CI configs against their schemas, offline)
 # cargo install --locked cargo-machete  (unused Rust deps, where [package.metadata.cargo-machete] is)
 # uv tool install import-linter==2.15   (Python import contracts, where [tool.importlinter] is)
 # On demand, never in a hook (docs/research/agent-tooling-gaps/on-demand-tools.md):
@@ -68,6 +72,7 @@ brew "rubocop"             # Ruby, where .rubocop.yml is
 brew "elixir"              # mix format and credo (erlang: /opt/homebrew/opt/erlang/bin)
 brew "swiftlint"           # Swift, where .swiftlint.yml is
 brew "swift-format"        # Swift, where .swift-format is
+brew "periphery"           # Swift declarations nothing uses, where a Package.swift is (ci profile)
 tap "dart-lang/dart"
 brew "dart-lang/dart/dart" # dart format and analyze
 brew "stylua"              # Lua format, where stylua.toml is
@@ -81,10 +86,13 @@ brew "buildifier"          # Bazel BUILD and .bzl files
 brew "stylelint"           # CSS, where a stylelint config is
 brew "solhint"             # Solidity, where .solhint.json is
 brew "foundry"             # forge fmt for Solidity
-# cargo install --locked cargo-semver-checks deadnix
+# cargo install --locked cargo-semver-checks deadnix agnix-cli  (agnix: agent files; its tap is untrusted, its npm package downloads a binary)
 # GOTOOLCHAIN=auto go install github.com/google/capslock/cmd/capslock@v0.3.4
 # go install golang.org/x/exp/cmd/gorelease@latest github.com/fe3dback/go-arch-lint@v1.19.0
 # uv tool install crosshair-tool==0.0.111 ; gem install --user-install brakeman
+# mix escript.install hex sobelow            (Phoenix security, where mix.exs lists it)
+# dotnet tool install -g dotnet-stryker      (C# mutation, where a stryker-config.json is; ci profile)
+# composer require --dev shipmonk/composer-dependency-analyser infection/infection  (per PHP project; Infection needs `pecl install pcov`)
 brew "uv"            # Python toolchain manager
 brew "go"
 brew "rust"          # or rustup; provides cargo/clippy/rustfmt

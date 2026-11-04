@@ -22,11 +22,30 @@ const opts = {
 
 const doc = {
   openapi: "3.0.3",
-  info: { title: "Users API", version: "1.0.0" },
+  info: {
+    title: "Users API",
+    version: "1.0.0",
+    description:
+      "The users list and the login that mints a session token, as the Zod contracts in packages/contracts define them.",
+    contact: {
+      name: "validate-kit monorepo",
+      url: "https://github.com/CryptoKrad/validate-kit",
+    },
+  },
+  servers: [
+    { url: "http://localhost:3001", description: "The API in development" },
+  ],
+  tags: [
+    { name: "users", description: "The user list" },
+    { name: "auth", description: "Sessions" },
+  ],
   paths: {
     "/users": {
       get: {
+        operationId: "listUsers",
         summary: "List users",
+        description: "Every user, as the contract's UsersSchema shapes them.",
+        tags: ["users"],
         responses: {
           "200": {
             description: "The user list",
@@ -41,7 +60,11 @@ const doc = {
     },
     "/login": {
       post: {
+        operationId: "login",
         summary: "Authenticate and mint a session token",
+        description:
+          "Checks the credentials in the body and returns a session token.",
+        tags: ["auth"],
         requestBody: {
           required: true,
           content: {

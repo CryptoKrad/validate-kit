@@ -82,10 +82,33 @@ nothing (a same-file helper that asserts counts). Where a project configured the
 (it needs the project's `typescript` below 7; a run that read no TypeScript
 file is a crash, not a pass) and import-linter (import rules), and, when enabled, lizard (a complexity
 ratchet with the baseline) and diff-cover (changed lines no test runs).
+knip and dependency-cruiser also run in each package below the root that has
+its own config beside a `package.json` (a `frontend/` with its own
+`knip.json`), in that folder with its own install; the root's run leaves that
+package's files to it.
+
+## Claude Code: send an agent back on its own findings
+
+`check init` also registers `validate-kit hook claude` in
+`.claude/settings.json` for Claude Code's `UserPromptSubmit`, `Stop`,
+`SubagentStart` and `SubagentStop` events (merge-safe; `--no-claude` leaves
+it out). When an agent or subagent ends its turn, the fast tier runs on the
+changed files of the work tree it is in (a subagent's own worktree when it
+has one). It is silent when the agent changed nothing since its start (the
+user's prompt, for the main agent) or its changes leave no finding of its
+own. Otherwise it exits 2, which hands the agent every finding: its own
+first, then those in files changed before it started (another agent's or the
+user's), which it is told to leave. A finding in a file nobody changed counts
+as its own (a changed signature breaks the callers), and so does a deletion.
+On the retry Claude Code lets it stop, so it is sent back once. Explore and
+Plan cannot edit and are never judged. A JS package that declares
+dependencies and has no `node_modules` up to the work tree's top says so
+instead of passing unchecked. Two agents writing one file at once cannot be
+told apart: each sees the other's edits there as its own.
 
 ## Tools
 
-125 tools. Each is silent when it passes, and a missing one is skipped with a
+142 tools. Each is silent when it passes, and a missing one is skipped with a
 note, or leaves the run incomplete (exit 3) under `--profile ci`. Most run
 only where the project chose them: its config file, a dependency that names
 the tool, a task or CI step that runs it, or `tools.<id>.enabled`. `check
@@ -94,22 +117,23 @@ doctor` which this machine can run. `tools.<id>.enabled: false` turns one off.
 
 | Area                   | Tools                                                                                                                       |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| JS and TS              | prettier, Biome, oxlint, ESLint, tsc, knip, jscpd, dependency-cruiser, size-limit, publint, attw, Stryker                   |
-| Python                 | ruff, ruff format, mypy, basedpyright, ty, deptry, import-linter, vulture, CrossHair, mutmut                                |
-| Rust                   | rustfmt, clippy, cargo-deny, cargo-machete, cargo-hack, cargo-semver-checks, Kani, Miri, cargo-mutants                      |
-| Go                     | gofmt, gofumpt, golangci-lint, deadcode, nilaway, go-race, govulncheck, capslock, gorelease, go-arch-lint, gremlins         |
+| JS and TS              | prettier, Biome, oxlint, ESLint, tsc, knip, jscpd, dependency-cruiser, size-limit, publint, attw, Stryker, sherif           |
+| Python                 | ruff, ruff format, mypy, basedpyright, ty, deptry, import-linter, vulture, CrossHair, mutmut, uv lock --check               |
+| Rust                   | rustfmt, clippy, cargo-deny, cargo-machete, cargo-shear, cargo-hack, cargo-semver-checks, Kani, Miri, cargo-mutants         |
+| Go                     | gofmt, gofumpt, golangci-lint, go mod tidy, deadcode, nilaway, go-race, govulncheck, capslock, gorelease, go-arch-lint, gremlins |
 | C, C++, Zig            | clang-format, clang-tidy, cppcheck, zig fmt, zig ast-check                                                                  |
-| Java, Kotlin, Scala    | google-java-format, PMD, ktlint, detekt, scalafmt                                                                           |
-| C#, Ruby, PHP, Elixir  | dotnet format, dotnet build, CSharpier, RuboCop, Brakeman, PHPStan, php-cs-fixer, Pint, mix format, Credo                   |
-| Swift, Dart, Lua       | swift-format, SwiftLint, dart format, dart analyze, StyLua, selene                                                          |
+| Java, Kotlin, Scala    | google-java-format, PMD, Error Prone (the project's Maven compile), ktlint, detekt, scalafmt                                 |
+| C#, Ruby, PHP, Elixir  | dotnet format, dotnet build, CSharpier, Stryker.NET, RuboCop, Brakeman, PHPStan, php-cs-fixer, Pint, composer-dependency-analyser, Infection, mix format, Credo, sobelow |
+| Swift, Dart, Lua       | swift-format, SwiftLint, periphery, dart format, dart analyze, StyLua, selene                                               |
 | Haskell, OCaml, Nix    | hlint, ormolu, ocamlformat, nixfmt, statix, deadnix                                                                         |
 | Bazel, Terraform       | buildifier, tofu fmt, tflint, trivy                                                                                         |
-| Schemas and Kubernetes | buf (lint, format, breaking), sqruff, sqlc (vet, diff), squawk, graphql-inspector, oasdiff, kubeconform, kube-linter, pluto |
-| Files around the code  | shellcheck, hadolint, taplo, yamllint, markdownlint-cli2, lychee (offline), ls-lint, reuse, typos, stylelint, html-validate |
-| Solidity               | forge fmt, solhint, Slither, aderyn                                                                                         |
-| Security               | Semgrep, gitleaks, zizmor, osv-scanner, cooldown, policy                                                                    |
+| Schemas and Kubernetes | buf (lint, format, breaking), sqruff, sqlc (vet, diff), squawk, graphql-inspector, oasdiff, spectral, kubeconform, kube-linter, pluto |
+| Files around the code  | shellcheck, shfmt, hadolint, taplo, yamllint, markdownlint-cli2, lychee (offline), ls-lint, reuse, typos, stylelint, html-validate, editorconfig-checker, check-jsonschema |
+| Solidity               | forge fmt, forge lint, solhint, Slither, aderyn                                                                             |
+| Security               | Semgrep, gitleaks, zizmor, actionlint, osv-scanner, cooldown, policy                                                        |
 | Formal                 | TLC, Lean, Quint                                                                                                            |
 | The kit's own          | ast-grep rules, blobs, paths, scripts, unicode, migrations, env, file-length, lizard, diff-cover                            |
+| Agent files            | agnix (CLAUDE.md, AGENTS.md, .claude/, .mcp.json, as the agent reads them)                                                 |
 
 Tiers decide when a tool runs: a fast one on every commit (`--profile dev`
 runs only those), a verify one also in a default run, and a deep one (mutation

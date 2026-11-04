@@ -8,7 +8,11 @@ valid:
   - "#[tokio::test]\n/// doc\nasync fn t() { x.unwrap(); }"
   - "#[rstest]\nfn t() { x.unwrap(); }"
   - "#[cfg(test)]\n#[allow(dead_code)]\nmod tests {\n    fn h() { x.unwrap(); }\n}"
+  - "#[cfg(test)]\nfn helper() -> u8 { \"1\".parse().unwrap() }"
+  - "#[cfg(test)]\nimpl Thing {\n    fn fixture() -> u8 { x.unwrap() }\n}"
 invalid:
+  - "#[cfg(not(test))]\nfn f() { x.unwrap(); }"
+  - "#[cfg(test)]\nfn helper() {}\n\nfn f() { x.unwrap(); }"
   - "fn f() { let x = g().unwrap(); }"
   - "fn f() { let x = g().expect(\"must exist\"); }"
   - "#[test]\nfn t() {}\n\n#[inline]\nfn f() { x.unwrap(); }"

@@ -13,6 +13,8 @@ if (!pnpmVersion) {
   process.exit(1);
 }
 
+const astGrepTool = "ast-grep@0.45.3";
+const astGrepVersion = astGrepTool.slice("ast-grep@".length);
 const miseTools = [
   "node@22",
   `pnpm@${pnpmVersion}`,
@@ -23,7 +25,7 @@ const miseTools = [
   "ruff@0.15.6",
   "golangci-lint@2.12.2",
   "gofumpt@0.10.0",
-  "ast-grep@0.45.3",
+  astGrepTool,
 ];
 
 const toolChecks = [
@@ -32,7 +34,7 @@ const toolChecks = [
     name: "pnpm",
     command: "pnpm",
     args: ["--version"],
-    expected: /^10\.23\.0$/,
+    expected: new RegExp(`^${pnpmVersion.replaceAll(".", "\\.")}$`),
   },
   {
     name: "rustc",
@@ -86,7 +88,9 @@ const toolChecks = [
     name: "ast-grep",
     command: "ast-grep",
     args: ["--version"],
-    expected: /^ast-grep 0\.43\.0\b/,
+    expected: new RegExp(
+      `^ast-grep ${astGrepVersion.replaceAll(".", "\\.")}\\b`,
+    ),
   },
 ];
 

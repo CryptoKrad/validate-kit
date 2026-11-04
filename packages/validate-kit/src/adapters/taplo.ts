@@ -15,10 +15,15 @@ import { byConfigFolder, finding, fromRealCwd, relativeFiles } from "./base.js";
 /** taplo's config names, searched upward from the folder it runs in. */
 const CONFIGS = [".taplo.toml", "taplo.toml"];
 
-/** `ERROR the file is not properly formatted path="/abs/a.toml"` */
-const UNFORMATTED = /^ERROR the file is not properly formatted path="(.+)"$/;
+/**
+ * `ERROR the file is not properly formatted path="/abs/a.toml"`. With
+ * RUST_LOG unset taplo names its tracing span first (`ERROR taplo:format_files:
+ * the file ...`); with RUST_LOG=warn or error it does not.
+ */
+const UNFORMATTED =
+  /^ERROR (?:[\w:]+: )?the file is not properly formatted path="(.+)"$/;
 /** What taplo prints after its findings: `ERROR operation failed error=...`. */
-const FAILED = /^ERROR operation failed error=(.*)$/;
+const FAILED = /^ERROR (?:[\w:]+: )?operation failed error=(.*)$/;
 /** The location line of a diagnostic's code frame: `┌─ /abs/a.toml:1:9`. */
 const FRAME = /^\s*┌─ (.+):(\d+):(\d+)$/;
 

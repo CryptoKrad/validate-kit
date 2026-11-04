@@ -22,7 +22,11 @@ pre-commit:
 # (scripts/verify-clean.sh --ci), so a push reaches CI already judged. A
 # commit that passed it once is not run again.
 pre-push:
-  commands:
-    preflight:
-      run: scripts/verify-clean.sh --pushed
+  # A script always receives Git's pushed refs. Command jobs can be skipped
+  # when Lefthook's inferred push-file list is empty (e.g. a changed remote).
+  jobs:
+    - name: preflight
+      script: preflight.sh
+      runner: sh
+      args: --pushed
       use_stdin: true

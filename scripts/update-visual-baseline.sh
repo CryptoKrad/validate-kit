@@ -10,17 +10,17 @@
 # Requires: Docker. Keep IMAGE in sync with apps/web @playwright/test version.
 set -euo pipefail
 
-IMAGE="mcr.microsoft.com/playwright:v1.61.0-noble@sha256:57b65fdc9ceabe0ef613124c7bbe2babcf9362c4d85e382fe3b03604e84b428a"
+IMAGE="mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f"
 REPO="$(git rev-parse --show-toplevel)"
 TMP="$(mktemp -d)"
 trap 'docker run --rm -v "$TMP":/t alpine:3@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b sh -c "rm -rf /t/* /t/.* 2>/dev/null || true"; rmdir "$TMP" 2>/dev/null || true' EXIT
 
 echo "==> Staging source into $TMP (excluding node_modules/.git/build output)"
 rsync -a \
-  --exclude 'node_modules' --exclude '.git' --exclude '.next' \
-  --exclude 'dist' --exclude 'target' --exclude 'test-results' \
-  --exclude 'playwright-report' --exclude 'coverage' \
-  "$REPO/" "$TMP/"
+	--exclude 'node_modules' --exclude '.git' --exclude '.next' \
+	--exclude 'dist' --exclude 'target' --exclude 'test-results' \
+	--exclude 'playwright-report' --exclude 'coverage' \
+	"$REPO/" "$TMP/"
 
 echo "==> Regenerating + verifying baseline in $IMAGE"
 docker run --rm -v "$TMP":/work -w /work -e CI= "$IMAGE" bash -lc '
@@ -36,5 +36,5 @@ docker run --rm -v "$TMP":/work -w /work -e CI= "$IMAGE" bash -lc '
 
 echo "==> Copying regenerated baseline back into the repo"
 cp "$TMP/apps/web/e2e/visual.spec.ts-snapshots/login.png" \
-   "$REPO/apps/web/e2e/visual.spec.ts-snapshots/login.png"
+	"$REPO/apps/web/e2e/visual.spec.ts-snapshots/login.png"
 echo "==> Done. Review the diff and commit apps/web/e2e/visual.spec.ts-snapshots/login.png"

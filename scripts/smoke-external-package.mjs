@@ -164,6 +164,7 @@ try {
     "validate.config.mjs",
     ".mcp.json",
     "lefthook.yml",
+    ".claude/settings.json",
   ]);
   const mcpEntry = JSON.parse(
     readFileSync(join(consumerRoot, ".mcp.json"), "utf8"),
@@ -190,6 +191,43 @@ try {
   assert(
     hookJson.findings?.some((finding) => finding.ruleId === "ts-no-console"),
     "scaffolded hook command did not report findings for the staged file",
+  );
+  // Claude Code's stop hook, run as Claude Code runs it: through a shell,
+  // with the event on stdin. A file this turn wrote with a finding sends the
+  // agent back with it; the file staged before the prompt is another's.
+  const claudeHooks = JSON.parse(
+    readFileSync(join(consumerRoot, ".claude", "settings.json"), "utf8"),
+  ).hooks;
+  const claudeCommand = claudeHooks.Stop?.[0]?.hooks?.[0]?.command;
+  assert(
+    claudeCommand === `"$CLAUDE_PROJECT_DIR"/${localBin} hook claude` &&
+      ["UserPromptSubmit", "SubagentStart", "SubagentStop"].every(
+        (event) =>
+          claudeHooks[event]?.[0]?.hooks?.[0]?.command === claudeCommand,
+      ),
+    `init scaffolded unexpected Claude Code hooks: ${JSON.stringify(claudeHooks)}`,
+  );
+  const claudeEvent = (event) =>
+    run("sh", ["-c", claudeCommand], {
+      cwd: consumerRoot,
+      input: JSON.stringify({
+        session_id: "smoke",
+        hook_event_name: event,
+        cwd: consumerRoot,
+      }),
+      env: { CLAUDE_PROJECT_DIR: consumerRoot },
+      allowedStatuses: [0, 2],
+    });
+  claudeEvent("UserPromptSubmit");
+  writeFileSync(join(consumerRoot, "src", "turn.ts"), "console.log(2);\n");
+  const claudeStop = claudeEvent("Stop");
+  rmSync(join(consumerRoot, "src", "turn.ts"));
+  assert(
+    claudeStop.status === 2 &&
+      /your changes leave these findings[^]*src\/turn\.ts[^]*leave them[^]*src\/index\.ts/.test(
+        claudeStop.stderr,
+      ),
+    `the scaffolded Claude Code hook did not send the agent back with its own finding first: ${claudeStop.status} ${claudeStop.stderr}`,
   );
 
   // A project the kit is NOT installed in, with no TS or JS, and with an
@@ -222,14 +260,39 @@ try {
     "validate.config.json",
     ".mcp.json",
     "lefthook.yml",
+    ".claude/settings.json",
   ]);
   const impostorMcp = JSON.parse(
     readFileSync(join(impostorRoot, ".mcp.json"), "utf8"),
   ).mcpServers["Tester.MCP"];
   assert(
     impostorMcp.command === "validate-kit" &&
-      scaffoldedHookRun(impostorRoot) === "validate-kit check --staged --quiet",
+      scaffoldedHookRun(impostorRoot) ===
+        "validate-kit check --staged --quiet" &&
+      JSON.parse(
+        readFileSync(join(impostorRoot, ".claude", "settings.json"), "utf8"),
+      ).hooks.Stop[0].hooks[0].command === "validate-kit hook claude",
     "init must scaffold the PATH command when the kit is not the project's own dependency",
+  );
+  // A project with a stop hook of its own keeps it, and init says the agent
+  // may now be sent back twice (Apify-reverse-engineer had a Python one).
+  const besideRoot = join(tempRoot, "claude-beside");
+  mkdirSync(join(besideRoot, ".claude"), { recursive: true });
+  writeFileSync(join(besideRoot, "main.go"), "package main\n");
+  writeFileSync(
+    join(besideRoot, ".claude", "settings.json"),
+    `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "python3 lint.py" }] }] } })}\n`,
+  );
+  const besideInit = run(installedKit, ["init", "--no-hook", "--no-mcp"], {
+    cwd: besideRoot,
+  });
+  const besideStop = JSON.parse(
+    readFileSync(join(besideRoot, ".claude", "settings.json"), "utf8"),
+  ).hooks.Stop.map((group) => group.hooks[0].command);
+  assert(
+    besideInit.stderr.includes("already runs Stop: python3 lint.py") &&
+      besideStop.join() === "python3 lint.py,validate-kit hook claude",
+    `init beside a project's own stop hook: ${besideStop.join()} ${besideInit.stderr}`,
   );
   const impostorList = parseJsonOutput(
     run(installedKit, ["list", "--json"], { cwd: impostorRoot }),
@@ -277,7 +340,9 @@ try {
   writeFileSync(join(ownJsRoot, "go.mod"), "module ownjs\n\ngo 1.22\n");
   writeFileSync(join(ownJsRoot, "build.mjs"), "export {};\n");
   const ownJsDry = run(toolsKit, ["init", "--dry-run"], { cwd: ownJsRoot });
-  run(toolsKit, ["init", "--no-hook", "--no-mcp"], { cwd: dvInitRoot });
+  run(toolsKit, ["init", "--no-hook", "--no-mcp", "--no-claude"], {
+    cwd: dvInitRoot,
+  });
   const afterSkip = dvInitEntries();
   run(toolsKit, ["init"], { cwd: dvInitRoot });
   const toolsCommand = ".tools/vk/node_modules/.bin/validate-kit";
@@ -292,7 +357,11 @@ try {
       afterSkip === ".tools,docs,frontend,go.mod,validate.config.json" &&
       dvMcp.command === toolsCommand &&
       scaffoldedHookRun(dvInitRoot) ===
-        `${toolsCommand} check --staged --quiet`,
+        `${toolsCommand} check --staged --quiet` &&
+      JSON.parse(
+        readFileSync(join(dvInitRoot, ".claude", "settings.json"), "utf8"),
+      ).hooks.Stop[0].hooks[0].command ===
+        `"$CLAUDE_PROJECT_DIR"/${toolsCommand} hook claude`,
     `DV1/DV2/DV15 init: ${JSON.stringify({ afterDry, afterSkip, dvMcp, hook: scaffoldedHookRun(dvInitRoot), dry: dvDry.stdout, ownJs: ownJsDry.stdout })}`,
   );
 
@@ -565,9 +634,13 @@ try {
     "# Written by validate-kit init.\nassert_lefthook_installed: true\nmin_version: 1.10.0\n\npre-commit:\n  parallel: false\n  jobs:\n    - name: validate\n      run: validate-kit check --staged\n";
   const loudPush =
     "\npre-push:\n  parallel: false\n  jobs:\n    - name: preflight\n      run: validate-kit check --profile ci\n";
-  const reinit = (name, text) => {
+  const reinit = (name, text, scriptSource) => {
     const result = dv21Init(name, (dir) => {
       writeFileSync(join(dir, "lefthook.yml"), text);
+      if (scriptSource)
+        cpSync(join(scriptSource, ".lefthook"), join(dir, ".lefthook"), {
+          recursive: true,
+        });
       run("lefthook", ["install"], { cwd: dir, env: dv21Env(noGlobal) });
     });
     return {
@@ -589,7 +662,7 @@ try {
     "check --profile ci --quiet",
     "check --profile ci",
   );
-  const kept = reinit("pf1-edited", userEdited);
+  const kept = reinit("pf1-edited", userEdited, upgraded.dir);
   pf1.upgraded =
     upgraded.init.status === 0 &&
     current.includes("\npre-push:\n") &&
@@ -631,7 +704,7 @@ try {
   pf1.userConfigNeedsPush =
     userPush.init.status === 2 &&
     readFileSync(join(userPush.dir, "lefthook.yml"), "utf8") === commitOnly &&
-    userPush.init.stderr.includes("run: validate-kit check --profile ci") &&
+    userPush.init.stderr.includes("args: validate-kit check --profile ci") &&
     !userPush.init.stderr.includes("run: validate-kit check --staged");
   assert(
     Object.values(pf1).every(Boolean),
@@ -4009,9 +4082,29 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     "node_modules/.keep": "",
   };
   const knipRoot = dvFixture("dv23-knip", knipFiles);
-  dv23.knip = findingLines(
-    dv23Check(knipRoot, ["--only", "knip"], "dv23 knip").findings,
-    "dv23-knip",
+  const knipRun = dv23Check(knipRoot, ["--only", "knip"], "dv23 knip");
+  dv23.knip = findingLines(knipRun.findings, "dv23-knip").join();
+  // Not compared: what a failure message needs to tell a tool that found
+  // nothing from a scope that dropped everything (one unreproduced empty
+  // run, 2026-10-28).
+  dv23.knipRunDetail = {
+    status: knipRun.toolStatus?.knip,
+    files: knipRun.scope?.files,
+  };
+  // A package below with its own knip config and install runs in its own
+  // folder, here under a Go root that has none (Apify-reverse-engineer's
+  // frontend/).
+  const nestedKnip = dvFixture("dv23-knip-nested", {
+    "go.mod": "module n\n\ngo 1.22\n",
+    "main.go": "package main\n\nfunc main() {}\n",
+    ...Object.fromEntries(
+      Object.entries(knipFiles).map(([path, text]) => [`web/${path}`, text]),
+    ),
+  });
+  gitIn(nestedKnip)(["init", "--quiet"]);
+  dv23.knipNested = findingLines(
+    dv23Check(nestedKnip, ["--only", "knip"], "dv23 knip nested").findings,
+    "dv23-knip-nested",
   ).join();
   const { "orphan.js": _orphan, ...usedFiles } = knipFiles;
   dv23.knipClean = dv23Check(
@@ -4133,6 +4226,16 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       ).findings,
       "dv23-gitleaks-step",
     ).join();
+    // A changed-file run (the Claude Code hook's) reads the changed files
+    // only, from a mirror of them, and names them as from the project.
+    const stepChanged = findingLines(
+      dv23Check(
+        stepRoot,
+        ["--changed", "--only", "gitleaks"],
+        "dv23 gitleaks step changed",
+      ).findings,
+      "dv23-gitleaks-step",
+    ).join();
     gitleaksCase = [
       `clean:${leakClean.findings.length}`,
       `staged:${findingLines(parseJsonOutput(staged, "dv23 gitleaks staged").findings, "dv23-gitleaks").join()}`,
@@ -4141,9 +4244,394 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       `secretPrinted:${staged.stdout.includes(fakeKey) || staged.stderr.includes(fakeKey)}`,
       `stepFull:${stepFull}`,
       `stepStaged:${stepStaged}`,
+      `stepChanged:${stepChanged}`,
     ].join(" ");
   }
   dv23.gitleaks = gitleaksCase;
+  // go mod tidy: an empty require block tidy removes (no module, so no
+  // network); --fix writes it, and the next run is clean.
+  let tidyCase = "go not installed: skipped";
+  if (hasTool("go", ["version"])) {
+    const tidyRoot = dvFixture("dv23-tidy", {
+      "go.mod": "module example.com/p\n\ngo 1.23\n\nrequire (\n)\n",
+      "p.go": "package p\n",
+    });
+    const untidy = dv23Check(tidyRoot, ["--only", "go-mod-tidy"], "dv23 tidy");
+    run(installedKit, ["check", "--only", "go-mod-tidy", "--fix", "--json"], {
+      cwd: tidyRoot,
+      env: dv23Env,
+      allowedStatuses: [0, 1],
+    });
+    const after = dv23Check(tidyRoot, ["--only", "go-mod-tidy"], "dv23 tidy");
+    tidyCase = `untidy:${findingLines(untidy.findings, "dv23-tidy").join()} after:${after.findings.length}`;
+  }
+  dv23.goModTidy = tidyCase;
+  // uv lock: the lock records requires-python; raising it in pyproject.toml
+  // leaves the lock stale with no package to resolve (no network).
+  let uvCase = "uv not installed: skipped";
+  if (hasTool("uv", ["--version"])) {
+    const project =
+      '[project]\nname = "p"\nversion = "0.1.0"\nrequires-python = ">=3.12"\ndependencies = []\n';
+    const uvRoot = dvFixture("dv23-uvlock", {
+      "pyproject.toml": project,
+      "p.py": "x = 1\n",
+    });
+    run("uv", ["lock", "--quiet"], { cwd: uvRoot });
+    const fresh = dv23Check(uvRoot, ["--only", "uv-lock"], "dv23 uv-lock");
+    writeFileSync(
+      join(uvRoot, "pyproject.toml"),
+      project.replace(">=3.12", ">=3.13"),
+    );
+    const stale = dv23Check(uvRoot, ["--only", "uv-lock"], "dv23 uv-lock");
+    uvCase = `fresh:${fresh.findings.length} stale:${findingLines(stale.findings, "dv23-uvlock").join()}`;
+  }
+  dv23.uvLock = uvCase;
+  // sherif: the repo's own copy, named as the tool's bin (a symlinked pnpm
+  // shim resolves its package from the link's folder and fails); react at
+  // two versions and a root that is not private.
+  const sherifRoot = dvFixture("dv23-sherif", {
+    "package.json":
+      '{"name":"root","version":"0.0.0","workspaces":["packages/*"],"devDependencies":{"sherif":"1.13.0"}}\n',
+    "pnpm-workspace.yaml": "packages:\n  - packages/*\n",
+    "packages/a/package.json":
+      '{"name":"a","version":"0.0.0","dependencies":{"react":"18.3.1"}}\n',
+    "packages/b/package.json":
+      '{"name":"b","version":"0.0.0","dependencies":{"react":"19.0.0"}}\n',
+    "src/a.ts": "export const a = 1;\n",
+    "validate.config.json": `${JSON.stringify({
+      tools: {
+        sherif: { bin: join(repoRoot, "node_modules", ".bin", "sherif") },
+      },
+    })}\n`,
+  });
+  dv23.sherif = findingLines(
+    dv23Check(sherifRoot, ["--only", "sherif"], "dv23 sherif").findings,
+    "dv23-sherif",
+  ).join();
+  // shfmt: a script with mixed indentation; --fix writes it.
+  let shfmtCase = "shfmt not installed: skipped";
+  if (hasTool("shfmt", ["--version"])) {
+    const shfmtRoot = dvFixture("dv23-shfmt", {
+      "run.sh": "#!/bin/sh\nif true;then\n   echo x\nfi\n",
+      "validate.config.json": '{ "tools": { "shfmt": { "enabled": true } } }\n',
+    });
+    const before = dv23Check(shfmtRoot, ["--only", "shfmt"], "dv23 shfmt");
+    run(installedKit, ["check", "--only", "shfmt", "--fix", "--json"], {
+      cwd: shfmtRoot,
+      env: dv23Env,
+      allowedStatuses: [0, 1],
+    });
+    const after = dv23Check(shfmtRoot, ["--only", "shfmt"], "dv23 shfmt");
+    shfmtCase = `before:${findingLines(before.findings, "dv23-shfmt").join()} after:${after.findings.length}`;
+  }
+  dv23.shfmt = shfmtCase;
+  // editorconfig-checker: tabs where .editorconfig says spaces, in a file no
+  // formatter owns; it reads git's tracked files, so the fixture is a repo.
+  let eccCase = "editorconfig-checker not installed: skipped";
+  if (hasTool("editorconfig-checker", ["--version"])) {
+    const eccRoot = dvFixture("dv23-ecc", {
+      ".editorconfig":
+        "root = true\n\n[*]\nindent_style = space\ninsert_final_newline = true\n",
+      Dockerfile: "FROM alpine\n\tRUN echo x\n",
+      "src/a.ts": "export const a = 1;\n",
+      "validate.config.json":
+        '{ "tools": { "editorconfig-checker": { "enabled": true } } }\n',
+    });
+    const eccGit = gitIn(eccRoot);
+    eccGit(["init", "--quiet"]);
+    eccGit(["add", "-A"]);
+    eccCase = findingLines(
+      dv23Check(eccRoot, ["--only", "editorconfig-checker"], "dv23 ecc")
+        .findings,
+      "dv23-ecc",
+    ).join();
+  }
+  dv23.editorconfigChecker = eccCase;
+  // cargo-shear: a file no module reaches, in a crate with no dependency (so
+  // cargo metadata needs no network); a warning, so exit 0 with a finding.
+  let shearCase = "cargo-shear not installed: skipped";
+  if (
+    hasTool("cargo-shear", ["--version"]) &&
+    hasTool("cargo", ["--version"])
+  ) {
+    const shearRoot = dvFixture("dv23-shear", {
+      "Cargo.toml":
+        '[package]\nname = "p"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\n',
+      "src/lib.rs": "pub fn f() -> u8 { 1 }\n",
+      "src/orphan.rs": "pub fn orphan() {}\n",
+      "validate.config.json":
+        '{ "tools": { "cargo-shear": { "enabled": true } } }\n',
+    });
+    shearCase = findingLines(
+      dv23Check(
+        shearRoot,
+        ["--only", "cargo-shear", "--profile", "ci"],
+        "dv23 shear",
+      ).findings,
+      "dv23-shear",
+    ).join();
+  }
+  dv23.cargoShear = shearCase;
+  // spectral: the repo's own copy named as the bin; a spec with no servers,
+  // under the recommended OpenAPI rules.
+  const spectralRoot = dvFixture("dv23-spectral", {
+    ".spectral.yaml": 'extends: ["spectral:oas"]\n',
+    "api/openapi.yaml":
+      'openapi: 3.0.3\ninfo:\n  title: Shop\n  version: "1.0"\n  description: Items.\n  contact:\n    name: Shop\ntags:\n  - name: items\n    description: Items.\npaths:\n  /items:\n    get:\n      operationId: listItems\n      description: List items.\n      tags: [items]\n      responses:\n        "200":\n          description: ok\n',
+    "src/a.ts": "export const a = 1;\n",
+    "validate.config.json": `${JSON.stringify({
+      tools: {
+        spectral: { bin: join(repoRoot, "node_modules", ".bin", "spectral") },
+      },
+    })}\n`,
+  });
+  dv23.spectral = findingLines(
+    dv23Check(spectralRoot, ["--only", "spectral"], "dv23 spectral").findings,
+    "dv23-spectral",
+  ).join();
+  // forge lint: a Foundry root whose [lint] table keeps the naming notes on.
+  let forgeLintCase = "forge not installed: skipped";
+  if (hasTool("forge", ["--version"])) {
+    const forgeRoot = dvFixture("dv23-forge-lint", {
+      "foundry.toml":
+        '[profile.default]\nsrc = "src"\nout = "out"\nlibs = ["lib"]\n\n[lint]\nseverity = ["high", "med", "low", "info", "gas"]\n',
+      "src/Counter.sol":
+        "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract Counter {\n    uint256 public Count;\n}\n",
+    });
+    forgeLintCase = findingLines(
+      dv23Check(forgeRoot, ["--only", "forge-lint"], "dv23 forge-lint")
+        .findings,
+      "dv23-forge-lint",
+    ).join();
+  }
+  dv23.forgeLint = forgeLintCase;
+  // agnix: a hook with a type Claude Code does not have.
+  let agnixCase = "agnix not installed: skipped";
+  if (hasTool("agnix", ["--version"])) {
+    const agnixRoot = dvFixture("dv23-agnix", {
+      "CLAUDE.md": "# Project\n\nUse pnpm.\n",
+      ".claude/settings.json":
+        '{ "hooks": { "Stop": [{ "hooks": [{ "type": "shell", "command": "pnpm test" }] }] } }\n',
+      "src/a.ts": "export const a = 1;\n",
+      // Named by path: a ~/.cargo/bin entry is not on every PATH the kit sees.
+      "validate.config.json": `${JSON.stringify({
+        tools: { agnix: { enabled: true, bin: binOnPath("agnix") } },
+      })}\n`,
+    });
+    agnixCase = findingLines(
+      dv23Check(agnixRoot, ["--only", "agnix"], "dv23 agnix").findings,
+      "dv23-agnix",
+    ).join();
+  }
+  dv23.agnix = agnixCase;
+  // Error Prone: the project's own Maven compile (plugins from the network).
+  let errorProneCase = "mvn not installed: skipped";
+  if (hasTool("mvn", ["-v"]) && hasTool("java", ["-version"])) {
+    // The fixture inline, not read from docs/ (the public copy has no docs/).
+    const epPom = [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">',
+      "  <modelVersion>4.0.0</modelVersion>",
+      "  <groupId>app</groupId>",
+      "  <artifactId>app</artifactId>",
+      "  <version>0.1.0</version>",
+      "  <properties>",
+      "    <maven.compiler.release>21</maven.compiler.release>",
+      "    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>",
+      "  </properties>",
+      "  <build><plugins><plugin>",
+      "    <groupId>org.apache.maven.plugins</groupId>",
+      "    <artifactId>maven-compiler-plugin</artifactId>",
+      "    <version>3.14.0</version>",
+      "    <configuration>",
+      "      <fork>true</fork>",
+      "      <compilerArgs>",
+      "        <arg>-XDcompilePolicy=simple</arg>",
+      "        <arg>-XDaddTypeAnnotationsToSymbol=true</arg>",
+      "        <arg>--should-stop=ifError=FLOW</arg>",
+      "        <arg>-Xplugin:ErrorProne -XepOpt:NullAway:AnnotatedPackages=app</arg>",
+      ...[
+        "api",
+        "file",
+        "main",
+        "model",
+        "parser",
+        "processing",
+        "tree",
+        "util",
+      ].map(
+        (javacPkg) =>
+          `        <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.${javacPkg}=ALL-UNNAMED</arg>`,
+      ),
+      "        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>",
+      "        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>",
+      "      </compilerArgs>",
+      "      <annotationProcessorPaths>",
+      "        <path><groupId>com.google.errorprone</groupId><artifactId>error_prone_core</artifactId><version>2.52.0</version></path>",
+      "        <path><groupId>com.uber.nullaway</groupId><artifactId>nullaway</artifactId><version>0.14.3</version></path>",
+      "      </annotationProcessorPaths>",
+      "    </configuration>",
+      "  </plugin></plugins></build>",
+      "</project>",
+      "",
+    ].join("\n");
+    const epRoot = dvFixture("dv23-error-prone", {
+      "pom.xml": epPom,
+      "src/main/java/app/Main.java":
+        "package app;\n\nimport java.util.HashSet;\nimport java.util.Set;\n\npublic class Main {\n  static String name(Object o) {\n    return o == null ? null : o.toString();\n  }\n\n  public static void main(String[] args) {\n    Set<String> seen = new HashSet<>();\n    seen.contains(42);\n    String n = name(null);\n    System.out.println(n.length());\n  }\n}\n",
+    });
+    errorProneCase = findingLines(
+      dv23Check(
+        epRoot,
+        ["--only", "error-prone", "--profile", "ci"],
+        "dv23 error-prone",
+      ).findings,
+      "dv23-error-prone",
+    ).join();
+  }
+  dv23.errorProne = errorProneCase;
+  // check-jsonschema: a Renovate config with a string where a boolean goes.
+  let jsonschemaCase = "check-jsonschema not installed: skipped";
+  if (hasTool("check-jsonschema", ["--version"])) {
+    const schemaRoot = dvFixture("dv23-jsonschema", {
+      "renovate.json":
+        '{\n  "extends": ["config:recommended"],\n  "lockFileMaintenance": { "enabled": "yes" }\n}\n',
+      "src/a.ts": "export const a = 1;\n",
+    });
+    jsonschemaCase = findingLines(
+      dv23Check(
+        schemaRoot,
+        ["--only", "check-jsonschema"],
+        "dv23 check-jsonschema",
+      ).findings,
+      "dv23-jsonschema",
+    ).join();
+  }
+  dv23.checkJsonschema = jsonschemaCase;
+  // sobelow: a Phoenix controller that hands request values to send_file
+  // and String.to_atom (sobelow's escript needs Erlang's escript on PATH).
+  let sobelowCase = "sobelow not installed: skipped";
+  if (hasTool("sobelow", ["--version"])) {
+    const sobelowRoot = dvFixture("dv23-sobelow", {
+      "mix.exs":
+        'defmodule Demo.MixProject do\n  use Mix.Project\n\n  def project do\n    [app: :demo, version: "0.1.0", elixir: "~> 1.15", deps: [{:phoenix, "~> 1.7"}, {:sobelow, "~> 0.18", only: [:dev, :test], runtime: false}]]\n  end\nend\n',
+      "lib/demo_web/controllers/page_controller.ex":
+        'defmodule DemoWeb.PageController do\n  use Phoenix.Controller\n\n  def show(conn, %{"name" => name, "path" => path}) do\n    kind = String.to_atom(name)\n    conn\n    |> put_status(200)\n    |> send_file(200, path)\n    |> assign(:kind, kind)\n  end\nend\n',
+      "validate.config.json": `${JSON.stringify({
+        tools: { sobelow: { bin: binOnPath("sobelow") } },
+      })}\n`,
+    });
+    sobelowCase = findingLines(
+      dv23Check(sobelowRoot, ["--only", "sobelow"], "dv23 sobelow").findings,
+      "dv23-sobelow",
+    ).join();
+  }
+  dv23.sobelow = sobelowCase;
+  // composer-dependency-analyser: a `use` nothing requires and a required
+  // package nothing uses (composer install from the network first).
+  let analyserCase = "composer not installed: skipped";
+  if (hasTool("composer", ["--version"]) && hasTool("php", ["--version"])) {
+    const cdaRoot = dvFixture("dv23-cda", {
+      "composer.json":
+        '{\n  "name": "demo/app",\n  "autoload": { "psr-4": { "App\\\\": "src/" } },\n  "require": { "psr/log": "^3.0", "symfony/yaml": "^7.0" },\n  "require-dev": { "shipmonk/composer-dependency-analyser": "^1.8" }\n}\n',
+      "src/Config.php":
+        '<?php\n\nnamespace App;\n\nuse Symfony\\Component\\Yaml\\Yaml;\nuse Monolog\\Logger;\n\nfinal class Config\n{\n    public static function load(string $path): array\n    {\n        $log = new Logger("app");\n        return Yaml::parseFile($path);\n    }\n}\n',
+    });
+    run("composer", ["install", "--no-interaction", "--quiet"], {
+      cwd: cdaRoot,
+    });
+    analyserCase = findingLines(
+      dv23Check(cdaRoot, ["--only", "composer-dependency-analyser"], "dv23 cda")
+        .findings,
+      "dv23-cda",
+    ).join();
+  }
+  dv23.composerDependencyAnalyser = analyserCase;
+  // periphery: a Swift package with functions nothing calls (it builds).
+  let peripheryCase = "periphery not installed: skipped";
+  if (hasTool("periphery", ["version"]) && hasTool("swift", ["--version"])) {
+    const swiftRoot = dvFixture("dv23-periphery", {
+      "Package.swift":
+        '// swift-tools-version: 6.0\nimport PackageDescription\n\nlet package = Package(\n    name: "Demo",\n    products: [.library(name: "Demo", targets: ["Demo"])],\n    targets: [.target(name: "Demo")]\n)\n',
+      "Sources/Demo/Demo.swift":
+        'public struct Demo {\n    public func used() -> Int { 1 }\n    func unusedInternal() -> Int { 3 }\n}\n\nfunc orphanFunction() -> String { "orphan" }\n',
+    });
+    peripheryCase = findingLines(
+      dv23Check(
+        swiftRoot,
+        ["--only", "periphery", "--profile", "ci"],
+        "dv23 periphery",
+      ).findings,
+      "dv23-periphery",
+    ).join();
+  }
+  dv23.periphery = peripheryCase;
+  // Infection: a boundary nobody tests (needs PHP with a coverage driver).
+  let infectionCase = "infection not installed: skipped";
+  if (
+    hasTool("composer", ["--version"]) &&
+    hasTool("php", ["--version"]) &&
+    /\b(?:pcov|xdebug)\b/.test(run("php", ["-m"], { cwd: tempRoot }).stdout)
+  ) {
+    const infectionRoot = dvFixture("dv23-infection", {
+      "composer.json":
+        '{\n  "name": "demo/money",\n  "autoload": { "psr-4": { "Demo\\\\": "src/" } },\n  "autoload-dev": { "psr-4": { "Demo\\\\Tests\\\\": "tests/" } },\n  "require-dev": { "phpunit/phpunit": "^12.0", "infection/infection": "^0.35" },\n  "config": { "allow-plugins": { "infection/extension-installer": true } }\n}\n',
+      "src/Money.php":
+        "<?php\n\nnamespace Demo;\n\nfinal class Money\n{\n    public static function quantityDown(int $quantity, int $step): int\n    {\n        return $quantity - $quantity % $step;\n    }\n\n    public static function isPositive(int $quantity): bool\n    {\n        return $quantity > 0;\n    }\n}\n",
+      "tests/MoneyTest.php":
+        "<?php\n\nnamespace Demo\\Tests;\n\nuse Demo\\Money;\nuse PHPUnit\\Framework\\TestCase;\n\nfinal class MoneyTest extends TestCase\n{\n    public function testQuantityRoundsDownToTheStep(): void\n    {\n        self::assertSame(10, Money::quantityDown(13, 5));\n        self::assertSame(0, Money::quantityDown(4, 5));\n    }\n\n    public function testFiveIsPositive(): void\n    {\n        self::assertTrue(Money::isPositive(5));\n    }\n}\n",
+      "phpunit.xml":
+        '<?xml version="1.0"?>\n<phpunit bootstrap="vendor/autoload.php" colors="false">\n  <testsuites><testsuite name="unit"><directory>tests</directory></testsuite></testsuites>\n  <source><include><directory>src</directory></include></source>\n</phpunit>\n',
+      "infection.json5":
+        '{ "source": { "directories": ["src"] }, "mutators": { "@default": true } }\n',
+      "validate.config.json":
+        '{ "tools": { "infection": { "options": { "minMsi": 100 } } } }\n',
+    });
+    run("composer", ["install", "--no-interaction", "--quiet"], {
+      cwd: infectionRoot,
+    });
+    infectionCase = findingLines(
+      dv23Check(
+        infectionRoot,
+        ["--only", "infection", "--profile", "ci"],
+        "dv23 infection",
+      ).findings,
+      "dv23-infection",
+    ).join();
+  }
+  dv23.infection = infectionCase;
+  // Stryker.NET: an untested method (restores from NuGet; a minute).
+  let strykerNetCase = "dotnet-stryker not installed: skipped";
+  if (
+    hasTool("dotnet", ["--version"]) &&
+    /dotnet-stryker/.test(
+      run("dotnet", ["tool", "list", "-g"], { cwd: tempRoot }).stdout,
+    )
+  ) {
+    const netRoot = dvFixture("dv23-stryker-net", {
+      "Demo.slnx":
+        '<Solution>\n  <Project Path="Demo/Demo.csproj" />\n  <Project Path="Demo.Tests/Demo.Tests.csproj" />\n</Solution>\n',
+      "Demo/Demo.csproj":
+        '<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <Nullable>enable</Nullable>\n    <ImplicitUsings>enable</ImplicitUsings>\n  </PropertyGroup>\n</Project>\n',
+      "Demo/Money.cs":
+        "namespace Demo;\n\npublic static class Money\n{\n    public static long QuantityDown(long quantity, long step) => quantity - quantity % step;\n\n    public static bool MeetsMinNotional(long quantity, long price, long min) => quantity * price >= min;\n}\n",
+      "Demo.Tests/Demo.Tests.csproj":
+        '<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <Nullable>enable</Nullable>\n    <ImplicitUsings>enable</ImplicitUsings>\n    <IsPackable>false</IsPackable>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />\n    <PackageReference Include="xunit" Version="2.9.3" />\n    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.1" />\n  </ItemGroup>\n  <ItemGroup>\n    <ProjectReference Include="../Demo/Demo.csproj" />\n  </ItemGroup>\n</Project>\n',
+      "Demo.Tests/MoneyTests.cs":
+        "using Demo;\nusing Xunit;\n\npublic class MoneyTests\n{\n    [Fact]\n    public void QuantityRoundsDownToTheStep() => Assert.Equal(10, Money.QuantityDown(13, 5));\n}\n",
+      "validate.config.json":
+        '{ "tools": { "stryker-net": { "enabled": true, "options": { "project": "Demo/Demo.csproj" } } } }\n',
+    });
+    strykerNetCase = findingLines(
+      dv23Check(
+        netRoot,
+        ["--only", "stryker-net", "--profile", "ci"],
+        "dv23 stryker-net",
+      ).findings,
+      "dv23-stryker-net",
+    ).join();
+  }
+  dv23.strykerNet = strykerNetCase;
   // deadcode: under ci, a function no main reaches.
   // On Go 1.25, v0.49.0: later releases need Go 1.26 (go-deadcode.md, 6).
   let deadcodeCase = "go not installed: skipped";
@@ -4176,14 +4664,57 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       dv23.knip ===
         "dependencies package.json:1,exports lib.js:2,files orphan.js:1" &&
       dv23.knipClean === 0 &&
+      dv23.knipNested ===
+        "dependencies web/package.json:1,exports web/lib.js:2,files web/orphan.js:1" &&
       dv23.jscpd === "duplicate-code src/a.ts:1,duplicate-code src/b.ts:2" &&
       dv23.jscpdMessage &&
       dv23.jscpdClean === 0 &&
       (dv23.gitleaks === "gitleaks not installed: skipped" ||
         dv23.gitleaks ===
-          "clean:0 staged:aws-access-token .deploy.conf:1,aws-access-token src/settings.ts:1 full:aws-access-token .deploy.conf:1,aws-access-token src/settings.ts:1 pathspec:aws-access-token src/pathspec.ts:1 secretPrinted:false stepFull:false stepStaged:aws-access-token src/new.txt:1") &&
+          "clean:0 staged:aws-access-token .deploy.conf:1,aws-access-token src/settings.ts:1 full:aws-access-token .deploy.conf:1,aws-access-token src/settings.ts:1 pathspec:aws-access-token src/pathspec.ts:1 secretPrinted:false stepFull:false stepStaged:aws-access-token src/new.txt:1 stepChanged:aws-access-token src/new.txt:1") &&
       (dv23.deadcode === "go not installed: skipped" ||
-        dv23.deadcode === "unreachable-func main.go:7"),
+        dv23.deadcode === "unreachable-func main.go:7") &&
+      (dv23.goModTidy === "go not installed: skipped" ||
+        dv23.goModTidy === "untidy:untidy go.mod:1 after:0") &&
+      (dv23.uvLock === "uv not installed: skipped" ||
+        dv23.uvLock === "fresh:0 stale:stale uv.lock:1") &&
+      dv23.sherif ===
+        "multiple-dependency-versions package.json:1,root-package-manager-field package.json:1,root-package-private-field package.json:1" &&
+      (dv23.shfmt === "shfmt not installed: skipped" ||
+        dv23.shfmt === "before:unformatted run.sh:1 after:0") &&
+      (dv23.editorconfigChecker ===
+        "editorconfig-checker not installed: skipped" ||
+        dv23.editorconfigChecker === "indent-style Dockerfile:2") &&
+      (dv23.cargoShear === "cargo-shear not installed: skipped" ||
+        dv23.cargoShear === "unlinked_files src/orphan.rs:1") &&
+      dv23.spectral === "oas3-api-servers api/openapi.yaml:1" &&
+      (dv23.forgeLint === "forge not installed: skipped" ||
+        dv23.forgeLint ===
+          "mixed-case-variable src/Counter.sol:5,uninitialized-state src/Counter.sol:5") &&
+      (dv23.agnix === "agnix not installed: skipped" ||
+        dv23.agnix === "CC-HK-016 .claude/settings.json:1") &&
+      (dv23.checkJsonschema === "check-jsonschema not installed: skipped" ||
+        dv23.checkJsonschema === "renovate renovate.json:3") &&
+      (dv23.sobelow === "sobelow not installed: skipped" ||
+        dv23.sobelow ===
+          "DOS.StringToAtom lib/demo_web/controllers/page_controller.ex:5,Traversal.SendFile lib/demo_web/controllers/page_controller.ex:8") &&
+      (dv23.composerDependencyAnalyser === "composer not installed: skipped" ||
+        dv23.composerDependencyAnalyser ===
+          "unknown-class src/Config.php:12,unused-dependency composer.json:4") &&
+      (dv23.periphery === "periphery not installed: skipped" ||
+        dv23.periphery ===
+          "unused Sources/Demo/Demo.swift:3,unused Sources/Demo/Demo.swift:6") &&
+      (dv23.infection === "infection not installed: skipped" ||
+        dv23.infection ===
+          "GreaterThan src/Money.php:14,min-msi infection.json5:1") &&
+      (dv23.strykerNet === "dotnet-stryker not installed: skipped" ||
+        // Stryker's mutator set decides how many mutants the untested line gets.
+        /^no-coverage Demo\/Money\.cs:7(,no-coverage Demo\/Money\.cs:7)+$/.test(
+          dv23.strykerNet,
+        )) &&
+      (dv23.errorProne === "mvn not installed: skipped" ||
+        dv23.errorProne ===
+          "CollectionIncompatibleType src/main/java/app/Main.java:13,ReturnValueIgnored src/main/java/app/Main.java:13"),
     `DV23 opt-in tools: ${JSON.stringify(dv23)}`,
   );
 
@@ -4505,6 +5036,24 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       "DATABASE_URL=postgres://localhost/app\nAPI_KEY=xxx\nOLD_FLAG=1\n",
     "src/app.ts":
       'export const db = process.env.DATABASE_URL;\nexport const k = process.env["API_KEY"];\nexport const s = process.env.STRIPE_SECRET;\nexport const e = process.env.NODE_ENV;\n',
+    // A read with a fallback, a comparison or a default is optional (a
+    // toggle), and not reported; the *_REQUIRED and T_ARG reads are.
+    "web/x.ts":
+      'export const p = process.env.T_PORT ?? "3000", f = process.env.T_FLAG === "1", o = process.env.T_OR || "x";\nexport const r = process.env.T_REQUIRED, c = [process.env.T_ARG, 1];\nconst { T_DESTRUCTURED, T_WITH_DEFAULT = "1", T_RENAMED: renamed } = process.env;\n',
+    "srv/main.go":
+      'package main\nvar required, toggle, addr = os.Getenv("G_REQUIRED"), os.Getenv("G_TOGGLE") == "1", flag.String("addr", os.Getenv("G_ADDR"), "")\nfunc f() bool { _, ok := os.LookupEnv("G_LOOKUP"); return ok && "1" != os.Getenv("G_LEFT") }\n',
+    "ops/run.py":
+      'import os\na, b, c = os.environ.get("P_DEFAULT", "x"), os.environ.get("P_TOGGLE") != "1", os.environ["P_REQUIRED"] == "1"\nd = os.getenv("P_OR") or "y"; e = os.environ.get("P_IN") in ("1", "true")\n',
+    // A Go test helper outside a _test.go file, and Docker's variables.
+    "testpg/testpg.go":
+      'package testpg\nimport ("os"; "testing")\nvar h = os.Getenv("DH_TEST_DATABASE_URL")\n',
+    "srv/docker.go":
+      'package main\nvar d, r = os.Getenv("DOCKER_HOST"), os.Getenv("TESTCONTAINERS_RYUK_DISABLED")\n',
+    "ops/main.rs":
+      'fn main() { let a = std::env::var("R_REQUIRED").unwrap(); let b = std::env::var("R_DEFAULT").unwrap_or_default(); let c = option_env!("R_BUILD"); let m = env!("R_MACRO", "set it"); }\n',
+    // A comparison with nothing is the guard of a required variable.
+    "ops/guard.go":
+      'package main\nfunc g() { if os.Getenv("G_GUARD") == "" { panic("unset") } }\n',
   };
   for (const [path, body] of Object.entries(conventionsFiles)) {
     mkdirSync(dirname(join(conventionsRoot, path)), { recursive: true });
@@ -4566,12 +5115,47 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     "duplicate-version db/migrations/002_orders.sql:1",
     "edited db/migrations/002_users.sql:1",
     "too-long src/app.ts:4",
+    "undeclared ops/guard.go:2",
+    "undeclared ops/main.rs:1",
+    "undeclared ops/main.rs:1",
+    "undeclared ops/run.py:2",
     "undeclared src/app.ts:3",
+    "undeclared srv/main.go:2",
+    "undeclared web/x.ts:2",
+    "undeclared web/x.ts:2",
+    "undeclared web/x.ts:3",
+    "undeclared web/x.ts:3",
     "unused .env.example:3",
   ];
   assert(
     JSON.stringify(conventionsFound) === JSON.stringify(conventionsExpected),
     `conventions: ${JSON.stringify(conventionsFound)}`,
+  );
+  // No merge base: a note where a remote exists but is not fetched, and
+  // nothing in a repository with no remote at all (Discount-Hunter).
+  const noRemoteRoot = join(tempRoot, "migrations-no-remote");
+  mkdirSync(join(noRemoteRoot, "db/migrations"), { recursive: true });
+  writeFileSync(
+    join(noRemoteRoot, "db/migrations/001_init.sql"),
+    "create table a (x int);\n",
+  );
+  const noRemoteGit = gitIn(noRemoteRoot);
+  noRemoteGit(["init", "--quiet"]);
+  noRemoteGit(["add", "."]);
+  noRemoteGit(["commit", "--quiet", "-m", "base"]);
+  const noBaseNotes = () =>
+    parseJsonOutput(
+      run(installedKit, ["check", "--only", "migrations", "--json"], {
+        cwd: noRemoteRoot,
+      }),
+      "migrations no-base",
+    ).findings.filter((f) => f.ruleId === "no-base").length;
+  const withoutRemote = noBaseNotes();
+  noRemoteGit(["remote", "add", "origin", "https://example.invalid/r.git"]);
+  const withRemote = noBaseNotes();
+  assert(
+    withoutRemote === 0 && withRemote === 1,
+    `migrations no-base note: ${withoutRemote} without a remote, ${withRemote} with one`,
   );
   // R11 row 2 (the operator's decision, 2026-10-04): a formatter runs only
   // where the repository adopted it; Go gets gofmt unless gofumpt is
@@ -4876,9 +5460,13 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     "web/app.js": `var a="${"x".repeat(300_000)}";console.log(a);\n`,
     // Over 1 MiB, with ordinary lines.
     "data/table.js": `${Array.from({ length: 48_000 }, (_, i) => `export const t${i} = ${i};\n`).join("")}console.log("table");\n`,
-    "vendor/lib.min.js": 'console.log("lib");\n',
+    "vendored/lib.min.js": 'console.log("lib");\n',
     // Not JavaScript: one machine-made line.
     "gen/blob.py": `X = "${"x".repeat(12_000)}"\nprint(X)\n`,
+    // The same line in a test is a fixture written by hand: kept. A
+    // declaration file is generated, test or not.
+    "tests/test_blob.py": `X = "${"x".repeat(12_000)}"\nprint(X)\n`,
+    "types/gen.d.ts": `export declare const X: "${"x".repeat(12_000)}";\n`,
   };
   for (const [path, text] of Object.entries(r3Files)) {
     mkdirSync(dirname(join(r3Root, path)), { recursive: true });
@@ -4921,14 +5509,14 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
   // Each file with what gave it away (a hand-written file with one long
   // fixture line can then be told apart: dark-visitor, 2026-10-09).
   const minifiedNote =
-    "minified:info:gen/blob.py: line 1 is over 10000 bytes, vendor/lib.min.js: a .min. name, web/app.js: line 1 is over 10000 bytes";
+    "minified:info:gen/blob.py: line 1 is over 10000 bytes, types/gen.d.ts: line 1 is over 10000 bytes, vendored/lib.min.js: a .min. name, web/app.js: line 1 is over 10000 bytes";
   assert(
     r3.default.flagged === "src/long.js,src/main.js" &&
       r3.default.notes.join() === `${minifiedNote},${oversizedNote}` &&
       r3.noLimit.flagged === "data/table.js,src/long.js,src/main.js" &&
       r3.noLimit.notes.join() === minifiedNote &&
       r3.keepMinified.flagged ===
-        "gen/blob.py,src/long.js,src/main.js,vendor/lib.min.js,web/app.js" &&
+        "gen/blob.py,src/long.js,src/main.js,vendored/lib.min.js,web/app.js" &&
       r3.keepMinified.notes.join() === oversizedNote,
     `R3 oversized and minified: ${JSON.stringify(r3)}`,
   );
@@ -5744,8 +6332,10 @@ export default {
     cwd: baseRoot,
     allowedStatuses: [0],
   });
+  // Named, with the profile it ran: the default check may not run it.
   sequence.gateNotDebt =
-    gateBaseline.stdout.includes("cannot be debt") &&
+    gateBaseline.stdout.includes("of the ci run cannot be debt") &&
+    gateBaseline.stdout.includes("  inv:TESTS src/a.ts:1") &&
     run(installedKit, ["check", ...tools, "inv:TESTS"], {
       cwd: baseRoot,
       allowedStatuses: [0, 1],
@@ -5768,9 +6358,13 @@ export default {
   // 1: moved code.
   writeFileSync(join(baseRoot, "src", "a.ts"), `\n\n// moved\n${twoLogs}`);
   sequence.shifted = baseCheck().status;
-  // 2: a third one hides behind nothing.
+  // 2: a third one hides behind nothing, and the run says why all three show.
   writeFileSync(join(baseRoot, "src", "a.ts"), `${twoLogs}console.log(3);\n`);
-  sequence.third = baseCheck().status;
+  const third = baseCheck(["--quiet"]);
+  sequence.third = third.status;
+  sequence.overSaid = `${third.stdout}${third.stderr}`.includes(
+    "src/a.ts ast-grep/ts-no-console: 3 here, 2 baselined, so all 3 show until there are 2 again",
+  );
   // 3: fixed debt: fine by default, stale under ci, lowered by `baseline`.
   writeFileSync(join(baseRoot, "src", "a.ts"), "console.log(1);\n");
   sequence.fixedDefault = baseCheck().status;
@@ -5786,14 +6380,27 @@ export default {
     "src/a.ts"
   ]["ast-grep/ts-no-console"];
   sequence.ciAfterLowering = baseCheck(["--profile", "ci"]).status;
-  // 4: updating never swallows a new violation.
+  // 4: updating never swallows a new violation. In a file git does not
+  // track it is never debt (a clone has no such file): left out and named.
   writeFileSync(join(baseRoot, "src", "b.ts"), "console.log(9);\n");
   const beforeGrowth = readFileSync(baselinePath, "utf8");
+  const untrackedRun = baselineCmd();
+  sequence.untrackedNotDebt =
+    untrackedRun.status === 0 &&
+    untrackedRun.stdout.includes(
+      "1 finding(s) are in files git does not track",
+    ) &&
+    !readFileSync(baselinePath, "utf8").includes("src/b.ts") &&
+    baseCheck().status === 1;
+  writeFileSync(baselinePath, beforeGrowth);
+  baseGit(["add", "--", "src/b.ts"]);
   const growth = baselineCmd();
   sequence.growthRefused =
     growth.status === 1 &&
     growth.stderr.includes("src/b.ts ast-grep/ts-no-console") &&
+    !growth.stderr.includes("--adopt-new-rules") &&
     readFileSync(baselinePath, "utf8") === beforeGrowth;
+  baseGit(["rm", "--cached", "--quiet", "--", "src/b.ts"]);
   rmSync(join(baseRoot, "src", "b.ts"));
   // 5: after an upgrade (the recorded kit version differs), a rule the
   // baseline never saw is adopted; an old rule's growth is still refused.
@@ -5831,6 +6438,10 @@ export default {
     join(baseRoot, "src", "a.ts"),
     "console.log(1);\nconsole.log(2);\nexport const loose = (x: number) => x == 1;\n",
   );
+  // Without the flag the refusal says which growth the flag would accept.
+  sequence.mixedHint = baselineCmd().stderr.includes(
+    "Of these, 1 come from rules validate.baseline.json has not seen, after a kit or tool upgrade, which `--adopt-new-rules` accepts; the other 1 are new findings.",
+  );
   const mixed = baselineCmd(["--adopt-new-rules"]);
   sequence.oldRuleGrowthRefused =
     mixed.status === 1 &&
@@ -5839,6 +6450,9 @@ export default {
   writeFileSync(
     join(baseRoot, "src", "a.ts"),
     "console.log(1);\nexport const loose = (x: number) => x == 1;\n",
+  );
+  sequence.allNewHint = baselineCmd().stderr.includes(
+    "All of them come from rules validate.baseline.json has not seen, after a kit or tool upgrade: `validate-kit baseline --adopt-new-rules` accepts them.",
   );
   sequence.newRuleAdopted = baselineCmd(["--adopt-new-rules"]).status;
   sequence.afterAdoption = baseCheck().status;
@@ -5850,6 +6464,7 @@ export default {
   sequence.partialKeepsVersions =
     JSON.parse(readFileSync(baselinePath, "utf8")).tools.lint2 !== undefined;
   writeFileSync(join(baseRoot, "BAD"), "x\n");
+  baseGit(["add", "--", "BAD"]);
   sequence.noUpgradeRefused = run(
     installedKit,
     ["baseline", ...withLint2, "--adopt-new-rules"],
@@ -5882,6 +6497,7 @@ export default {
     { cwd: baseRoot, allowedStatuses: [0, 1] },
   ).status;
   writeFileSync(baselinePath, beforeNewTool);
+  baseGit(["rm", "--cached", "--quiet", "--", "BAD"]);
   rmSync(join(baseRoot, "BAD"));
   // A tool the kit and the config no longer have (a removed invariant)
   // loses its record and its counts at the next write, and the output says
@@ -5976,15 +6592,19 @@ export default {
     incompleteSaysWhy: true,
     shifted: 0,
     third: 1,
+    overSaid: true,
     fixedDefault: 0,
     fixedCi: 1,
     staleReported: true,
     lowered: 0,
     loweredCount: 1,
     ciAfterLowering: 0,
+    untrackedNotDebt: true,
     growthRefused: true,
     knownRuleRefused: true,
+    mixedHint: true,
     oldRuleGrowthRefused: true,
+    allNewHint: true,
     newRuleAdopted: 0,
     afterAdoption: 0,
     partialKeepsVersions: true,
@@ -6307,6 +6927,15 @@ function commitAll(root) {
 
 function hasTool(bin, args) {
   return !spawnSync(bin, args, { stdio: "ignore" }).error;
+}
+
+/** The first `bin` on this process's PATH, absolute, for a fixture's `tools.<id>.bin`. */
+function binOnPath(bin) {
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    const candidate = join(dir, bin);
+    if (dir !== "" && existsSync(candidate)) return candidate;
+  }
+  return bin;
 }
 
 /** sha256 over every file's path and bytes, in a stable order. */

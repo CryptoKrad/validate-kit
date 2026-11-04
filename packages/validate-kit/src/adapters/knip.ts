@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import type {
   BuiltCommand,
   PlanEnv,
@@ -10,8 +8,9 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { toolAdopted } from "../detect/adoption.js";
-import { languageForFile } from "../detect/languages.js";
+import { languageForFile, toPosix } from "../detect/languages.js";
 import { absPosix, finding, sarifResults } from "./base.js";
+import { installedFor, ownFiles, ownProjects } from "./native.js";
 
 /** knip's config files, in the order it reads them (knip-cli.md, 3). */
 const KNIP_CONFIGS = [
@@ -24,6 +23,13 @@ const KNIP_CONFIGS = [
   "knip.config.ts",
   "knip.config.js",
 ];
+
+const adoptedHere = (root: string, projectRoot: string): boolean =>
+  toolAdopted(root, projectRoot, {
+    configs: KNIP_CONFIGS,
+    dep: "knip",
+    key: "knip",
+  });
 
 interface KnipTask {
   /** Files whose findings count (absolute, POSIX): the kit's scope. */
@@ -50,27 +56,43 @@ export const knip: ToolAdapter = {
   minVersion: "6.30.0",
   installHint: "pnpm add -D knip",
   parseVersion: (out) => /(\d+\.\d+\.\d+)/.exec(out)?.[1],
+  // At the root, or a package below with a knip config of its own.
   adoptedAt: (root, projectRoot) =>
-    toolAdopted(root, projectRoot, {
-      configs: KNIP_CONFIGS,
-      dep: "knip",
-      key: "knip",
-    }),
+    adoptedHere(root, projectRoot) ||
+    ownProjects(root, KNIP_CONFIGS).length > 0,
 
   findingExitCodes: [1],
 
+  // One run per project: the root's when it chose knip, and each package
+  // below with its own knip config, in its folder with its own install
+  // (knip reads one project's config; a workspace's is the root's). The root
+  // leaves those packages' files to them.
   expand(seed: TaskSeed, env: PlanEnv): TaskSeed[] {
-    const task: KnipTask = { scope: [...env.scopedFiles] };
-    // knip resolves every import through the installed dependencies.
-    if (!existsSync(join(seed.cwd, "node_modules")))
-      return [
-        {
+    const tool = env.config.tools["knip"];
+    const named = tool?.enabled === true || tool?.configPath !== undefined;
+    const roots = [
+      ...(named || adoptedHere(seed.cwd, env.projectRoot) ? [seed.cwd] : []),
+      ...(tool?.configPath === undefined
+        ? ownProjects(env.projectRoot, KNIP_CONFIGS, env)
+        : []),
+    ];
+    const scoped = env.scopedFiles.map(toPosix);
+    const tasks: TaskSeed[] = [];
+    for (const cwd of roots) {
+      // knip resolves every import through the installed dependencies.
+      if (!installedFor(cwd, env.projectRoot))
+        tasks.push({
           ...seed,
+          cwd,
           cannotRun:
             "the dependencies are not installed (no node_modules): knip resolves imports through them",
-        },
-      ];
-    return [{ ...seed, options: task }];
+        });
+      else {
+        const task: KnipTask = { scope: ownFiles(cwd, roots, scoped) };
+        tasks.push({ ...seed, cwd, options: task });
+      }
+    }
+    return tasks;
   },
 
   refuseArgs(extraArgs) {

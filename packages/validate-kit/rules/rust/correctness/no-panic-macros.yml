@@ -9,13 +9,16 @@ rule:
   has:
     field: macro
     regex: "^(panic|todo|unimplemented|unreachable)$"
-  # Test code is exempt: panicking in a `#[cfg(test)]` mod or `#[test]` fn is
-  # idiomatic. `follows` walks back only through this item's own stacked
-  # attributes and comments (see rust-no-unwrap).
+  # Test code is exempt: panicking in a `#[cfg(test)]` mod, fn or impl, or a
+  # `#[test]` fn, is idiomatic. `follows` walks back only through this item's
+  # own stacked attributes and comments (see rust-no-unwrap).
   not:
     any:
       - inside:
-          kind: mod_item
+          any:
+            - kind: mod_item
+            - kind: function_item
+            - kind: impl_item
           stopBy: end
           follows:
             kind: attribute_item

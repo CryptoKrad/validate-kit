@@ -479,7 +479,11 @@ describe("mutmut", () => {
       targets: ["calc.py"],
       scope: [`${root}/calc.py`],
     });
-    const built = mutmut.buildArgs(ctx);
+    // Argument construction uses a known executable, without running mutmut.
+    const built = mutmut.buildArgs.call(
+      { ...mutmut, bin: process.execPath },
+      ctx,
+    );
     expect(built.cwd).toBe(ctx.scratch);
     expect(built.args).toEqual(["run", "calc.x*"]);
     expect(readFileSync(join(ctx.scratch, "calc.py"), "utf8")).toBe(original);
@@ -517,7 +521,9 @@ describe("mutmut", () => {
     const root = project();
     const ctx = task(root, { targets: ["src/calc/ops.py"], scope: [] });
     // `calc.ops.x_twice__mutmut_1` is how mutmut names a mutant of src/calc/ops.py.
-    expect(mutmut.buildArgs(ctx).args).toContain("calc.ops.x*");
+    expect(
+      mutmut.buildArgs.call({ ...mutmut, bin: process.execPath }, ctx).args,
+    ).toContain("calc.ops.x*");
     expect(
       mutmut.parseOutput(
         ran(

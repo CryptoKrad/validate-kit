@@ -1,4 +1,10 @@
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import {
   basename,
   delimiter,
@@ -228,16 +234,98 @@ function registerMcpServer(
   }
 }
 
+/** Claude Code's events the hook answers, with how long each may take. */
+const CLAUDE_EVENTS = {
+  UserPromptSubmit: 30,
+  Stop: 180,
+  SubagentStart: 30,
+  SubagentStop: 180,
+} as const;
+
+interface HookGroup {
+  matcher?: string;
+  hooks?: { type?: string; command?: string; timeout?: number }[];
+}
+
 /**
- * Scaffold a starter validate config, the MCP entry, and the pre-commit and
- * pre-push hooks; `hook: false` and `mcp: false` leave those out, `dryRun`
- * writes nothing.
+ * Register `hook claude` for Claude Code's stop events in
+ * .claude/settings.json, so an agent that ends its turn with findings in the
+ * files it changed is sent back to fix them (once). Merge-safe: other hooks
+ * and settings are kept, and an event that already runs the kit's hook is
+ * left alone. Relative to the project, so a hook started from a subfolder
+ * finds the kit.
+ */
+function registerClaudeHooks(
+  root: string,
+  kitCommand: string,
+  out: Writer,
+): void {
+  const path = join(root, ".claude", "settings.json");
+  try {
+    const settings = existsSync(path)
+      ? (JSON.parse(readFileSync(path, "utf8")) as {
+          hooks?: Record<string, HookGroup[]>;
+        })
+      : {};
+    const hooks = settings.hooks ?? {};
+    const command = `${kitCommand.includes("/") ? `"$CLAUDE_PROJECT_DIR"/${kitCommand}` : kitCommand} hook claude`;
+    const added: string[] = [];
+    const beside: string[] = [];
+    for (const [event, timeout] of Object.entries(CLAUDE_EVENTS)) {
+      const groups = hooks[event] ?? [];
+      if (
+        groups.some((group) =>
+          group.hooks?.some((hook) =>
+            / hook claude\b/.test(hook.command ?? ""),
+          ),
+        )
+      )
+        continue;
+      if (event.endsWith("Stop"))
+        for (const group of groups)
+          for (const hook of group.hooks ?? [])
+            if (hook.command) beside.push(`${event}: ${hook.command}`);
+      hooks[event] = [
+        ...groups,
+        { hooks: [{ type: "command", command, timeout }] },
+      ];
+      added.push(event);
+    }
+    if (added.length === 0) return;
+    if (!out.dryRun) mkdirSync(dirname(path), { recursive: true });
+    out.write(
+      path,
+      `${JSON.stringify({ ...settings, hooks }, null, 2)}\n`,
+      `Claude Code hooks: ${added.join(", ")}`,
+    );
+    // A stop hook of the project's own that checks the agent's changes too
+    // would send it back twice.
+    if (beside.length > 0)
+      process.stderr.write(
+        pc.yellow(
+          `${path} already runs ${beside.join("; ")}. If that also checks the agent's changes, the agent is sent back twice: keep one.\n`,
+        ),
+      );
+  } catch (err) {
+    process.stderr.write(
+      pc.yellow(
+        `Could not update ${path} (${err instanceof Error ? err.message : String(err)}): add \`${kitCommand} hook claude\` to its UserPromptSubmit, Stop, SubagentStart and SubagentStop hooks by hand.\n`,
+      ),
+    );
+  }
+}
+
+/**
+ * Scaffold a starter validate config, the MCP entry, Claude Code's stop
+ * hooks, and the pre-commit and pre-push hooks; `hook: false`, `mcp: false`
+ * and `claude: false` leave those out, `dryRun` writes nothing.
  */
 export async function initCommand(flags: {
   force?: boolean;
   cwd?: string;
   hook?: boolean;
   mcp?: boolean;
+  claude?: boolean;
   dryRun?: boolean;
 }): Promise<number> {
   const root = resolve(flags.cwd ?? process.cwd());
@@ -267,17 +355,22 @@ export async function initCommand(flags: {
   );
   if (stop !== undefined) return stop;
   if (flags.mcp !== false) registerMcpServer(root, kitCommand, out);
+  if (flags.claude !== false) registerClaudeHooks(root, kitCommand, out);
   const hookExit =
     flags.hook === false
       ? undefined
       : await scaffoldHook(root, kitCommand, out);
 
-  if (!local && !onPath(BIN) && (flags.mcp !== false || flags.hook !== false)) {
+  if (
+    !local &&
+    !onPath(BIN) &&
+    (flags.mcp !== false || flags.hook !== false || flags.claude !== false)
+  ) {
     // Fail-closed is correct here (a hook that cannot find the gate blocks
     // the commit), but say so now rather than at the first commit.
     process.stderr.write(
       pc.yellow(
-        `\`${BIN}\` is not on PATH: the scaffolded hook and MCP entry will fail until it is installed on this machine.\n`,
+        `\`${BIN}\` is not on PATH: the scaffolded hooks and MCP entry will fail until it is installed on this machine.\n`,
       ),
     );
   }

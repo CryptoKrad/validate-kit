@@ -1,5 +1,17 @@
 id: rust-no-panic-macros
 snapshots:
+  ? |-
+    #[cfg(not(test))]
+    fn f() { panic!("x") }
+  : labels:
+    - source: panic!("x")
+      style: primary
+      start: 27
+      end: 38
+    - source: panic
+      style: secondary
+      start: 27
+      end: 32
   fn f() { panic!("boom") }:
     labels:
     - source: panic!("boom")

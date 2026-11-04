@@ -505,12 +505,12 @@ function validateHostedValidateKitTestScope(lines, file) {
       "components: clippy, rustfmt",
       "toolchain: stable",
       'go-version: "1.25"',
-      "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2",
-      "mvdan.cc/gofumpt@v0.10.0",
+      "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0",
+      "mvdan.cc/gofumpt@v0.12.0",
       "astral-sh/setup-uv@",
       'version: "0.9.30"',
-      "uv tool install ruff==0.15.6",
-      "npm install -g @ast-grep/cli@0.45.3",
+      "uv tool install ruff==0.17.3",
+      "npm install -g @ast-grep/cli@0.51.1",
       "cd packages/validate-kit && ./node_modules/.bin/tsup",
     ]) {
       if (!text.includes(snippet)) {
@@ -632,7 +632,7 @@ function validateSecurityWorkflow(lines, file) {
 
   const text = lines.join("\n");
   for (const snippet of [
-    'SEMGREP_VERSION: "1.163.0"',
+    'SEMGREP_VERSION: "1.183.0"',
     "actions/setup-python@",
     'python-version: "3.12"',
     'python -m pip install "semgrep==${SEMGREP_VERSION}"',
@@ -889,9 +889,9 @@ function validateToolVersionDrift() {
     }
   }
   const k6 = miseVersion("k6");
-  if (k6 && !workflows.includes(`k6-version: v${k6}`)) {
+  if (k6 && !workflows.includes(`k6-version: ${k6}`)) {
     fail(
-      `tool-version drift: mise.toml k6=${k6} not pinned as "k6-version: v${k6}"`,
+      `tool-version drift: mise.toml k6=${k6} not pinned as "k6-version: ${k6}"`,
     );
   }
   // node accepts both scalar (`node-version: 22`) and matrix (`[22, 24]`) forms.

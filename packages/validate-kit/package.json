@@ -41,20 +41,20 @@
     "prepack": "tsup"
   },
   "dependencies": {
-    "@ast-grep/cli": "0.45.3",
-    "@modelcontextprotocol/sdk": "1.32.1",
+    "@ast-grep/cli": "0.51.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "commander": "^15.0.0",
-    "execa": "^10.0.1",
+    "execa": "^10.2.1",
     "jiti": "^2.7.0",
-    "oxlint": "1.86.0",
+    "oxlint": "1.90.0",
     "p-limit": "^7.3.3",
     "picocolors": "^1.1.1",
     "picomatch": "^4.0.7",
-    "prettier": "^3.9.9",
-    "semver": "7.8.5",
-    "smol-toml": "1.9.0",
+    "prettier": "^3.9.10",
+    "semver": "7.8.6",
+    "smol-toml": "1.9.1",
     "tinyglobby": "^0.2.17",
-    "yaml": "2.9.0",
+    "yaml": "2.9.1",
     "zod": "^4.6.7"
   },
   "peerDependencies": {
@@ -70,10 +70,10 @@
     "@types/picomatch": "^4.0.3",
     "@types/semver": "^7.8.0",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "tsup": "^8.5.1",
+    "tsup": "^9.0.0",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.3.5",
-    "vitest": "^5.0.3"
+    "vitest": "^5.1.0"
   },
   "repository": {
     "type": "git",

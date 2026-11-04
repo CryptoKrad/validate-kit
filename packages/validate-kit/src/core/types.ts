@@ -88,7 +88,7 @@ export interface LanguageSpec {
 export const LANGUAGE_SPECS: Record<Language, LanguageSpec> = {
   ts: {
     extensions: [".ts", ".tsx", ".cts", ".mts"],
-    markers: ["tsconfig.json"],
+    markers: ["tsconfig.json", "package.json"],
   },
   js: {
     extensions: [".js", ".jsx", ".cjs", ".mjs"],
@@ -431,6 +431,10 @@ export interface RawOutput {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /** Signal that terminated the process, when there was no numeric exit. */
+  signal?: string;
+  /** Operating-system error code for an invocation failure (e.g. E2BIG). */
+  errorCode?: string;
   /** True when the binary could not be spawned at all. */
   spawnError?: boolean;
   /** True when the process was killed by the run timeout (distinct from spawnError). */
@@ -516,6 +520,11 @@ export interface ToolAdapter {
    * and tests): found in a `.venv` from where it runs before anywhere else.
    */
   readonly pythonEnv?: boolean;
+  /**
+   * A Composer package's own tool (its version is the one the project
+   * tested): found in a `vendor/bin` from where it runs before anywhere else.
+   */
+  readonly composerVendor?: boolean;
   /** Args to print the version. Default ["--version"]. */
   readonly versionArgs?: readonly string[];
   /**

@@ -144,7 +144,7 @@ describe("tflint", () => {
     const real = tmp();
     mkdirSync(join(real, "mod"));
     const link = `${real}-link`;
-    symlinkSync(real, link);
+    symlinkSync(real, link, process.platform === "win32" ? "junction" : "dir");
     // tflint: relative to where it started, to the folder's real path.
     const printed = posix.relative(
       link,

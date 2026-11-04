@@ -39,8 +39,8 @@ jobs:
           go-version: "1.25"
       - name: Install Go tools
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
-          go install mvdan.cc/gofumpt@v0.10.0
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+          go install mvdan.cc/gofumpt@v0.12.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3.2.4
         with:
@@ -48,10 +48,10 @@ jobs:
       - name: Install ruff + ast-grep
         # zizmor: ignore[adhoc-packages] an exact version, as the lockfile would pin it
         run: |
-          uv tool install ruff==0.15.6
+          uv tool install ruff==0.17.3
           uv tool update-shell || true # soft-pass-ok: shell-profile convenience only; PATH is set explicitly on the next line
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          npm install -g @ast-grep/cli@0.45.3
+          npm install -g @ast-grep/cli@0.51.1
       - name: Build validate-kit
         run: cd packages/validate-kit && ./node_modules/.bin/tsup
       - name: Polyglot behavioral test (clippy/golangci/ruff/fmt + custom rules)
