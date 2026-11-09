@@ -3,6 +3,7 @@ import { actionlint } from "./actionlint.js";
 import { aderyn } from "./aderyn.js";
 import { agnix } from "./agnix.js";
 import { astgrep } from "./astgrep.js";
+import { astroCheck } from "./astro-check.js";
 import { attw } from "./attw.js";
 import { basedpyright } from "./basedpyright.js";
 import { biome, biomeFormat } from "./biome.js";
@@ -221,6 +222,7 @@ export const TOOL_REGISTRY: ToolAdapter[] = [
   importLinter,
   lizard,
   publint,
+  astroCheck,
   attw,
   vulture,
   rubocop,

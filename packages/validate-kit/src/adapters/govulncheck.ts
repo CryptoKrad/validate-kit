@@ -103,7 +103,7 @@ export const govulncheck: ToolAdapter = {
       // Symbol level only: trace[0] names the vulnerable function.
       if (!f?.trace?.[0]?.function) continue;
       const call = f.trace.find(
-        (frame) => frame.module !== undefined && roots.has(frame.module),
+        (frame) => frame.package !== undefined && roots.has(frame.package),
       );
       const at = call?.position;
       if (!at?.filename || !at.line) continue;

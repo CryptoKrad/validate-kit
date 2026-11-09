@@ -11,7 +11,7 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { isUnder, toPosix } from "../detect/languages.js";
-import { absPosix, finding } from "./base.js";
+import { absPosix, crlfCheckouts, finding } from "./base.js";
 import { formatChanged } from "./mutation.js";
 
 /** What changes what tidy would write: Go source and the module files. */
@@ -19,6 +19,38 @@ const INPUT = /\.go$|(?:^|\/)go\.(?:mod|sum|work)$/;
 
 /** `diff current/go.mod tidy/go.mod`: the file tidy would rewrite. */
 const HEADER = /^diff current\/(go\.(?:mod|sum)) tidy\//;
+
+/**
+ * The files whose whole diff is line endings: every line tidy would change
+ * reads the same once its carriage return is gone. The output is split on
+ * `\r?\n`, so a CRLF line on the `-` side arrives without its CR and equals
+ * its `+` line exactly; anything tidy would really change leaves the two
+ * sides different. A file with nothing removed or added is not counted: no
+ * evidence, no change.
+ */
+function lineEndingsOnly(stdout: string): Set<string> {
+  const sides = new Map<string, { minus: string[]; plus: string[] }>();
+  let current: { minus: string[]; plus: string[] } | undefined;
+  for (const line of stdout.split(/\r?\n/)) {
+    const file = HEADER.exec(line)?.[1];
+    if (file !== undefined) {
+      current = { minus: [], plus: [] };
+      sides.set(file, current);
+    } else if (current && line.startsWith("-") && !line.startsWith("---"))
+      current.minus.push(line.slice(1));
+    else if (current && line.startsWith("+") && !line.startsWith("+++"))
+      current.plus.push(line.slice(1));
+  }
+  const only = new Set<string>();
+  for (const [file, { minus, plus }] of sides)
+    if (
+      minus.length > 0 &&
+      minus.length === plus.length &&
+      minus.every((line, i) => line === plus[i])
+    )
+      only.add(file);
+  return only;
+}
 
 /**
  * go mod tidy -diff — go.mod and go.sum against the imports: a require for a
@@ -99,20 +131,50 @@ export const goModTidy: ToolAdapter = {
         ? new Error(why)
         : formatChanged("go mod tidy", "exited 1 with no diff and no error");
     }
+    // A CRLF checkout of an LF commit (core.autocrlf) makes tidy rewrite every
+    // line of go.sum, so it reads as untidy whatever its requires. Only both
+    // proofs together change the finding: git says the commit is LF (so CI's
+    // checkout is clean), and the diff is line endings and nothing else. Then
+    // the content is tidy and the error's claim -- CI fails on it -- is false,
+    // so it is a warning about the checkout. A warning gates like an error
+    // (isGating), so the run still fails until the checkout is fixed: what
+    // changes is that it says why. A commit stored with CRLF, or a diff with
+    // any real change in it, stays the error it was.
+    const endingsOnly = lineEndingsOnly(raw.stdout);
+    const cwd = toPosix(ctx.cwd);
+    const crlf = crlfCheckouts(
+      ctx.cwd,
+      files.map((file) => absPosix(cwd, file)),
+    );
     return result(
       files.map((file) =>
-        finding({
-          tool: "go-mod-tidy",
-          layer: "lint",
-          language: "go",
-          file: absPosix(toPosix(ctx.cwd), file),
-          line: 1,
-          col: 1,
-          ruleId: "untidy",
-          severity: "error",
-          message: `${file} is not what \`go mod tidy\` would write: a require nothing imports, or an import whose module is not required (CI's -mod=readonly fails on it); run go mod tidy`,
-          fixable: true,
-        }),
+        crlf.has(absPosix(cwd, file)) && endingsOnly.has(file)
+          ? finding({
+              tool: "go-mod-tidy",
+              layer: "lint",
+              language: "go",
+              file: absPosix(cwd, file),
+              line: 1,
+              col: 1,
+              ruleId: "crlf-checkout",
+              severity: "warning",
+              message: `${file} is tidy: every line \`go mod tidy\` would change differs only by its line ending, because core.autocrlf checked this LF commit out as CRLF. Add \`${file} text eol=lf\` (or \`* text=auto eol=lf\`) to .gitattributes and check the file out again with no local edits pending.`,
+              // A fix pass would rewrite it to LF and the next checkout would
+              // bring the CRLF back; the durable fix is the attribute.
+              fixable: false,
+            })
+          : finding({
+              tool: "go-mod-tidy",
+              layer: "lint",
+              language: "go",
+              file: absPosix(cwd, file),
+              line: 1,
+              col: 1,
+              ruleId: "untidy",
+              severity: "error",
+              message: `${file} is not what \`go mod tidy\` would write: a require nothing imports, or an import whose module is not required (CI's -mod=readonly fails on it); run go mod tidy`,
+              fixable: true,
+            }),
       ),
     );
   },

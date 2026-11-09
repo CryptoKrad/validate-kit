@@ -4632,6 +4632,30 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     ).join();
   }
   dv23.strykerNet = strykerNetCase;
+  // astro check: a page that omits a required prop and a frontmatter value
+  // of the wrong type; tsc reads neither. The fixture installs its own astro
+  // (the network; skipped where the registry cannot be reached).
+  let astroCase = "astro not installable: skipped";
+  const astroRoot = dvFixture("dv23-astro", {
+    "package.json":
+      '{"name":"dv23-astro","private":true,"type":"module","devDependencies":{"@astrojs/check":"0.9.12","astro":"7.4.1","typescript":"5.9.3"}}\n',
+    "tsconfig.json": '{ "extends": "astro/tsconfigs/strict" }\n',
+    "src/components/Card.astro":
+      "---\ninterface Props {\n  title: string;\n  count: number;\n}\nconst { title, count } = Astro.props;\n---\n<article><h2>{title}</h2><p>{count}</p></article>\n",
+    "src/pages/index.astro":
+      '---\nimport Card from "../components/Card.astro";\nconst total: number = "three";\n---\n<html lang="en">\n  <body>\n    <Card title="One" />\n    <p>{total}</p>\n  </body>\n</html>\n',
+  });
+  const astroInstall = run(
+    "npm",
+    ["install", "--silent", "--no-audit", "--no-fund", "--ignore-scripts"],
+    { cwd: astroRoot, allowedStatuses: [0, 1], env: dv23Env },
+  );
+  if (astroInstall.status === 0)
+    astroCase = findingLines(
+      dv23Check(astroRoot, ["--only", "astro-check"], "dv23 astro").findings,
+      "dv23-astro",
+    ).join();
+  dv23.astroCheck = astroCase;
   // deadcode: under ci, a function no main reaches.
   // On Go 1.25, v0.49.0: later releases need Go 1.26 (go-deadcode.md, 6).
   let deadcodeCase = "go not installed: skipped";
@@ -4707,6 +4731,9 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       (dv23.infection === "infection not installed: skipped" ||
         dv23.infection ===
           "GreaterThan src/Money.php:14,min-msi infection.json5:1") &&
+      (dv23.astroCheck === "astro not installable: skipped" ||
+        dv23.astroCheck ===
+          "ts2322 src/pages/index.astro:3,ts2322 src/pages/index.astro:7") &&
       (dv23.strykerNet === "dotnet-stryker not installed: skipped" ||
         // Stryker's mutator set decides how many mutants the untested line gets.
         /^no-coverage Demo\/Money\.cs:7(,no-coverage Demo\/Money\.cs:7)+$/.test(

@@ -1,11 +1,12 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, posix, relative, resolve } from "node:path";
+import { extname, isAbsolute, posix, relative, resolve } from "node:path";
 import type { z } from "zod";
 import { ConfigError } from "../config/schema.js";
 import { resolveBin, run } from "../core/exec.js";
 import { groupBy } from "../core/group.js";
 import type { PlannedTask } from "../core/plan.js";
 import { configFolderOf } from "../detect/adoption.js";
+import { gitSync } from "../detect/git.js";
 import { languageForFile, toPosix } from "../detect/languages.js";
 import type {
   AvailabilityResult,
@@ -690,9 +691,76 @@ export function finding(f: {
 }
 
 /**
+ * Of the files a formatter listed, those the work tree holds with CRLF while
+ * git stores them with LF: `core.autocrlf` rewriting LF on checkout. A
+ * formatter that always writes LF (gofmt, gofumpt) reads the work tree, so it
+ * lists every such file as unformatted — on a Windows clone with
+ * `core.autocrlf=true` and no `.gitattributes`, the whole tree. In the repo
+ * that found this, `gofmt -l` listed 41 Go files whose commits were all LF,
+ * and those 41 hid the 2 that really were unformatted.
+ *
+ * Proof only. A file is included when git itself reports `i/lf w/crlf` for
+ * it; untracked, committed with CRLF (`i/crlf`: there the commit is what is
+ * wrong), mixed endings, or no git at all leave the formatter's own finding
+ * standing. It is consulted only for files the formatter already listed, so it
+ * can change what a finding says and never invents or removes one.
+ *
+ * One `ls-files --eol` of the whole tree, as `scripts` reads it, and a lookup:
+ * no pathspec on the command line, so no length limit and no pathspec magic.
+ * (`ls-files` has no `--pathspec-from-file`.)
+ */
+export function crlfCheckouts(
+  cwd: string,
+  listed: readonly string[],
+): ReadonlySet<string> {
+  const crlf = new Set<string>();
+  if (listed.length === 0) return crlf;
+  const wanted = new Set(listed);
+  for (const entry of (gitSync(cwd, ["ls-files", "--eol", "-z"]) ?? "").split(
+    "\0",
+  )) {
+    const match = /^i\/(\S*)\s+w\/(\S*)\s+attr\/[^\t]*\t(.*)$/s.exec(entry);
+    if (match?.[1] !== "lf" || match[2] !== "crlf" || match[3] === undefined)
+      continue;
+    const file = absPosix(cwd, match[3]);
+    if (wanted.has(file)) crlf.add(file);
+  }
+  return crlf;
+}
+
+/**
+ * What a formatter's finding says for a file `crlfCheckouts` proved is LF in
+ * the commit and CRLF on disk. Deliberately not "formatted": git cannot tell
+ * a clean file from one that is also badly formatted (both read `i/lf
+ * w/crlf`), so the verdict is deferred, and stated as deferred. The gate's
+ * outcome is the one the formatter gave — a warning at this file — so a
+ * project's pass or fail is unchanged; only what it says is.
+ */
+export function crlfCheckoutFinding(tool: string, file: string): Finding {
+  const ext = extname(file);
+  const attr = ext ? `*${ext} text eol=lf` : "* text=auto eol=lf";
+  return finding({
+    tool,
+    layer: "format",
+    language: languageForFile(file),
+    file,
+    line: 1,
+    col: 1,
+    ruleId: "crlf-checkout",
+    severity: "warning",
+    message: `Checked out with CRLF while git stores it with LF (core.autocrlf): ${tool} writes LF, so it lists this checkout, not the commit, and cannot judge the file's formatting here. Add \`${attr}\` to .gitattributes and check the file out again with no local edits pending; the formatting verdict follows.`,
+    // Not fixable: a fix pass would rewrite the work tree to LF and pass,
+    // and the next checkout would bring the CRLF back. The durable fix is the
+    // attribute.
+    fixable: false,
+  });
+}
+
+/**
  * A formatter's list of the files that differ, one path a line on stdout
  * (`files` picks the lines that are paths; `path` decodes one): a finding
  * each, at 1:1. None in a fix pass, where the list is the files it rewrote.
+ * A file listed only because the checkout is CRLF says so (`crlfCheckouts`).
  */
 export function listedFiles(
   tool: string,
@@ -705,24 +773,26 @@ export function listedFiles(
   }: { files: RegExp; message: string; path?: (line: string) => string },
 ): Finding[] {
   if (ctx.fix) return [];
-  return raw.stdout.split(/\r?\n/).flatMap((line) => {
+  const listed = raw.stdout.split(/\r?\n/).flatMap((line) => {
     const printed = line.trim();
-    if (!files.test(printed)) return [];
-    const file = absPosix(ctx.cwd, path(printed));
-    return [
-      finding({
-        tool,
-        layer: "format",
-        language: languageForFile(file),
-        file,
-        line: 1,
-        col: 1,
-        severity: "warning",
-        message,
-        fixable: true,
-      }),
-    ];
+    return files.test(printed) ? [absPosix(ctx.cwd, path(printed))] : [];
   });
+  const crlf = crlfCheckouts(ctx.cwd, listed);
+  return listed.map((file) =>
+    crlf.has(file)
+      ? crlfCheckoutFinding(tool, file)
+      : finding({
+          tool,
+          layer: "format",
+          language: languageForFile(file),
+          file,
+          line: 1,
+          col: 1,
+          severity: "warning",
+          message,
+          fixable: true,
+        }),
+  );
 }
 
 /**

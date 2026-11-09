@@ -107,7 +107,7 @@ describe("govulncheck", () => {
   // Indented JSON values, one after another, as -format json prints them.
   const stream = [
     { config: { scanner_version: "v1.3.0", scan_level: "symbol" } },
-    { SBOM: { roots: ["example.com/gv"] } },
+    { SBOM: { roots: ["example.com/gv/cmd/server"] } },
     {
       osv: {
         id: "GO-2021-0113",
@@ -136,7 +136,7 @@ describe("govulncheck", () => {
           },
           {
             module: "example.com/gv",
-            package: "example.com/gv",
+            package: "example.com/gv/cmd/server",
             function: "main",
             position: { filename: "main.go", line: 10, column: 24 },
           },

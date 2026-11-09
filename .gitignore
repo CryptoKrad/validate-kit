@@ -3,6 +3,8 @@ node_modules/
 .pnpm-store/
 
 # Build output
+# A recorded fixture's Composer install: its composer.lock is committed instead.
+docs/research/**/fixture*/vendor/
 dist/
 build/
 *.tsbuildinfo

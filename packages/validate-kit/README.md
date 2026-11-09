@@ -108,32 +108,32 @@ told apart: each sees the other's edits there as its own.
 
 ## Tools
 
-142 tools. Each is silent when it passes, and a missing one is skipped with a
+143 tools. Each is silent when it passes, and a missing one is skipped with a
 note, or leaves the run incomplete (exit 3) under `--profile ci`. Most run
 only where the project chose them: its config file, a dependency that names
 the tool, a task or CI step that runs it, or `tools.<id>.enabled`. `check
 list` shows which would run in a project, and from which folder; `check
 doctor` which this machine can run. `tools.<id>.enabled: false` turns one off.
 
-| Area                   | Tools                                                                                                                       |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| JS and TS              | prettier, Biome, oxlint, ESLint, tsc, knip, jscpd, dependency-cruiser, size-limit, publint, attw, Stryker, sherif           |
-| Python                 | ruff, ruff format, mypy, basedpyright, ty, deptry, import-linter, vulture, CrossHair, mutmut, uv lock --check               |
-| Rust                   | rustfmt, clippy, cargo-deny, cargo-machete, cargo-shear, cargo-hack, cargo-semver-checks, Kani, Miri, cargo-mutants         |
-| Go                     | gofmt, gofumpt, golangci-lint, go mod tidy, deadcode, nilaway, go-race, govulncheck, capslock, gorelease, go-arch-lint, gremlins |
-| C, C++, Zig            | clang-format, clang-tidy, cppcheck, zig fmt, zig ast-check                                                                  |
-| Java, Kotlin, Scala    | google-java-format, PMD, Error Prone (the project's Maven compile), ktlint, detekt, scalafmt                                 |
-| C#, Ruby, PHP, Elixir  | dotnet format, dotnet build, CSharpier, Stryker.NET, RuboCop, Brakeman, PHPStan, php-cs-fixer, Pint, composer-dependency-analyser, Infection, mix format, Credo, sobelow |
-| Swift, Dart, Lua       | swift-format, SwiftLint, periphery, dart format, dart analyze, StyLua, selene                                               |
-| Haskell, OCaml, Nix    | hlint, ormolu, ocamlformat, nixfmt, statix, deadnix                                                                         |
-| Bazel, Terraform       | buildifier, tofu fmt, tflint, trivy                                                                                         |
-| Schemas and Kubernetes | buf (lint, format, breaking), sqruff, sqlc (vet, diff), squawk, graphql-inspector, oasdiff, spectral, kubeconform, kube-linter, pluto |
+| Area                   | Tools                                                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JS and TS              | prettier, Biome, oxlint, ESLint, tsc, knip, jscpd, dependency-cruiser, size-limit, publint, attw, Stryker, sherif, astro check                                             |
+| Python                 | ruff, ruff format, mypy, basedpyright, ty, deptry, import-linter, vulture, CrossHair, mutmut, uv lock --check                                                              |
+| Rust                   | rustfmt, clippy, cargo-deny, cargo-machete, cargo-shear, cargo-hack, cargo-semver-checks, Kani, Miri, cargo-mutants                                                        |
+| Go                     | gofmt, gofumpt, golangci-lint, go mod tidy, deadcode, nilaway, go-race, govulncheck, capslock, gorelease, go-arch-lint, gremlins                                           |
+| C, C++, Zig            | clang-format, clang-tidy, cppcheck, zig fmt, zig ast-check                                                                                                                 |
+| Java, Kotlin, Scala    | google-java-format, PMD, Error Prone (the project's Maven compile), ktlint, detekt, scalafmt                                                                               |
+| C#, Ruby, PHP, Elixir  | dotnet format, dotnet build, CSharpier, Stryker.NET, RuboCop, Brakeman, PHPStan, php-cs-fixer, Pint, composer-dependency-analyser, Infection, mix format, Credo, sobelow   |
+| Swift, Dart, Lua       | swift-format, SwiftLint, periphery, dart format, dart analyze, StyLua, selene                                                                                              |
+| Haskell, OCaml, Nix    | hlint, ormolu, ocamlformat, nixfmt, statix, deadnix                                                                                                                        |
+| Bazel, Terraform       | buildifier, tofu fmt, tflint, trivy                                                                                                                                        |
+| Schemas and Kubernetes | buf (lint, format, breaking), sqruff, sqlc (vet, diff), squawk, graphql-inspector, oasdiff, spectral, kubeconform, kube-linter, pluto                                      |
 | Files around the code  | shellcheck, shfmt, hadolint, taplo, yamllint, markdownlint-cli2, lychee (offline), ls-lint, reuse, typos, stylelint, html-validate, editorconfig-checker, check-jsonschema |
-| Solidity               | forge fmt, forge lint, solhint, Slither, aderyn                                                                             |
-| Security               | Semgrep, gitleaks, zizmor, actionlint, osv-scanner, cooldown, policy                                                        |
-| Formal                 | TLC, Lean, Quint                                                                                                            |
-| The kit's own          | ast-grep rules, blobs, paths, scripts, unicode, migrations, env, file-length, lizard, diff-cover                            |
-| Agent files            | agnix (CLAUDE.md, AGENTS.md, .claude/, .mcp.json, as the agent reads them)                                                 |
+| Solidity               | forge fmt, forge lint, solhint, Slither, aderyn                                                                                                                            |
+| Security               | Semgrep, gitleaks, zizmor, actionlint, osv-scanner, cooldown, policy                                                                                                       |
+| Formal                 | TLC, Lean, Quint                                                                                                                                                           |
+| The kit's own          | ast-grep rules, blobs, paths, scripts, unicode, migrations, env, file-length, lizard, diff-cover                                                                           |
+| Agent files            | agnix (CLAUDE.md, AGENTS.md, .claude/, .mcp.json, as the agent reads them)                                                                                                 |
 
 Tiers decide when a tool runs: a fast one on every commit (`--profile dev`
 runs only those), a verify one also in a default run, and a deep one (mutation

@@ -7,7 +7,13 @@ import type {
 } from "../core/types.js";
 import { languageForFile } from "../detect/languages.js";
 import { gofumptAdopted } from "../detect/adoption.js";
-import { absPosix, filesIn, finding } from "./base.js";
+import {
+  absPosix,
+  crlfCheckoutFinding,
+  crlfCheckouts,
+  filesIn,
+  finding,
+} from "./base.js";
 
 /** gofumpt — stricter gofmt. Lists (or rewrites) files that need formatting. */
 export const gofumpt: ToolAdapter = {
@@ -37,24 +43,29 @@ export const gofumpt: ToolAdapter = {
   },
 
   parseOutput(raw: RawOutput, ctx: ToolContext): RunResult {
-    const findings = [];
-    for (const line of raw.stdout.split("\n")) {
-      const file = line.trim();
-      if (languageForFile(file) !== "go") continue;
-      findings.push(
-        finding({
-          tool: "gofumpt",
-          layer: "format",
-          language: "go",
-          file: absPosix(ctx.cwd, file),
-          line: 1,
-          col: 1,
-          severity: "warning",
-          message: "File is not gofumpt-formatted",
-          fixable: true,
-        }),
-      );
-    }
+    const listed = raw.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((file) => languageForFile(file) === "go")
+      .map((file) => absPosix(ctx.cwd, file));
+    // gofumpt is gofmt's printer with stricter rules: it writes LF too, so a
+    // CRLF checkout is listed whatever its formatting (base.ts, crlfCheckouts).
+    const crlf = crlfCheckouts(ctx.cwd, listed);
+    const findings = listed.map((file) =>
+      crlf.has(file)
+        ? crlfCheckoutFinding("gofumpt", file)
+        : finding({
+            tool: "gofumpt",
+            layer: "format",
+            language: "go",
+            file,
+            line: 1,
+            col: 1,
+            severity: "warning",
+            message: "File is not gofumpt-formatted",
+            fixable: true,
+          }),
+    );
     return {
       findings,
       filesProcessed: 0,

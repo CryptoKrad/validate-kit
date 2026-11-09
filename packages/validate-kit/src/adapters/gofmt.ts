@@ -7,7 +7,13 @@ import type {
 } from "../core/types.js";
 import { gofumptAdopted } from "../detect/adoption.js";
 import { languageForFile } from "../detect/languages.js";
-import { absPosix, filesIn, finding } from "./base.js";
+import {
+  absPosix,
+  crlfCheckoutFinding,
+  crlfCheckouts,
+  filesIn,
+  finding,
+} from "./base.js";
 
 /**
  * gofmt — Go's own formatter, the Go default; gofumpt replaces it where a
@@ -40,24 +46,29 @@ export const gofmt: ToolAdapter = {
   },
 
   parseOutput(raw: RawOutput, ctx: ToolContext): RunResult {
-    const findings = [];
-    for (const line of raw.stdout.split("\n")) {
-      const file = line.trim();
-      if (languageForFile(file) !== "go") continue;
-      findings.push(
-        finding({
-          tool: "gofmt",
-          layer: "format",
-          language: "go",
-          file: absPosix(ctx.cwd, file),
-          line: 1,
-          col: 1,
-          severity: "warning",
-          message: "File is not gofmt-formatted",
-          fixable: true,
-        }),
-      );
-    }
+    const listed = raw.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((file) => languageForFile(file) === "go")
+      .map((file) => absPosix(ctx.cwd, file));
+    // gofmt always writes LF, so a file core.autocrlf checked out as CRLF is
+    // listed whatever its formatting (base.ts, crlfCheckouts).
+    const crlf = crlfCheckouts(ctx.cwd, listed);
+    const findings = listed.map((file) =>
+      crlf.has(file)
+        ? crlfCheckoutFinding("gofmt", file)
+        : finding({
+            tool: "gofmt",
+            layer: "format",
+            language: "go",
+            file,
+            line: 1,
+            col: 1,
+            severity: "warning",
+            message: "File is not gofmt-formatted",
+            fixable: true,
+          }),
+    );
     return {
       findings,
       filesProcessed: 0,

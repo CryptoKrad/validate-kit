@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { astroCheck } from "../src/adapters/astro-check.js";
 import { attw } from "../src/adapters/attw.js";
 import { basedpyright } from "../src/adapters/basedpyright.js";
 import { crosshair } from "../src/adapters/crosshair.js";
@@ -80,6 +81,110 @@ const report = (...diagnostics: unknown[]) =>
 /** A ty issue as 0.0.86 printed it (over-gitlab.stdout), at a severity. */
 const issue = (severity: string) =>
   `[\n  {\n    "check_name": "invalid-argument-type",\n    "description": "invalid-argument-type: Argument to function \`add\` is incorrect: Expected \`int\`, found \`Literal[\\"x\\"]\`",\n    "severity": "${severity}",\n    "fingerprint": "f5e2380913859577",\n    "location": {\n      "path": "mod.py",\n      "positions": {\n        "begin": {\n          "line": 5,\n          "column": 5\n        },\n        "end": {\n          "line": 5,\n          "column": 8\n        }\n      }\n    }\n  }\n]`;
+
+/** astro check's closing summary. */
+const result = (errors: number) =>
+  `Result (3 files): \n- ${errors} errors\n- 0 warnings\n- 0 hints\n\n`;
+
+/** A package.json with these devDependencies. */
+const deps = (...names: string[]) =>
+  JSON.stringify({
+    devDependencies: Object.fromEntries(names.map((n) => [n, "*"])),
+  });
+
+// astro 7.4.1 with @astrojs/check 0.9.12, recorded 2026-11-09
+// (docs/research/lint-toolchain/assets/sota-2026-11-09/astro-check/check.stdout).
+describe("astro-check", () => {
+  const head =
+    "14:55:33 [types] Generated 305ms\n14:55:33 [check] Getting diagnostics for Astro files in <TMP>/fixture...\n";
+  const E = "\u001b";
+  // The colours are in the capture: astro prints them even under NO_COLOR.
+  const diag = (line: number, col: number, level: string, text: string) =>
+    `${E}[96msrc/pages/index.astro${E}[0m:${E}[93m${line}${E}[0m:${E}[93m${col}${E}[0m - ${E}[91m${level}${E}[0m${E}[90m ts(2322): ${E}[0m${text}\n`;
+  const two =
+    head +
+    diag(
+      7,
+      6,
+      "error",
+      "Type '{ title: string; }' is not assignable to type 'IntrinsicAttributes & Props'.",
+    ) +
+    `  Property 'count' is missing in type '{ title: string; }' but required in type 'Props'.\n\n${E}[7m7${E}[0m     <Card title="One" />\n${E}[7m ${E}[0m ${E}[91m     ~~~~${E}[0m\n` +
+    diag(3, 7, "error", "Type 'string' is not assignable to type 'number'.") +
+    `\n${E}[7m3${E}[0m const total: number = "three";\n${E}[7m ${E}[0m ${E}[91m      ~~~~~${E}[0m\n\n` +
+    result(2);
+
+  it("reports each diagnostic at its line with the code as the rule", () => {
+    const { findings } = astroCheck.parseOutput(ran(1, two), ctx("/site"));
+    expect(findings).toMatchObject([
+      {
+        file: "/site/src/pages/index.astro",
+        line: 7,
+        col: 6,
+        ruleId: "ts2322",
+        severity: "error",
+        layer: "type-check",
+      },
+      {
+        file: "/site/src/pages/index.astro",
+        line: 3,
+        col: 7,
+        ruleId: "ts2322",
+        severity: "error",
+        message: "Type 'string' is not assignable to type 'number'.",
+      },
+    ]);
+  });
+
+  it("reports a hint as info and a clean run as nothing", () => {
+    const hint = head + diag(4, 7, "hint", "'x' is declared but never used.");
+    expect(
+      astroCheck.parseOutput(ran(0, hint + result(0)), ctx("/site")).findings,
+    ).toMatchObject([{ severity: "info", line: 4 }]);
+    expect(
+      astroCheck.parseOutput(ran(0, head + result(0)), ctx("/site")).findings,
+    ).toEqual([]);
+  });
+
+  it("refuses output with no summary, and an exit 1 with no error", () => {
+    expect(() =>
+      astroCheck.parseOutput(
+        ran(1, "", "[config] Error: Unable to load your Astro config\n"),
+        ctx("/site"),
+      ),
+    ).toThrow("astro check: [config] Error: Unable to load your Astro config");
+    expect(() => astroCheck.parseOutput(ran(0, head), ctx("/site"))).toThrow(
+      "format may have changed",
+    );
+    expect(() =>
+      astroCheck.parseOutput(ran(1, head + result(0)), ctx("/site")),
+    ).toThrow("exited 1 with no error diagnostic");
+  });
+
+  it("runs only where a package depends on astro and @astrojs/check", async () => {
+    const root = project("vk-astro-", {
+      "site/package.json": deps("astro", "@astrojs/check"),
+      "bare/package.json": deps("astro"),
+      "api/package.json": deps("fastify"),
+    });
+    const files = ["site", "bare", "api"].map(
+      (d) => `${root}/${d}/package.json`,
+    );
+    const seed = { adapter: astroCheck, cwd: root, files: [] };
+    const tasks = await astroCheck.expand?.(
+      seed,
+      env(root, { scopedFiles: files }),
+    );
+    expect(tasks?.map((task) => task.cwd)).toEqual([`${root}/site`]);
+  });
+
+  it("refuses --watch, which never ends", () => {
+    expect(astroCheck.refuseArgs?.(["--watch"])).toContain("--watch");
+    expect(astroCheck.refuseArgs?.(["--tsconfig", "tsconfig.json"])).toBe(
+      undefined,
+    );
+  });
+});
 
 describe("size-limit", () => {
   const config =
