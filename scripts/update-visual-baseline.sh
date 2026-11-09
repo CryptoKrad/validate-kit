@@ -10,7 +10,7 @@
 # Requires: Docker. Keep IMAGE in sync with apps/web @playwright/test version.
 set -euo pipefail
 
-IMAGE="mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f"
+IMAGE="mcr.microsoft.com/playwright:v1.65.0-noble@sha256:6e3fb709361521eb27161606e6da6d2674e5e89fa16516cb37d6fdd91372273d"
 REPO="$(git rev-parse --show-toplevel)"
 TMP="$(mktemp -d)"
 trap 'docker run --rm -v "$TMP":/t alpine:3@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b sh -c "rm -rf /t/* /t/.* 2>/dev/null || true"; rmdir "$TMP" 2>/dev/null || true' EXIT
