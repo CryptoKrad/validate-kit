@@ -5,10 +5,13 @@ rules:
     message: >-
       Possible hardcoded credential. Move secrets to environment variables or a
       secret store; never commit them.
+    # `:=` too: Go's short assignment was never matched. Not a literal that
+    # is joined to something (`"whsec_" + hex.EncodeToString(raw)`): that is
+    # a prefix on a generated value, and was reported as the secret.
     options:
       generic_ellipsis_max_span: 0
     patterns:
-      - pattern-regex: '(?i)(password|passwd|pwd|api_key|apikey|api_token|secret|secret_key|access_token|auth_token|bearer_token|client_secret|private_key|db_password|database_url|connection_string|aws_secret_access_key)\s*[:=]\s*["''][^"''\n]{6,}["'']'
+      - pattern-regex: '(?i)(password|passwd|pwd|api_key|apikey|api_token|secret|secret_key|access_token|auth_token|bearer_token|client_secret|private_key|db_password|database_url|connection_string|aws_secret_access_key)\s*(?::=|[:=])\s*["''][^"''\n]{6,}["''](?!\s*\+)'
     paths:
       include:
         - "*.py"

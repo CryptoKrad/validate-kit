@@ -166,6 +166,51 @@ describe("review fixes (2026-07-01)", () => {
     expect(() => oxlint.parseOutput(raw, ctx())).toThrow(/diagnostics/);
   });
 
+  // oxlint 1.92.0 on a .js that is not UTF-8, recorded 2026-11-09 in a
+  // repository of saved pages (assets/sota-2026-11-09/oxlint-unreadable): the
+  // diagnostic has no filename, and the adapter crashed the whole run on it.
+  it("oxlint reports a file it could not read as a finding, and refuses any other diagnostic without a file", () => {
+    const unreadable = {
+      message:
+        'Failed to open file /repo/saved/latin.js with error "stream did not contain valid UTF-8"',
+      severity: "error",
+      labels: [],
+    };
+    const { findings } = oxlint.parseOutput(
+      {
+        stdout: JSON.stringify({
+          diagnostics: [unreadable],
+          number_of_files: 2,
+        }),
+        stderr: "",
+        exitCode: 1,
+      },
+      ctx({ cwd: "/repo" }),
+    );
+    expect(findings).toMatchObject([
+      {
+        file: "/repo/saved/latin.js",
+        line: 1,
+        ruleId: "unreadable",
+        severity: "warning",
+        message:
+          "oxlint could not read this file, so nothing in it is linted: stream did not contain valid UTF-8",
+      },
+    ]);
+    expect(() =>
+      oxlint.parseOutput(
+        {
+          stdout: JSON.stringify({
+            diagnostics: [{ message: "something new", severity: "error" }],
+          }),
+          stderr: "",
+          exitCode: 1,
+        },
+        ctx(),
+      ),
+    ).toThrow(/without a file \("something new"\)/);
+  });
+
   // H2 — ast-grep fix mode returns human text; must not be JSON-parsed → crash.
   it("ast-grep fix mode ignores human stdout instead of crashing", () => {
     const raw: RawOutput = {

@@ -25,9 +25,17 @@ interface OxDiagnostic {
   code?: string;
   severity?: string;
   url?: string;
-  filename: string;
+  /** Absent on a file oxlint could not open. */
+  filename?: string;
   labels?: OxLabel[];
 }
+
+/**
+ * A file oxlint could not read (a `.js` saved in another encoding): it says so
+ * in the message, with no `filename`, `code` or label. Recorded on 1.92.0:
+ * docs/research/lint-toolchain/assets/sota-2026-11-09/oxlint-unreadable.
+ */
+const UNREADABLE = /^Failed to open file (.+) with error "(.*)"$/;
 
 /** oxlint — very fast JS/TS linter (oxc). The broad JS/TS lint layer. */
 export const oxlint: ToolAdapter = {
@@ -90,6 +98,26 @@ export const oxlint: ToolAdapter = {
       diagnostics.length === 0 &&
       (root as { number_of_files?: unknown }).number_of_files === 0;
     const findings = diagnostics.map((d) => {
+      if (typeof d.filename !== "string") {
+        const unreadable = UNREADABLE.exec(d.message);
+        if (!unreadable?.[1])
+          throw new Error(
+            `oxlint output has a diagnostic without a file (${JSON.stringify(d.message.slice(0, 120))}): its output format may have changed; refusing to report it.`,
+          );
+        const unread = absPosix(ctx.cwd, unreadable[1]);
+        return finding({
+          tool: "oxlint",
+          layer: "lint",
+          language: languageForFile(unread),
+          file: unread,
+          line: 1,
+          col: 1,
+          ruleId: "unreadable",
+          severity: "warning",
+          message: `oxlint could not read this file, so nothing in it is linted: ${unreadable[2] ?? ""}`,
+          fixable: false,
+        });
+      }
       const file = absPosix(ctx.cwd, d.filename);
       // labels[0] IS the diagnostic anchor in oxlint's miette-style JSON —
       // there is no primary flag (verified empirically on oxlint 1.x); later

@@ -4673,6 +4673,21 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     ).join();
   }
   dv23.zshSyntax = zshCase;
+  // The credential rule: Go's `:=` is an assignment too (it was never
+  // matched), and a literal joined to a generated value is a prefix, not the
+  // secret (it was reported).
+  let credentialCase = "semgrep not installed: skipped";
+  if (hasTool("semgrep", ["--version"])) {
+    const credRoot = dvFixture("dv23-cred", {
+      "cred.go":
+        'package a\n\nfunc f(raw []byte) {\n\tsecret := "whsec_" + encode(raw)\n\tapiKey := "example-not-a-real-key"\n\tpassword = "correct-horse-battery"\n\tuse(secret, apiKey, password)\n}\n',
+    });
+    credentialCase = findingLines(
+      dv23Check(credRoot, ["--only", "semgrep"], "dv23 credential").findings,
+      "dv23-cred",
+    ).join();
+  }
+  dv23.credential = credentialCase;
   // deadcode: under ci, a function no main reaches.
   // On Go 1.25, v0.49.0: later releases need Go 1.26 (go-deadcode.md, 6).
   let deadcodeCase = "go not installed: skipped";
@@ -4748,6 +4763,9 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       (dv23.infection === "infection not installed: skipped" ||
         dv23.infection ===
           "GreaterThan src/Money.php:14,min-msi infection.json5:1") &&
+      (dv23.credential === "semgrep not installed: skipped" ||
+        dv23.credential ===
+          "vk-hardcoded-credential cred.go:5,vk-hardcoded-credential cred.go:6") &&
       (dv23.zshSyntax === "zsh not installed: skipped" ||
         dv23.zshSyntax === "parse bad.zsh:4,parse tool.sh:4") &&
       (dv23.astroCheck === "astro not installable: skipped" ||

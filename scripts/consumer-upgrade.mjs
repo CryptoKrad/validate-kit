@@ -19,6 +19,8 @@
 //                                                          (--commit commits the wiring there; nothing is pushed;
 //                                                          --config=<file> is its validate.config.json, for a
 //                                                          project `extends: "recommended"` alone does not fit)
+//       --wait=<minutes>        with --apply or --install: a project in use is looked at again each minute
+//                               until it has been left alone for an hour, or the minutes run out
 //   node scripts/consumer-upgrade.mjs --status [folder]    the projects under a folder (default: beside this
 //                                                          repository) whose kit is not the committed one;
 //                                                          nothing printed, exit 0, when none is
@@ -75,10 +77,26 @@ export function statusOf(porcelain) {
 /** What differs from HEAD in a work tree, as [state, path] pairs. */
 function changes(project) {
   return statusOf(
-    execFileSync("git", ["-C", project, "status", "--porcelain"], {
-      encoding: "utf8",
-    }),
+    execFileSync(
+      "git",
+      ["-C", project, "status", "--porcelain", "--untracked-files=all"],
+      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    ),
   );
+}
+
+// What an install writes in a project: `init`'s files and the baseline.
+const WIRING =
+  /^(?:\.gitignore|\.mcp\.json|\.claude\/settings\.json|lefthook\.yml|\.lefthook\/.+|validate\.config\.(?:json|mjs|ts)|validate\.baseline\.json)$/;
+
+/**
+ * The paths an install wrote: what differs now and did not before it began.
+ * `before` and `after` are [state, path] pairs; only wiring paths count, so
+ * a file someone else saved meanwhile is never taken for the install's.
+ */
+export function wrote(before, after) {
+  const had = new Set(before.map(([, path]) => path));
+  return after.filter(([, path]) => !had.has(path) && WIRING.test(path));
 }
 
 /** One line per finding, the same for both kits: `tool/rule path:line`. */
@@ -331,11 +349,36 @@ function run(status, findings, more = {}) {
   };
 }
 
-/** Put the tree back as it was before an install that did not end silent. */
-function undo(project, folder) {
+/**
+ * The files the gate's quiet output and the stop hook speak about, or nothing
+ * when a line is neither a finding (`path:line:col severity …`) nor one of
+ * their own lines around the findings: something this cannot vouch for.
+ */
+export function spokenOf(text) {
+  const paths = [];
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") continue;
+    const found = /^(.+?):\d+:\d+ (?:error|warning|info) /.exec(line);
+    if (found) paths.push(found[1]);
+    else if (
+      !/^validate-kit: (?:exit \d+:|your changes leave these findings)/.test(
+        line,
+      ) &&
+      !line.startsWith("The working tree has uncommitted changes:")
+    )
+      return undefined;
+  }
+  return paths;
+}
+
+/**
+ * Put the tree back as it was before an install that did not end silent:
+ * the install's own files go, and nothing that was uncommitted before it
+ * began is touched.
+ */
+function undo(project, folder, before) {
   rmSync(folder, { recursive: true, force: true });
-  // The tree was clean when the install began: whatever differs is its own.
-  for (const [state, path] of changes(project)) {
+  for (const [state, path] of wrote(before, changes(project))) {
     if (state === "??")
       rmSync(join(project, path), { recursive: true, force: true });
     else git(project, ["checkout", "--", path]);
@@ -352,12 +395,24 @@ function undo(project, folder) {
 function installInto(project, commit, config) {
   const name = basename(project);
   const folder = join(project, ".tools", "validate-kit");
-  if (existsSync(join(folder, "package.json")))
-    fail(2, `${name} already has a kit: upgrade it (no --install)`);
-  if (changes(project).length > 0)
+  // A folder with a package.json and no kit in it is an install that never
+  // finished: this one takes its place.
+  if (existsSync(join(folder, "package.json"))) {
+    const pkg = JSON.parse(readFileSync(join(folder, "package.json"), "utf8"));
+    if (
+      pkg.devDependencies?.["validate-kit"] ??
+      pkg.dependencies?.["validate-kit"]
+    )
+      fail(2, `${name} already has a kit: upgrade it (no --install)`);
+  }
+  // Uncommitted work stays as it is: the install writes its own files and
+  // commits only those. It cannot share a file with that work.
+  const before = changes(project);
+  const shared = before.filter(([, path]) => WIRING.test(path));
+  if (shared.length > 0)
     fail(
       1,
-      `${name} has uncommitted changes: the wiring goes in from a clean tree, as a commit of its own`,
+      `${name} has uncommitted changes to ${shared.map(([, path]) => path).join(", ")}, which the install also writes: commit or set them aside first`,
     );
   const packed = tarball();
   mkdirSync(folder, { recursive: true });
@@ -401,7 +456,17 @@ function installInto(project, commit, config) {
   });
   const said =
     `${quiet.stdout}${quiet.stderr}${hook.stdout}${hook.stderr}`.trim();
-  if (init.status !== 0 || quiet.status !== 0 || hook.status !== 0 || said) {
+  // Work that was uncommitted before the install is its author's to hear
+  // about: findings there are the hook doing its job, not a gate that starts
+  // red. Anything else it says, and the install is undone.
+  const work = new Set(before.map(([, path]) => path));
+  const spoken = init.status === 0 ? spokenOf(said) : undefined;
+  const theirs =
+    spoken !== undefined &&
+    spoken.length > 0 &&
+    spoken.every((path) => work.has(path));
+  const silent = quiet.status === 0 && hook.status === 0 && said === "";
+  if (init.status !== 0 || !(silent || theirs)) {
     process.stdout.write(
       `${name}: not installed, and put back as it was: ${init.status === 0 ? "its gate does not end silent with today's findings as the baseline" : "init stopped"}\n${`${init.status === 0 ? said : init.stdout + init.stderr}`
         .split("\n")
@@ -409,20 +474,25 @@ function installInto(project, commit, config) {
         .map((line) => `  ${line}`)
         .join("\n")}\n`,
     );
-    undo(project, folder);
+    undo(project, folder, before);
     process.exit(1);
   }
-  const wrote = changes(project).map(([state, path]) => `${state} ${path}`);
+  const own = wrote(before, changes(project));
   process.stdout.write(
-    `${name}: installed ${basename(packed)}; ${String(found)} findings of today recorded as the baseline; the gate and the stop hook print nothing\n${wrote.map((line) => `  ${line}`).join("\n")}\n`,
+    `${name}: installed ${basename(packed)}; ${String(found)} findings of today recorded as the baseline; the gate and the stop hook ${theirs ? `speak only about ${String(new Set(spoken).size)} files that were uncommitted before the install` : "print nothing"}\n${own.map(([state, path]) => `  ${state} ${path}`).join("\n")}\n`,
   );
   if (!commit) return;
-  git(project, ["add", "-A"]);
+  // Its own files only: whatever else is uncommitted there stays uncommitted.
+  const paths = own.map(([, path]) => path);
+  git(project, ["add", "--", ...paths]);
   git(project, [
     "commit",
     "-q",
+    "--only",
     "-m",
     `chore: validate-kit as this repository's gate\n\nThe config, the lefthook pre-commit and pre-push hooks, Claude Code's stop\nhook and the MCP entry, as \`validate-kit init\` writes them, and today's\n${String(found)} findings as the baseline: the gate starts silent and speaks only\nabout what is new. The kit itself is a local install under .tools/ (ignored).\n\nCo-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>`,
+    "--",
+    ...paths,
   ]);
   process.stdout.write(
     `  committed as ${git(project, ["rev-parse", "--short", "HEAD"])}; not pushed\n`,
@@ -466,6 +536,36 @@ function selfTest() {
   );
   assert.equal(commitOf("file:validate-kit-0.2.5.tgz"), undefined);
   assert.equal(commitOf(undefined), undefined);
+  // What the gate and the hook speak about: findings by file, or nothing
+  // when a line is not theirs.
+  assert.deepEqual(
+    spokenOf(
+      "src/a.go:72:23 warning golangci-lint/errcheck Error return value is not checked\nvalidate-kit: exit 1: 0 error(s), 1 warning(s)\nThe working tree has uncommitted changes: this run judged them too.\nvalidate-kit: your changes leave these findings; fix them before you finish:\nsrc/a.go:72:23 warning golangci-lint/errcheck Error return value is not checked",
+    ),
+    ["src/a.go", "src/a.go"],
+  );
+  assert.deepEqual(spokenOf(""), []);
+  assert.equal(spokenOf("panic: something else"), undefined);
+  // An install's own files: new since it began, and only what it writes.
+  assert.deepEqual(
+    wrote(
+      [[" M", "src/app.go"]],
+      [
+        [" M", "src/app.go"],
+        [" M", ".mcp.json"],
+        ["??", "lefthook.yml"],
+        ["??", ".lefthook/pre-push/validate-kit-preflight.sh"],
+        ["??", "validate.config.json"],
+        ["??", "notes.txt"],
+      ],
+    ).map(([, path]) => path),
+    [
+      ".mcp.json",
+      "lefthook.yml",
+      ".lefthook/pre-push/validate-kit-preflight.sh",
+      "validate.config.json",
+    ],
+  );
   // The first line of git's status keeps its leading column.
   assert.deepEqual(statusOf(" M .gitignore\n?? lefthook.yml\nA  new.txt\n"), [
     [" M", ".gitignore"],
@@ -503,6 +603,16 @@ function main() {
     fail(2, "usage: consumer-upgrade.mjs <project> [--apply] | --self-test");
   const project = resolve(target);
   const folder = join(project, ".tools", "validate-kit");
+  // --wait=<minutes>: a project in use is looked at again each minute, and
+  // the work starts when it has been left alone for an hour.
+  const wait = Number(
+    args.find((arg) => arg.startsWith("--wait="))?.slice(7) ?? 0,
+  );
+  const deadline = Date.now() + wait * 60_000;
+  const pause = new Int32Array(new SharedArrayBuffer(4));
+  if (!evenIfBusy)
+    while (inUse(project) && Date.now() < deadline)
+      Atomics.wait(pause, 0, 0, 60_000);
   if (args.includes("--install")) {
     if (inUse(project) && !evenIfBusy)
       fail(
