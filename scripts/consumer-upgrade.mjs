@@ -53,6 +53,15 @@ const GATE_TIMEOUT_MS = 30 * 60_000;
 // A commit or an edit this recent means someone's hooks are in use right now.
 const BUSY_MS = 60 * 60_000;
 const windows = process.platform === "win32";
+// How pnpm installs the kit in a project, whatever that project's pnpm and
+// its settings: no release younger than a day among the kit's dependencies
+// (a packed kit carries no lockfile, so they are resolved on the spot), and,
+// without a terminal, leave to replace a node_modules another pnpm made
+// (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY): the folder holds nothing else.
+const PNPM_POLICY = [
+  "--config.minimumReleaseAge=1440",
+  "--config.confirmModulesPurge=false",
+];
 
 function fail(code, message) {
   process.stderr.write(`consumer-upgrade: ${message}\n`);
@@ -226,6 +235,19 @@ function sameKit(a, b) {
  * committed kit. Read from each .tools/validate-kit/package.json: nothing is
  * run in any project.
  */
+/** The kit an install folder names, if pnpm could read its manifest. */
+function namedKit(folder) {
+  try {
+    const pkg = JSON.parse(readFileSync(join(folder, "package.json"), "utf8"));
+    return (
+      pkg.devDependencies?.["validate-kit"] ??
+      pkg.dependencies?.["validate-kit"]
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 function listBehind(root) {
   const current = kitCommit();
   const behind = [];
@@ -237,16 +259,16 @@ function listBehind(root) {
     : {};
   for (const name of readdirSync(root).toSorted()) {
     if (Object.hasOwn(holds, name)) continue;
-    const manifest = join(root, name, ".tools", "validate-kit", "package.json");
-    if (!existsSync(manifest)) continue;
-    let spec;
-    try {
-      const pkg = JSON.parse(readFileSync(manifest, "utf8"));
-      spec =
-        pkg.devDependencies?.["validate-kit"] ??
-        pkg.dependencies?.["validate-kit"];
-    } catch {
-      continue; // not a package pnpm could read either
+    const folder = join(root, name, ".tools", "validate-kit");
+    if (!existsSync(join(folder, "package.json"))) continue;
+    const spec = namedKit(folder);
+    // An install that failed after pnpm cleared node_modules: the folder
+    // names a kit, and the project's hooks have nothing to run.
+    if (spec && !existsSync(binOf(folder))) {
+      behind.push(
+        `${name}: .tools/validate-kit names a kit and holds no binary, so its hooks cannot run: run consumer-upgrade.mjs on it`,
+      );
+      continue;
     }
     const has = commitOf(spec);
     if (has && sameKit(has, current)) continue;
@@ -302,25 +324,30 @@ function install(folder, spec) {
     ? "dependencies"
     : "devDependencies";
   pkg[table] = { ...pkg[table], "validate-kit": spec };
-  // What is there now, to put back: a failed install must not leave the
-  // folder naming one kit and holding another.
+  // The kit the folder names now, to go back to.
+  const before = readFileSync(manifest, "utf8");
   const lockfile = join(folder, "pnpm-lock.yaml");
-  const was = [manifest, lockfile]
-    .filter((path) => existsSync(path))
-    .map((path) => [path, readFileSync(path, "utf8")]);
-  writeFileSync(manifest, `${JSON.stringify(pkg)}\n`);
-  // Without a terminal pnpm will not replace a node_modules another pnpm
-  // made (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY): the folder holds
-  // nothing but this install, so it may.
-  const done = inFolder(folder, "pnpm", [
-    "install",
-    "--config.confirmModulesPurge=false",
-  ]);
+  // The kit's own dependencies are resolved again each time, under the
+  // cooldown: a lockfile kept from an earlier install can name a release
+  // that was hours old when it was written, which pnpm then refuses.
+  const installAs = (text) => {
+    writeFileSync(manifest, text);
+    rmSync(lockfile, { force: true });
+    return inFolder(folder, "pnpm", ["install", ...PNPM_POLICY]);
+  };
+  // A trial folder holds no kit yet, and has nothing to go back to.
+  const had = existsSync(binOf(folder));
+  const done = installAs(`${JSON.stringify(pkg)}\n`);
   if (done.status === 0) return;
-  for (const [path, text] of was) writeFileSync(path, text);
+  const why = `${done.stdout}${done.stderr}`.trim().split("\n").slice(-15);
+  if (!had) fail(1, `pnpm install failed in ${folder}:\n${why.join("\n")}`);
+  // pnpm clears node_modules before it fails: naming the old kit again is
+  // not enough, the old kit has to be installed again, or the project's
+  // hooks have no binary to run.
+  const back = installAs(before);
   fail(
     1,
-    `pnpm install failed in ${folder}, which is put back as it was:\n${`${done.stdout}${done.stderr}`.trim().split("\n").slice(-15).join("\n")}`,
+    `pnpm install failed in ${folder}; ${back.status === 0 && existsSync(binOf(folder)) ? "the kit it had is installed again" : "AND the kit it had could not be installed again: its hooks have no binary until `pnpm install` succeeds there"}:\n${why.join("\n")}`,
   );
 }
 
@@ -418,11 +445,20 @@ function installInto(project, commit, config) {
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, "package.json"), '{ "private": true }\n');
   copyFileSync(packed, join(folder, basename(packed)));
-  execFileSync(
-    "pnpm",
-    ["add", "-D", "--allow-build=@ast-grep/cli", `./${basename(packed)}`],
-    { cwd: folder, stdio: ["ignore", "ignore", "inherit"], shell: windows },
-  );
+  const added = inFolder(folder, "pnpm", [
+    "add",
+    "-D",
+    "--allow-build=@ast-grep/cli",
+    ...PNPM_POLICY,
+    `./${basename(packed)}`,
+  ]);
+  if (added.status !== 0) {
+    rmSync(folder, { recursive: true, force: true });
+    fail(
+      1,
+      `pnpm add failed in ${folder}, which is removed:\n${`${added.stdout}${added.stderr}`.trim().split("\n").slice(-15).join("\n")}`,
+    );
+  }
   // The install is this machine's: never tracked.
   const ignored = spawnSync("git", [
     "-C",
@@ -625,8 +661,18 @@ function main() {
       args.find((arg) => arg.startsWith("--config="))?.slice(9),
     );
   }
-  if (!existsSync(join(folder, "package.json")) || !existsSync(binOf(folder)))
+  const named = namedKit(folder);
+  if (!named)
     fail(2, `${project} has no kit installed under .tools/validate-kit`);
+  // It names a kit and holds no binary (an install that failed after pnpm
+  // cleared node_modules): what it names is installed again first, in use
+  // or not, since its hooks have nothing to run until then.
+  if (!existsSync(binOf(folder))) {
+    install(folder, named);
+    process.stdout.write(
+      `${basename(project)}: its install folder named a kit and held no binary: installed again\n`,
+    );
+  }
   // The gate runs the project's own tests and builds: not beside whoever is
   // working there, and its kit is not swapped under them.
   if (inUse(project) && !evenIfBusy) {
