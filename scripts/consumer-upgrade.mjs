@@ -13,6 +13,10 @@
 //
 //   node scripts/consumer-upgrade.mjs <project>            compare; change nothing
 //   node scripts/consumer-upgrade.mjs <project> --apply    compare, then upgrade when nothing is new
+//       --accept-new-findings   also when the gate was failing already and fails the same way with more
+//                               findings (a kit fix that finds what the old kit missed); never from a clean gate
+//   node scripts/consumer-upgrade.mjs <project> --install  a project with no kit: install, init, baseline, prove it silent
+//                                                          (--commit commits the wiring there; nothing is pushed)
 //   node scripts/consumer-upgrade.mjs --self-test
 //
 // Exit 0: nothing new (and, with --apply, upgraded). 1: something new, or the
@@ -20,8 +24,10 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  appendFileSync,
   copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   renameSync,
@@ -47,6 +53,26 @@ function fail(code, message) {
 
 function git(cwd, args) {
   return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
+}
+
+/**
+ * `git status --porcelain` as [state, path] pairs. The two state columns are
+ * part of each line (" M .gitignore"): trimming the output shifts the first.
+ */
+export function statusOf(porcelain) {
+  return porcelain
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => [line.slice(0, 2), line.slice(3)]);
+}
+
+/** What differs from HEAD in a work tree, as [state, path] pairs. */
+function changes(project) {
+  return statusOf(
+    execFileSync("git", ["-C", project, "status", "--porcelain"], {
+      encoding: "utf8",
+    }),
+  );
 }
 
 /** One line per finding, the same for both kits: `tool/rule path:line`. */
@@ -88,15 +114,19 @@ export function compare(oldRun, newRun, root) {
   const incomplete = fresh(newRun.report.incomplete, oldRun.report.incomplete);
   const crashed = fresh(newRun.report.crashed, oldRun.report.crashed);
   const sameExit = newRun.status === oldRun.status || newRun.status === 0;
+  const toolsHold = incomplete.length === 0 && crashed.length === 0;
   return {
     findings,
     incomplete,
     crashed,
-    safe:
-      findings.length === 0 &&
-      incomplete.length === 0 &&
-      crashed.length === 0 &&
-      sameExit,
+    safe: findings.length === 0 && toolsHold && sameExit,
+    // The gate was failing already, and fails the same way with more to say:
+    // nobody's green gate turns red (--accept-new-findings).
+    onlyMoreFindings:
+      findings.length > 0 &&
+      toolsHold &&
+      oldRun.status !== 0 &&
+      newRun.status === oldRun.status,
   };
 }
 
@@ -161,12 +191,24 @@ function install(folder, spec) {
     ? "dependencies"
     : "devDependencies";
   pkg[table] = { ...pkg[table], "validate-kit": spec };
+  // What is there now, to put back: a failed install must not leave the
+  // folder naming one kit and holding another.
+  const lockfile = join(folder, "pnpm-lock.yaml");
+  const was = [manifest, lockfile]
+    .filter((path) => existsSync(path))
+    .map((path) => [path, readFileSync(path, "utf8")]);
   writeFileSync(manifest, `${JSON.stringify(pkg)}\n`);
-  execFileSync("pnpm", ["install", "--silent"], {
+  const done = spawnSync("pnpm", ["install"], {
     cwd: folder,
-    stdio: ["ignore", "ignore", "inherit"],
+    encoding: "utf8",
     shell: windows,
   });
+  if (done.status === 0) return;
+  for (const [path, text] of was) writeFileSync(path, text);
+  fail(
+    1,
+    `pnpm install failed in ${folder}, which is put back as it was:\n${`${done.stdout}${done.stderr}`.trim().split("\n").slice(-15).join("\n")}`,
+  );
 }
 
 /** Is someone working in the project: a commit or an edit in the last hour? */
@@ -174,16 +216,13 @@ function inUse(project) {
   const since = Date.now() - BUSY_MS;
   if (Number(git(project, ["log", "-1", "--format=%ct"])) * 1000 > since)
     return true;
-  return git(project, ["status", "--porcelain"])
-    .split("\n")
-    .filter(Boolean)
-    .some((line) => {
-      try {
-        return statSync(join(project, line.slice(3))).mtimeMs > since;
-      } catch {
-        return false; // deleted, or a rename's "a -> b"
-      }
-    });
+  return changes(project).some(([, path]) => {
+    try {
+      return statSync(join(project, path)).mtimeMs > since;
+    } catch {
+      return false; // deleted, or a rename's "a -> b"
+    }
+  });
 }
 
 /** A finding and a gate run, for the self-test. */
@@ -195,6 +234,107 @@ function run(status, findings, more = {}) {
     status,
     report: { findings, incomplete: [], crashed: [], ...more },
   };
+}
+
+/** Put the tree back as it was before an install that did not end silent. */
+function undo(project, folder) {
+  rmSync(folder, { recursive: true, force: true });
+  // The tree was clean when the install began: whatever differs is its own.
+  for (const [state, path] of changes(project)) {
+    if (state === "??")
+      rmSync(join(project, path), { recursive: true, force: true });
+    else git(project, ["checkout", "--", path]);
+  }
+}
+
+/**
+ * Give a project with no kit the committed one, the way the README says:
+ * a private install under .tools/validate-kit, `init` for the config, the
+ * hooks and the MCP entry, and today's findings recorded as its baseline so
+ * the gate starts silent and only what is new speaks. From a clean tree
+ * only, and undone unless the gate ends at exit 0 with nothing printed.
+ */
+function installInto(project, commit) {
+  const name = basename(project);
+  const folder = join(project, ".tools", "validate-kit");
+  if (existsSync(join(folder, "package.json")))
+    fail(2, `${name} already has a kit: upgrade it (no --install)`);
+  if (changes(project).length > 0)
+    fail(
+      1,
+      `${name} has uncommitted changes: the wiring goes in from a clean tree, as a commit of its own`,
+    );
+  const packed = tarball();
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, "package.json"), '{ "private": true }\n');
+  copyFileSync(packed, join(folder, basename(packed)));
+  execFileSync(
+    "pnpm",
+    ["add", "-D", "--allow-build=@ast-grep/cli", `./${basename(packed)}`],
+    { cwd: folder, stdio: ["ignore", "ignore", "inherit"], shell: windows },
+  );
+  // The install is this machine's: never tracked.
+  const ignored = spawnSync("git", [
+    "-C",
+    project,
+    "check-ignore",
+    "-q",
+    ".tools",
+  ]);
+  if (ignored.status !== 0)
+    appendFileSync(
+      join(project, ".gitignore"),
+      "\n# validate-kit's local install\n.tools/\n",
+    );
+  const bin = binOf(folder);
+  const kit = (args) =>
+    spawnSync(bin, args, {
+      cwd: project,
+      encoding: "utf8",
+      maxBuffer: 256 * 1024 * 1024,
+      timeout: GATE_TIMEOUT_MS,
+      shell: windows,
+    });
+  const init = kit(["init"]);
+  const found = init.status === 0 ? count(gate(bin, project)) : 0;
+  if (found > 0) kit(["baseline"]);
+  const quiet =
+    init.status === 0 ? kit(["check", "--profile", "ci", "--quiet"]) : init;
+  // The stop hook on a tree with nothing of the agent's in it.
+  const hook = spawnSync(bin, ["hook", "claude"], {
+    cwd: project,
+    encoding: "utf8",
+    input: JSON.stringify({ hook_event_name: "Stop", cwd: project }),
+    shell: windows,
+  });
+  const said =
+    `${quiet.stdout}${quiet.stderr}${hook.stdout}${hook.stderr}`.trim();
+  if (init.status !== 0 || quiet.status !== 0 || hook.status !== 0 || said) {
+    process.stdout.write(
+      `${name}: not installed, and put back as it was: ${init.status === 0 ? "its gate does not end silent with today's findings as the baseline" : "init stopped"}\n${`${init.status === 0 ? said : init.stdout + init.stderr}`
+        .split("\n")
+        .slice(0, 40)
+        .map((line) => `  ${line}`)
+        .join("\n")}\n`,
+    );
+    undo(project, folder);
+    process.exit(1);
+  }
+  const wrote = changes(project).map(([state, path]) => `${state} ${path}`);
+  process.stdout.write(
+    `${name}: installed ${basename(packed)}; ${String(found)} findings of today recorded as the baseline; the gate and the stop hook print nothing\n${wrote.map((line) => `  ${line}`).join("\n")}\n`,
+  );
+  if (!commit) return;
+  git(project, ["add", "-A"]);
+  git(project, [
+    "commit",
+    "-q",
+    "-m",
+    `chore: validate-kit as this repository's gate\n\nThe config, the lefthook pre-commit and pre-push hooks, Claude Code's stop\nhook and the MCP entry, as \`validate-kit init\` writes them, and today's\n${String(found)} findings as the baseline: the gate starts silent and speaks only\nabout what is new. The kit itself is a local install under .tools/ (ignored).\n\nCo-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>`,
+  ]);
+  process.stdout.write(
+    `  committed as ${git(project, ["rev-parse", "--short", "HEAD"])}; not pushed\n`,
+  );
 }
 
 function selfTest() {
@@ -219,6 +359,20 @@ function selfTest() {
     compare(run(0, []), run(4, [], { crashed: ["tsc"] }), "/p").safe,
     false,
   );
+  // More findings on a gate that was failing already can be taken on request;
+  // on a clean gate, or with a tool newly missing, never.
+  assert.equal(more.onlyMoreFindings, true);
+  assert.equal(
+    compare(run(0, []), run(1, [finding("F401", 9)]), "/p").onlyMoreFindings,
+    false,
+  );
+  assert.equal(missing.onlyMoreFindings, false);
+  // The first line of git's status keeps its leading column.
+  assert.deepEqual(statusOf(" M .gitignore\n?? lefthook.yml\nA  new.txt\n"), [
+    [" M", ".gitignore"],
+    ["??", "lefthook.yml"],
+    ["A ", "new.txt"],
+  ]);
   // A tool that crashed under the old kit too is not news, whatever it printed.
   const crash = (stderr) =>
     run(4, [], { crashed: [{ id: "govulncheck", stderr }] });
@@ -244,6 +398,14 @@ function main() {
     fail(2, "usage: consumer-upgrade.mjs <project> [--apply] | --self-test");
   const project = resolve(target);
   const folder = join(project, ".tools", "validate-kit");
+  if (args.includes("--install")) {
+    if (inUse(project) && !evenIfBusy)
+      fail(
+        1,
+        `${basename(project)} changed in the last hour, so someone is working there (--even-if-busy)`,
+      );
+    return installInto(project, args.includes("--commit"));
+  }
   if (!existsSync(join(folder, "package.json")) || !existsSync(binOf(folder)))
     fail(2, `${project} has no kit installed under .tools/validate-kit`);
   // The gate runs the project's own tests and builds: not beside whoever is
@@ -276,14 +438,18 @@ function main() {
     ])
       for (const item of list.slice(0, 40))
         process.stdout.write(`  ${what}: ${item}\n`);
-    if (!verdict.safe) {
+    const accepted =
+      verdict.onlyMoreFindings && args.includes("--accept-new-findings");
+    if (!verdict.safe && !accepted) {
       process.stdout.write(
-        "  not safe to upgrade: the new kit reports what the old one did not\n",
+        `  not safe to upgrade: the new kit reports what the old one did not${verdict.onlyMoreFindings ? " (the gate was failing already, with the same exit code: --accept-new-findings takes them)" : ""}\n`,
       );
       process.exit(1);
     }
     if (!apply) {
-      process.stdout.write("  nothing new: safe to upgrade (--apply)\n");
+      process.stdout.write(
+        `  ${accepted ? "more findings on a gate that was failing already" : "nothing new"}: safe to upgrade (--apply)\n`,
+      );
       return;
     }
     copyFileSync(packed, join(folder, basename(packed)));
