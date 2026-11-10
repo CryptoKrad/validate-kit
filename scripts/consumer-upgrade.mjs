@@ -136,14 +136,29 @@ export function compare(oldRun, newRun, root) {
   };
 }
 
+/**
+ * Run a command in a folder as that folder's own shell would: a login shell
+ * started there, so a version manager (mise, asdf) picks the project's tools.
+ * Run directly, the command inherits this repository's: one consumer's gate
+ * exited 0 from its own shell and 4 from here, under another Go.
+ */
+function inFolder(folder, command, args, options = {}) {
+  const shell = process.env.SHELL;
+  const spawnOptions = { cwd: folder, encoding: "utf8", ...options };
+  if (windows || !shell)
+    return spawnSync(command, args, { ...spawnOptions, shell: windows });
+  return spawnSync(
+    shell,
+    ["-lc", 'exec "$@"', "sh", command, ...args],
+    spawnOptions,
+  );
+}
+
 /** The gate's report from one kit, run in the project. */
 function gate(bin, project) {
-  const done = spawnSync(bin, GATE, {
-    cwd: project,
-    encoding: "utf8",
+  const done = inFolder(project, bin, GATE, {
     maxBuffer: 256 * 1024 * 1024,
     timeout: GATE_TIMEOUT_MS,
-    shell: windows,
   });
   if (done.error)
     fail(1, `${bin} did not finish the gate: ${done.error.message}`);
@@ -276,11 +291,13 @@ function install(folder, spec) {
     .filter((path) => existsSync(path))
     .map((path) => [path, readFileSync(path, "utf8")]);
   writeFileSync(manifest, `${JSON.stringify(pkg)}\n`);
-  const done = spawnSync("pnpm", ["install"], {
-    cwd: folder,
-    encoding: "utf8",
-    shell: windows,
-  });
+  // Without a terminal pnpm will not replace a node_modules another pnpm
+  // made (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY): the folder holds
+  // nothing but this install, so it may.
+  const done = inFolder(folder, "pnpm", [
+    "install",
+    "--config.confirmModulesPurge=false",
+  ]);
   if (done.status === 0) return;
   for (const [path, text] of was) writeFileSync(path, text);
   fail(
@@ -366,12 +383,9 @@ function installInto(project, commit, config) {
     );
   const bin = binOf(folder);
   const kit = (args) =>
-    spawnSync(bin, args, {
-      cwd: project,
-      encoding: "utf8",
+    inFolder(project, bin, args, {
       maxBuffer: 256 * 1024 * 1024,
       timeout: GATE_TIMEOUT_MS,
-      shell: windows,
     });
   // A project the recommended preset alone does not fit brings its config:
   // init keeps one that is there.
@@ -382,11 +396,8 @@ function installInto(project, commit, config) {
   const quiet =
     init.status === 0 ? kit(["check", "--profile", "ci", "--quiet"]) : init;
   // The stop hook on a tree with nothing of the agent's in it.
-  const hook = spawnSync(bin, ["hook", "claude"], {
-    cwd: project,
-    encoding: "utf8",
+  const hook = inFolder(project, bin, ["hook", "claude"], {
     input: JSON.stringify({ hook_event_name: "Stop", cwd: project }),
-    shell: windows,
   });
   const said =
     `${quiet.stdout}${quiet.stderr}${hook.stdout}${hook.stderr}`.trim();
