@@ -1714,6 +1714,20 @@ describe("error-prone", () => {
     ).toThrow(
       /failed without an Error Prone diagnostic.*Fatal error compiling/,
     );
+    // A plugin Maven could not fetch: the build never reaches a goal, and its
+    // cause is on stdout with nothing on stderr. CI read this as a format
+    // change, 2026-11-10 (assets/sota-2026-11-03/error-prone/unresolved-plugin).
+    expect(() =>
+      errorProne.parseOutput(
+        ran(
+          1,
+          "[INFO] Building app 0.1.0\n[ERROR] BUILD FAILURE\n[INFO] Total time:  0.061 s\n[ERROR] Plugin org.apache.maven.plugins:maven-resources-plugin:3.5.0 or one of its dependencies could not be resolved:\n[ERROR] \tCannot access central (https://repo.maven.apache.org/maven2) in offline mode and the artifact has not been downloaded from it before.\n[ERROR] -> [Help 1]\n[ERROR] \n[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.\n",
+        ),
+        ctx("/p"),
+      ),
+    ).toThrow(
+      /failed without an Error Prone diagnostic: Plugin org\.apache\.maven\.plugins:maven-resources-plugin:3\.5\.0 or one of its dependencies could not be resolved: Cannot access central/,
+    );
     expect(() => errorProne.parseOutput(ran(1), ctx("/p"))).toThrow(
       /output format may have changed/,
     );

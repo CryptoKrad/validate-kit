@@ -20,6 +20,22 @@ const DIAGNOSTIC =
 /** Maven's own summary of a failed compile, for the error message. */
 const FAILED = /^\[ERROR\] Failed to execute goal .*$/m;
 
+/** `[ERROR]` lines that say nothing about what went wrong. */
+const NO_CAUSE =
+  /^(?:BUILD FAILURE$|-> \[Help|\[Help \d|To see the full stack trace|Re-run Maven|For more information)/;
+/**
+ * What Maven said of a build that never reached a goal (a plugin it could not
+ * fetch, a pom it could not read): the first two `[ERROR]` lines with a cause.
+ * Recorded: assets/sota-2026-11-03/error-prone/unresolved-plugin.stdout.
+ */
+function buildError(stdout: string): string | undefined {
+  const said = stdout.split("\n").flatMap((line) => {
+    const text = /^\[ERROR\]\s+(\S.*)$/.exec(line)?.[1]?.trim();
+    return text && !NO_CAUSE.test(text) ? [text] : [];
+  });
+  return said.length > 0 ? said.slice(0, 2).join(" ") : undefined;
+}
+
 /** The pom declares Error Prone (its core as an annotation processor path). */
 function errorProneIn(root: string): boolean {
   try {
@@ -121,7 +137,9 @@ export const errorProne: ToolAdapter = {
     }
     if (raw.exitCode !== 0 && findings.length === 0) {
       const why =
-        FAILED.exec(raw.stdout)?.[0] ?? raw.stderr.trim().split("\n")[0];
+        FAILED.exec(raw.stdout)?.[0] ??
+        buildError(raw.stdout) ??
+        raw.stderr.trim().split("\n")[0];
       throw why
         ? new Error(
             `mvn compile failed without an Error Prone diagnostic: ${why}`,
