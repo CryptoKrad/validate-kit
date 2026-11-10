@@ -4,7 +4,9 @@
 // Reads the pins CI installs (.github/workflows, the baseline script), the
 // packages pnpm installs and the Homebrew formulas in the Brewfile, asks each
 // one's own registry for its newest stable release, and prints what is
-// behind. Nothing is printed when nothing is: it is run by a hook.
+// behind, with the projects beside this repository whose kit is not the
+// committed one (scripts/consumer-upgrade.mjs --status). Nothing is printed
+// when nothing is: it is run by a hook.
 //
 //   node scripts/outdated.mjs            what is behind; exit 1 when anything is
 //   node scripts/outdated.mjs --all      also what is held, too new, or not compared
@@ -404,6 +406,16 @@ function upgradeMachine() {
   );
 }
 
+/** The projects beside this repository whose kit is not the committed one, a line each. */
+function consumersBehind() {
+  const script = join(repoRoot, "scripts", "consumer-upgrade.mjs");
+  if (!existsSync(script)) return [];
+  const out = spawnSync(process.execPath, [script, "--status"], {
+    encoding: "utf8",
+  });
+  return out.stdout.split("\n").filter(Boolean);
+}
+
 /** Replace each moved pin's text in every tracked file that names it. */
 function apply(moves) {
   const files = execFileSync("git", ["ls-files"], {
@@ -574,17 +586,25 @@ function main() {
   const lines = (verdict) => [
     ...new Set(results.filter((r) => r.verdict === verdict).map((r) => r.line)),
   ];
+  const consumers = consumersBehind();
   const behind = [
     ...lines("behind"),
     ...brew.map((name) => `brew  ${name}: Homebrew has a newer one`),
+    ...consumers.map((line) => `kit  ${line}`),
   ];
   const report =
     behind.length === 0
       ? ""
       : [
-          `${behind.length} pinned versions are behind (node scripts/outdated.mjs --apply moves them):`,
+          `${behind.length} behind:`,
           ...behind.map((line) => `  ${line}`),
+          ...(lines("behind").length > 0
+            ? ["  node scripts/outdated.mjs --apply"]
+            : []),
           ...(brew.length > 0 ? [`  brew upgrade ${brew.join(" ")}`] : []),
+          ...(consumers.length > 0
+            ? ["  node scripts/consumer-upgrade.mjs <project> --apply"]
+            : []),
           "",
         ].join("\n");
   if (args.has("--refresh")) {

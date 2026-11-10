@@ -4656,6 +4656,23 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       "dv23-astro",
     ).join();
   dv23.astroCheck = astroCase;
+  // zsh-syntax: a .zsh file and a .sh with a zsh shebang, each with an
+  // unclosed `if`, beside a clean bash script. shellcheck runs too and must
+  // leave the zsh scripts alone (it answers SC1071 for one).
+  let zshCase = "zsh not installed: skipped";
+  if (hasTool("zsh", ["--version"])) {
+    const zshRoot = dvFixture("dv23-zsh", {
+      "bad.zsh": "#!/bin/zsh\nif [[ -n $1 ]]; then\n  print ok\n",
+      "tool.sh": "#!/usr/bin/env zsh\nfor f in *.txt; do\n  print -r -- $f\n",
+      "build.sh": '#!/usr/bin/env bash\necho "ok"\n',
+    });
+    zshCase = findingLines(
+      dv23Check(zshRoot, ["--only", "zsh-syntax", "shellcheck"], "dv23 zsh")
+        .findings,
+      "dv23-zsh",
+    ).join();
+  }
+  dv23.zshSyntax = zshCase;
   // deadcode: under ci, a function no main reaches.
   // On Go 1.25, v0.49.0: later releases need Go 1.26 (go-deadcode.md, 6).
   let deadcodeCase = "go not installed: skipped";
@@ -4731,6 +4748,8 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
       (dv23.infection === "infection not installed: skipped" ||
         dv23.infection ===
           "GreaterThan src/Money.php:14,min-msi infection.json5:1") &&
+      (dv23.zshSyntax === "zsh not installed: skipped" ||
+        dv23.zshSyntax === "parse bad.zsh:4,parse tool.sh:4") &&
       (dv23.astroCheck === "astro not installable: skipped" ||
         dv23.astroCheck ===
           "ts2322 src/pages/index.astro:3,ts2322 src/pages/index.astro:7") &&

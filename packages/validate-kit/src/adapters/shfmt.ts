@@ -12,6 +12,7 @@ import { toolAdopted } from "../detect/adoption.js";
 import { toPosix } from "../detect/languages.js";
 import { absPosix, filesIn, finding } from "./base.js";
 import { formatChanged } from "./mutation.js";
+import { isZsh, onlyScripts } from "./zsh-syntax.js";
 
 /** A parse error on stderr: `file:line:col: message`. */
 const PARSE = /^(.+?):(\d+):(\d+): (.*)$/;
@@ -47,7 +48,8 @@ export const shfmt: ToolAdapter = {
         configs: [],
         step: /(?:^|[\s;&|"'(/])shfmt(?:\s|$)/m,
       });
-    return chosen ? [seed] : [];
+    // shfmt formats sh, bash and mksh: a zsh script is not its to rewrite.
+    return chosen ? onlyScripts(seed, (path) => !isZsh(path)) : [];
   },
 
   refuseArgs: (extraArgs) =>

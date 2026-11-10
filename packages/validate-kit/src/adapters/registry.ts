@@ -139,6 +139,7 @@ import { vulture } from "./vulture.js";
 import { yamllint } from "./yamllint.js";
 import { zigAstCheck, zigFmt } from "./zig.js";
 import { zizmor } from "./zizmor.js";
+import { zshSyntax } from "./zsh-syntax.js";
 
 /**
  * Every tool integration the engine knows about. Drives detection→activation,
@@ -191,6 +192,7 @@ export const TOOL_REGISTRY: ToolAdapter[] = [
   deadcode,
   nilaway,
   shellcheck,
+  zshSyntax,
   squawk,
   // infrastructure and docs files: Dockerfiles, YAML, Markdown, links,
   // file names, licences

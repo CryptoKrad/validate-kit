@@ -16,7 +16,12 @@
 //       --accept-new-findings   also when the gate was failing already and fails the same way with more
 //                               findings (a kit fix that finds what the old kit missed); never from a clean gate
 //   node scripts/consumer-upgrade.mjs <project> --install  a project with no kit: install, init, baseline, prove it silent
-//                                                          (--commit commits the wiring there; nothing is pushed)
+//                                                          (--commit commits the wiring there; nothing is pushed;
+//                                                          --config=<file> is its validate.config.json, for a
+//                                                          project `extends: "recommended"` alone does not fit)
+//   node scripts/consumer-upgrade.mjs --status [folder]    the projects under a folder (default: beside this
+//                                                          repository) whose kit is not the committed one;
+//                                                          nothing printed, exit 0, when none is
 //   node scripts/consumer-upgrade.mjs --self-test
 //
 // Exit 0: nothing new (and, with --apply, upgraded). 1: something new, or the
@@ -28,6 +33,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   mkdtempSync,
   readFileSync,
   renameSync,
@@ -150,11 +156,83 @@ function gate(bin, project) {
   return { status: done.status, report };
 }
 
-/** The tarball of the committed kit, packed once per commit. */
+/** The committed kit: the last commit that changed the package. */
+function kitCommit() {
+  return git(repoRoot, [
+    "log",
+    "-1",
+    "--format=%h",
+    "--",
+    "packages/validate-kit",
+  ]);
+}
+
+/** `file:validate-kit-0.2.5-817e3e3.tgz` as `817e3e3`; nothing for a tarball named without its commit. */
+export function commitOf(spec) {
+  return /validate-kit-[\d.]+-([0-9a-f]{7,40})\.tgz$/.exec(spec ?? "")?.[1];
+}
+
+/** Is the kit package the same at both commits? */
+function sameKit(a, b) {
+  return (
+    spawnSync("git", [
+      "-C",
+      repoRoot,
+      "diff",
+      "--quiet",
+      a,
+      b,
+      "--",
+      "packages/validate-kit",
+    ]).status === 0
+  );
+}
+
+/**
+ * One line per project under `root` whose private kit install is not the
+ * committed kit. Read from each .tools/validate-kit/package.json: nothing is
+ * run in any project.
+ */
+function listBehind(root) {
+  const current = kitCommit();
+  const behind = [];
+  // Projects that stay behind on purpose, with the reason (a private file:
+  // it names them).
+  const holdsFile = join(repoRoot, "docs", "consumers", "holds.json");
+  const holds = existsSync(holdsFile)
+    ? JSON.parse(readFileSync(holdsFile, "utf8"))
+    : {};
+  for (const name of readdirSync(root).toSorted()) {
+    if (Object.hasOwn(holds, name)) continue;
+    const manifest = join(root, name, ".tools", "validate-kit", "package.json");
+    if (!existsSync(manifest)) continue;
+    let spec;
+    try {
+      const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+      spec =
+        pkg.devDependencies?.["validate-kit"] ??
+        pkg.dependencies?.["validate-kit"];
+    } catch {
+      continue; // not a package pnpm could read either
+    }
+    const has = commitOf(spec);
+    if (has && sameKit(has, current)) continue;
+    behind.push(
+      spec
+        ? `${name}: its kit (${has ?? "built before tarballs carried their commit"}) is behind ${current}`
+        : `${name}: .tools/validate-kit holds no kit (an install that did not finish)`,
+    );
+  }
+  if (behind.length === 0) return;
+  process.stdout.write(`${behind.join("\n")}\n`);
+  process.exitCode = 1;
+}
+
+/** The tarball of the committed kit, packed once per commit of the package. */
 function tarball() {
   if (git(repoRoot, ["status", "--porcelain", "--", "packages/validate-kit"]))
     fail(2, "packages/validate-kit has uncommitted changes: commit, then pack");
-  const commit = git(repoRoot, ["rev-parse", "--short", "HEAD"]);
+  const commit = kitCommit();
   const { version } = JSON.parse(
     readFileSync(join(repoRoot, "packages/validate-kit/package.json"), "utf8"),
   );
@@ -254,7 +332,7 @@ function undo(project, folder) {
  * the gate starts silent and only what is new speaks. From a clean tree
  * only, and undone unless the gate ends at exit 0 with nothing printed.
  */
-function installInto(project, commit) {
+function installInto(project, commit, config) {
   const name = basename(project);
   const folder = join(project, ".tools", "validate-kit");
   if (existsSync(join(folder, "package.json")))
@@ -295,6 +373,9 @@ function installInto(project, commit) {
       timeout: GATE_TIMEOUT_MS,
       shell: windows,
     });
+  // A project the recommended preset alone does not fit brings its config:
+  // init keeps one that is there.
+  if (config) copyFileSync(config, join(project, "validate.config.json"));
   const init = kit(["init"]);
   const found = init.status === 0 ? count(gate(bin, project)) : 0;
   if (found > 0) kit(["baseline"]);
@@ -367,6 +448,13 @@ function selfTest() {
     false,
   );
   assert.equal(missing.onlyMoreFindings, false);
+  assert.equal(commitOf("file:validate-kit-0.2.5-817e3e3.tgz"), "817e3e3");
+  assert.equal(
+    commitOf("file:/Users/x/Projects/p/.tools/validate-kit-0.2.5-57c8de0.tgz"),
+    "57c8de0",
+  );
+  assert.equal(commitOf("file:validate-kit-0.2.5.tgz"), undefined);
+  assert.equal(commitOf(undefined), undefined);
   // The first line of git's status keeps its leading column.
   assert.deepEqual(statusOf(" M .gitignore\n?? lefthook.yml\nA  new.txt\n"), [
     [" M", ".gitignore"],
@@ -391,6 +479,12 @@ function selfTest() {
 function main() {
   const args = process.argv.slice(2);
   if (args.includes("--self-test")) return selfTest();
+  if (args.includes("--status"))
+    return listBehind(
+      resolve(
+        args.find((arg) => !arg.startsWith("--")) ?? join(repoRoot, ".."),
+      ),
+    );
   const apply = args.includes("--apply");
   const evenIfBusy = args.includes("--even-if-busy");
   const target = args.find((arg) => !arg.startsWith("--"));
@@ -404,7 +498,11 @@ function main() {
         1,
         `${basename(project)} changed in the last hour, so someone is working there (--even-if-busy)`,
       );
-    return installInto(project, args.includes("--commit"));
+    return installInto(
+      project,
+      args.includes("--commit"),
+      args.find((arg) => arg.startsWith("--config="))?.slice(9),
+    );
   }
   if (!existsSync(join(folder, "package.json")) || !existsSync(binOf(folder)))
     fail(2, `${project} has no kit installed under .tools/validate-kit`);

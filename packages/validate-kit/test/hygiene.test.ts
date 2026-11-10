@@ -16,7 +16,9 @@ import { checkJsonschema } from "../src/adapters/check-jsonschema.js";
 import { composerDependencyAnalyser } from "../src/adapters/composer-dependency-analyser.js";
 import { editorconfigChecker } from "../src/adapters/editorconfig-checker.js";
 import { sherif } from "../src/adapters/sherif.js";
+import { shellcheck } from "../src/adapters/shellcheck.js";
 import { shfmt } from "../src/adapters/shfmt.js";
+import { isZsh, zshSyntax } from "../src/adapters/zsh-syntax.js";
 import { sobelow } from "../src/adapters/sobelow.js";
 import { spectral } from "../src/adapters/spectral.js";
 import { strykerNet } from "../src/adapters/stryker-net.js";
@@ -938,6 +940,123 @@ describe("sherif", () => {
     expect(built.args).toEqual([]);
     expect(built.env).toEqual({ CI: "1" });
     expect(sherif.refuseArgs?.(["--fix"])).toMatch(/rewrites/);
+  });
+});
+
+// zsh 5.9, recorded 2026-11-09
+// (docs/research/lint-toolchain/assets/sota-2026-11-09/zsh-syntax).
+/** A folder with a .zsh file, a .sh that is zsh by its shebang, and a bash script. */
+function zshScripts(): { root: string; files: string[] } {
+  const root = tmp("vk-zsh-");
+  const write = (name: string, text: string) => {
+    writeFileSync(join(root, name), text);
+    return `${root}/${name}`;
+  };
+  return {
+    root,
+    files: [
+      write("bad.zsh", "#!/bin/zsh\nif [[ -n $1 ]]; then\n  print ok\n"),
+      write("tool.sh", "#!/usr/bin/env zsh\nprint ok\n"),
+      write("build.sh", "#!/usr/bin/env bash\necho ok\n"),
+    ],
+  };
+}
+
+describe("zsh-syntax", () => {
+  it("knows a zsh script by its extension or its shebang", () => {
+    const { root, files } = zshScripts();
+    expect(files.map(isZsh)).toEqual([true, true, false]);
+    expect(isZsh(`${root}/gone.sh`)).toBe(false);
+  });
+
+  it("takes the zsh scripts, and leaves shellcheck and shfmt the others", () => {
+    const { root, files } = zshScripts();
+    const seed = { cwd: root, files };
+    const [bad = "", tool = "", build = ""] = files;
+    expect(zshSyntax.expand?.(seed, env(root))).toEqual([
+      { cwd: root, files: [bad, tool] },
+    ]);
+    expect(shellcheck.expand?.(seed, env(root))).toEqual([
+      { cwd: root, files: [build] },
+    ]);
+    expect(
+      shfmt.expand?.(seed, env(root, { toolConfig: { enabled: true } })),
+    ).toEqual([{ cwd: root, files: [build] }]);
+    // Nothing of theirs: no task at all.
+    expect(
+      zshSyntax.expand?.({ cwd: root, files: [build] }, env(root)),
+    ).toEqual([]);
+    expect(shellcheck.expand?.({ cwd: root, files: [bad] }, env(root))).toEqual(
+      [],
+    );
+  });
+
+  it("reports each script zsh cannot parse at its line, in one process", () => {
+    const root = tmp("vk-zsh-");
+    const files = ["bad.zsh", "tool with space.sh", "clean.zsh"];
+    expect(zshSyntax.buildArgs(ctx(root, { files })).args).toEqual([
+      "-f",
+      "-c",
+      'r=0; for f; do zsh -f -n -- "$f" || r=1; done; exit $r',
+      "zsh",
+      ...files,
+    ]);
+    const { findings } = zshSyntax.parseOutput(
+      ran(
+        1,
+        "",
+        "bad.zsh:7: parse error near `\\n'\ntool with space.sh:5: parse error near `\\n'\nbad2.zsh:3: closing brace expected\n",
+      ),
+      ctx(root, { files }),
+    );
+    expect(
+      findings.map((f) => [
+        f.file.slice(root.length + 1),
+        f.line,
+        f.ruleId,
+        f.severity,
+        f.message,
+      ]),
+    ).toEqual([
+      [
+        "bad.zsh",
+        7,
+        "parse",
+        "error",
+        "zsh cannot parse this script: parse error near `\\n'",
+      ],
+      [
+        "tool with space.sh",
+        5,
+        "parse",
+        "error",
+        "zsh cannot parse this script: parse error near `\\n'",
+      ],
+      [
+        "bad2.zsh",
+        3,
+        "parse",
+        "error",
+        "zsh cannot parse this script: closing brace expected",
+      ],
+    ]);
+    expect(
+      zshSyntax.parseOutput(ran(0), ctx(root, { files })).findings,
+    ).toEqual([]);
+  });
+
+  it("fails loud on zsh's own trouble, and on an exit 1 that names no line", () => {
+    const root = tmp("vk-zsh-");
+    expect(() =>
+      zshSyntax.parseOutput(
+        ran(1, "", "zsh: can't open input file: gone.zsh\n"),
+        ctx(root, { files: ["gone.zsh"] }),
+      ),
+    ).toThrow("zsh-syntax: zsh: can't open input file: gone.zsh");
+    expect(() =>
+      zshSyntax.parseOutput(ran(1), ctx(root, { files: ["a.zsh"] })),
+    ).toThrow("format may have changed");
+    expect(zshSyntax.refuseArgs?.(["-x"])).toMatch(/no arguments/);
   });
 });
 

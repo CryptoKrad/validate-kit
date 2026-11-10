@@ -100,10 +100,11 @@ export const LANGUAGE_SPECS: Record<Language, LanguageSpec> = {
     extensions: [".py", ".pyi"],
     markers: ["pyproject.toml", "setup.py", "setup.cfg"],
   },
-  // shellcheck's dialects; not .zsh, which it cannot check
-  // (docs/research/lint-toolchain/shellcheck-cli.md).
+  // shellcheck's dialects, and .zsh: shellcheck cannot check zsh
+  // (docs/research/lint-toolchain/shellcheck-cli.md), so a zsh script, by
+  // extension or by shebang, goes to zsh-syntax and not to shellcheck or shfmt.
   shell: {
-    extensions: [".sh", ".bash", ".ksh", ".dash", ".bats"],
+    extensions: [".sh", ".bash", ".ksh", ".dash", ".bats", ".zsh"],
     markers: [],
   },
   // squawk's input, of which only migrations are passed

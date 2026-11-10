@@ -110,11 +110,12 @@ export function isCode(file: string): boolean {
 }
 
 /**
- * A `#!` line naming a shell shellcheck reads (directly, or through `env`,
- * with flags after it): `#!/bin/sh -e`, `#!/usr/bin/env -S bash -eu`.
+ * A `#!` line naming a shell (directly, or through `env`, with flags after
+ * it): `#!/bin/sh -e`, `#!/usr/bin/env -S bash -eu`. The ones shellcheck
+ * reads, and zsh, whose scripts go to zsh-syntax.
  */
 const SHELL_SHEBANG =
-  /^#![ \t]*(?:\/usr\/bin\/env[ \t]+(?:-S[ \t]+)?)?(?:\/\S*\/)?(?:sh|bash|dash|ksh|bats)(?:[ \t]|\r?$)/;
+  /^#![ \t]*(?:\/usr\/bin\/env[ \t]+(?:-S[ \t]+)?)?(?:\/\S*\/)?(?:sh|bash|dash|ksh|bats|zsh)(?:[ \t]|\r?$)/;
 
 /**
  * Extensionless files whose `#!` line names a shell, found when the scope is

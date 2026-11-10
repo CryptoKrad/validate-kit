@@ -7,6 +7,7 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { absPosix, finding, parseFindings } from "./base.js";
+import { isZsh, onlyScripts } from "./zsh-syntax.js";
 
 /** One json1 comment (docs/research/lint-toolchain/shellcheck-cli.md). */
 interface ShellcheckComment {
@@ -48,6 +49,10 @@ export const shellcheck: ToolAdapter = {
 
   // Exit 1: findings reported, always with a comment (the filter runs first).
   findingExitCodes: [1],
+
+  // A zsh script is not one of its dialects: it answers SC1071 and reads no
+  // further. zsh-syntax checks those.
+  expand: (seed) => onlyScripts(seed, (path) => !isZsh(path)),
 
   refuseArgs(extraArgs) {
     // -a prints each comment once per file it spans, half at wrong columns.
