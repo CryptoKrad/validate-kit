@@ -9,6 +9,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { goBuildProblem } from "../src/adapters/base.js";
 import { checkCommand } from "../src/commands/check.js";
 import { doctorCommand } from "../src/commands/doctor.js";
 import { initCommand } from "../src/commands/init.js";
@@ -66,6 +67,17 @@ function outdatedAvailability(
     version: "1.0.0",
     minVersion: adapter.minVersion,
     installHint: adapter.installHint,
+  });
+}
+
+/** A tool that runs, built with an older Go than the toolchain. */
+function staleAvailability(adapter: ToolAdapter): Promise<AvailabilityResult> {
+  return Promise.resolve({
+    available: true,
+    version: "2.0.0",
+    minVersion: adapter.minVersion,
+    installHint: adapter.installHint,
+    staleBuild: "built with go1.26.4; Go here is go1.27.3",
   });
 }
 
@@ -205,6 +217,72 @@ describe("commands", () => {
 
     await expect(initCommand({ cwd: root })).resolves.toBe(EXIT.CLEAN);
     expect(existsSync(resolve(root, "validate.config.ts"))).toBe(true);
+  });
+
+  it("reads a Go tool as stale only when it was built with an older Go release", () => {
+    // `go version -m <tool>`'s first line, against `go env GOVERSION`.
+    expect(goBuildProblem("/go/bin/govulncheck: go1.26.4", "go1.27.3\n")).toBe(
+      "built with go1.26.4; Go here is go1.27.3, and code that asks for it stops this build",
+    );
+    // A patch behind is the same language version; a newer build reads older code.
+    expect(goBuildProblem("/go/bin/x: go1.27.1", "go1.27.3")).toBeUndefined();
+    expect(goBuildProblem("/go/bin/x: go1.28.0", "go1.27.3")).toBeUndefined();
+    // No verdict from what does not state a release: a shim, a development build.
+    expect(
+      goBuildProblem("shim: not a Go executable", "go1.27.3"),
+    ).toBeUndefined();
+    expect(goBuildProblem("/go/bin/x: devel +abc", "go1.27.3")).toBeUndefined();
+  });
+
+  it("fails doctor for a required Go tool built with an older Go, and only warns for an optional one", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "validate-kit-doctor-"));
+    writeFileSync(resolve(root, "tsconfig.json"), "{}\n");
+    writeFileSync(resolve(root, "index.ts"), "export {};\n");
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- a spy, read, never called
+    const stdout = vi.mocked(process.stdout.write);
+    const doctor = async (adapters: ToolAdapter[]) => {
+      stdout.mockClear();
+      const exit = await doctorCommand({
+        cwd: root,
+        json: true,
+        adapters,
+        detect: () => Promise.resolve(detectedTs(root)),
+        availability: staleAvailability,
+      });
+      const report = JSON.parse(
+        stdout.mock.calls.map(([chunk]) => String(chunk)).join(""),
+      ) as { ok: boolean; tools: { status: string; problem?: string }[] };
+      return { exit, report };
+    };
+
+    const required = await doctor([doctorAdapter("required-tool")]);
+    expect(required.exit).toBe(EXIT.INCOMPLETE);
+    expect(required.report.tools).toEqual([
+      expect.objectContaining({
+        status: "stale-build",
+        problem: "built with go1.26.4; Go here is go1.27.3",
+      }),
+    ]);
+
+    const optional = await doctor([doctorAdapter("optional-tool", true)]);
+    expect(optional.exit).toBe(EXIT.CLEAN);
+    expect(optional.report.tools[0]?.status).toBe("stale-build");
+
+    // A tool that prints no version (nilaway) is stale all the same.
+    const { version: _, ...unversioned } = await staleAvailability(
+      doctorAdapter("x"),
+    );
+    stdout.mockClear();
+    await doctorCommand({
+      cwd: root,
+      json: true,
+      adapters: [doctorAdapter("no-version-tool")],
+      detect: () => Promise.resolve(detectedTs(root)),
+      availability: () => Promise.resolve(unversioned),
+    });
+    expect(
+      stdout.mock.calls.map(([chunk]) => String(chunk)).join(""),
+    ).toContain('"status": "stale-build"');
   });
 
   it("fails doctor for outdated required tools without failing optional outdated tools", async () => {

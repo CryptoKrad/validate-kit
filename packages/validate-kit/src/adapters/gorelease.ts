@@ -71,6 +71,7 @@ const GENERIC =
 export const gorelease: ToolAdapter = {
   id: "gorelease",
   layer: "lint",
+  goBuilt: true,
   languages: ["go"],
   bin: "gorelease",
   // It has no version flag (-version is the proposed release): `-h` exits 2

@@ -132,6 +132,7 @@ function configuredExcludes(config: string | undefined): string[] {
 export const gremlins: ToolAdapter = {
   id: "gremlins",
   layer: "mutation",
+  goBuilt: true,
   ...MUTATION_TOOL,
   languages: ["go"],
   bin: "gremlins",

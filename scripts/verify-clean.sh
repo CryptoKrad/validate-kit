@@ -138,6 +138,7 @@ run "pnpm run build"
 run "pnpm --filter validate-kit run typecheck"
 run "pnpm --filter validate-kit run test"
 run "pnpm run check"
+run "node scripts/consumer-upgrade.mjs --self-test"
 # A formal case that would be skipped here is a failure, as in CI.
 run "SMOKE_REQUIRE_FORMAL=1 pnpm run smoke:external-package"
 if [ "$ci" -eq 1 ]; then

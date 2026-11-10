@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import pc from "picocolors";
 import {
-  checkAvailability,
+  checkAvailabilityAndBuild,
   compareSemver,
   toolAvailability,
 } from "../adapters/base.js";
@@ -47,7 +47,7 @@ export async function doctorCommand(flags: {
   ) => Promise<AvailabilityResult>;
 }): Promise<number> {
   const root = resolve(flags.cwd ?? process.cwd());
-  const availability = flags.availability ?? checkAvailability;
+  const availability = flags.availability ?? checkAvailabilityAndBuild;
   let profile: ValidationProfile | undefined;
   try {
     profile = validateProfile(flags.profile);
@@ -116,6 +116,7 @@ export async function doctorCommand(flags: {
           minVersion: adapter.minVersion,
           installHint: adapter.installHint,
           ...(found.problem ? { problem: found.problem } : {}),
+          ...(found.staleBuild ? { staleBuild: found.staleBuild } : {}),
         };
       } else {
         avail = await availability(adapter, root);
@@ -130,6 +131,7 @@ export async function doctorCommand(flags: {
       let status:
         | "ok"
         | "outdated"
+        | "stale-build"
         | "version-unknown"
         | "missing-required"
         | "missing-optional"
@@ -138,6 +140,10 @@ export async function doctorCommand(flags: {
       // reporting "ok" would fail open on a possibly-too-old tool. Soft
       // warning: visible, but doesn't fail doctor (the tool did spawn).
       if (!needed) status = "not-needed";
+      // Before the version checks: a Go tool that prints no version (nilaway)
+      // is stale all the same.
+      else if (avail.available && avail.staleBuild && !outdated)
+        status = "stale-build";
       // With a minimum of 0.0.0 no version could fail the check, so one it
       // cannot read cannot either (gofmt prints none).
       else if (avail.available && !avail.version)
@@ -149,8 +155,11 @@ export async function doctorCommand(flags: {
   );
 
   const missingRequired = rows.filter((r) => r.status === "missing-required");
+  // A stale build fails like an old version: the tool starts, and stops on
+  // the first file that asks for the newer Go.
   const outdatedRequired = rows.filter(
-    (r) => r.required && r.status === "outdated",
+    (r) =>
+      r.required && (r.status === "outdated" || r.status === "stale-build"),
   );
   const ok = missingRequired.length === 0 && outdatedRequired.length === 0;
 
@@ -169,6 +178,7 @@ export async function doctorCommand(flags: {
             status: r.status,
             installHint: r.adapter.installHint,
             ...(r.avail.problem ? { problem: r.avail.problem } : {}),
+            ...(r.avail.staleBuild ? { problem: r.avail.staleBuild } : {}),
           })),
           ok,
         },
@@ -191,7 +201,9 @@ export async function doctorCommand(flags: {
     const icon =
       r.status === "ok"
         ? pc.green("✔")
-        : r.status === "outdated" || r.status === "version-unknown"
+        : r.status === "outdated" ||
+            r.status === "stale-build" ||
+            r.status === "version-unknown"
           ? pc.yellow("▲")
           : r.status === "missing-required"
             ? pc.red("✗")
@@ -207,15 +219,21 @@ export async function doctorCommand(flags: {
             ? pc.yellow(
                 `older than ${r.adapter.minVersion}, the oldest the kit is tested with`,
               )
-            : r.status === "version-unknown"
-              ? pc.yellow(`version unparseable (min ${r.adapter.minVersion})`)
-              : r.status === "not-needed"
-                ? pc.dim("not needed")
-                : pc.green("ok");
+            : r.status === "stale-build"
+              ? pc.yellow(r.avail.staleBuild ?? "built with an older Go")
+              : r.status === "version-unknown"
+                ? pc.yellow(`version unparseable (min ${r.adapter.minVersion})`)
+                : r.status === "not-needed"
+                  ? pc.dim("not needed")
+                  : pc.green("ok");
     const ver = r.avail.version ?? pc.dim("–");
     process.stdout.write(
       `  ${icon} ${pad(r.adapter.id, 14)} ${pad(r.adapter.layer, 13)} ${pad(ver, 10)} ${statusText}\n`,
     );
+    if (r.status === "stale-build")
+      process.stdout.write(
+        pc.dim(`      to rebuild with this Go: ${r.adapter.installHint}\n`),
+      );
     if (
       r.status === "missing-required" ||
       r.status === "missing-optional" ||

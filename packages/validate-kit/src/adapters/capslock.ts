@@ -59,6 +59,7 @@ function packageOf(fn: string): string {
 export const capslock: ToolAdapter = {
   id: "capslock",
   layer: "security",
+  goBuilt: true,
   languages: ["go"],
   bin: "capslock",
   versionArgs: ["-version"],

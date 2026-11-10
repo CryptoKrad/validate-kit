@@ -36,6 +36,7 @@ interface DeadcodeTask {
 export const deadcode: ToolAdapter = {
   id: "deadcode",
   layer: "lint",
+  goBuilt: true,
   languages: ["go"],
   bin: "deadcode",
   // It has no version flag (`go version -m` names it): its -h runs, and no

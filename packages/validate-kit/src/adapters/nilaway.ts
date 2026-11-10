@@ -49,6 +49,7 @@ const POSITIONED = /^(.+?):(\d+):(\d+): (.+)$/;
 export const nilaway: ToolAdapter = {
   id: "nilaway",
   layer: "lint",
+  goBuilt: true,
   languages: ["go"],
   bin: "nilaway",
   // A `go install`ed checker prints `version devel`: no minimum can be checked.
@@ -139,7 +140,20 @@ export const nilaway: ToolAdapter = {
         throw new Error(
           `nilaway failed: ${raw.stderr.trim().split("\n")[0] ?? ""}`,
         );
-      return result(errors);
+      // A type error in the standard library or a dependency is not this
+      // project's to fix: nilaway could not load the code. One built with an
+      // older Go than the toolchain reports the newer standard library this
+      // way (`check doctor` names it).
+      const own = errors.filter((error) => isUnder(error.file, cwd));
+      if (own.length === 0) {
+        const first = raw.stderr
+          .split(/\r?\n/)
+          .find((line) => POSITIONED.test(line.trim()));
+        throw new Error(
+          `nilaway could not type-check code outside this project: ${first?.trim() ?? ""}. A nilaway built with an older Go than the one in use fails this way: run \`check doctor\`, then \`${this.installHint}\`.`,
+        );
+      }
+      return result(own);
     }
     // { "<package>": { "<analyzer>": [diagnostic] | { "error": "..." } } }
     const packages = raw.stdout.trim()

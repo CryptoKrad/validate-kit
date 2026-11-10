@@ -57,6 +57,7 @@ export function jsonStream<T>(text: string): T[] {
 export const govulncheck: ToolAdapter = {
   id: "govulncheck",
   layer: "security",
+  goBuilt: true,
   languages: ["go"],
   bin: "govulncheck",
   supportsFix: false,

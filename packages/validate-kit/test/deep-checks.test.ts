@@ -66,6 +66,30 @@ describe("nilaway", () => {
     const [first] = typeError.findings;
     expect(first).toMatchObject({ ruleId: "typecheck", severity: "error" });
     expect(first && nilaway.masks?.(first)).toBe(true);
+    // nilaway built with go1.26.6 under Go 1.27.3 (recorded 2026-11-09 in a
+    // consumer's repository): every error is in the standard library. That is
+    // nilaway unable to load the code, never fourteen findings in the project.
+    const stdlib =
+      "/opt/homebrew/Cellar/go/1.27.3/libexec/src/math/rand/v2/rand.go:213:17: method must have no type parameters\n" +
+      "/opt/homebrew/Cellar/go/1.27.3/libexec/src/math/rand/v2/rand.go:213:33: Int (function) is not a type\n";
+    expect(() =>
+      nilaway.parseOutput(
+        { stdout: "{}", stderr: stdlib, exitCode: 1 },
+        ctx(root, { scope: [] }),
+      ),
+    ).toThrow(
+      /could not type-check code outside this project: .*rand\.go:213:17: method must have no type parameters.*check doctor/,
+    );
+    // The project's own error beside them is still the finding.
+    const mixed = nilaway.parseOutput(
+      {
+        stdout: "",
+        stderr: `${stdlib}${root}/bad.go:2:28: cannot use "x" as int value\n`,
+        exitCode: 1,
+      },
+      ctx(root, { scope: [] }),
+    );
+    expect(mixed.findings.map((f) => f.file)).toEqual([`${root}/bad.go`]);
     expect(() =>
       nilaway.parseOutput(
         {

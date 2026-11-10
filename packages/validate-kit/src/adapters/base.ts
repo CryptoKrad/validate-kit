@@ -1,5 +1,14 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { extname, isAbsolute, posix, relative, resolve } from "node:path";
+import {
+  basename,
+  delimiter,
+  extname,
+  isAbsolute,
+  join,
+  posix,
+  relative,
+  resolve,
+} from "node:path";
 import type { z } from "zod";
 import { ConfigError } from "../config/schema.js";
 import { resolveBin, run } from "../core/exec.js";
@@ -334,6 +343,115 @@ export async function checkAvailability(
   };
 }
 
+/**
+ * `checkAvailability`, and for a Go analyzer that runs, whether it was built
+ * with an older Go than the toolchain. `check doctor`'s probe: the two more
+ * processes per tool are kept off the path every `check` run takes.
+ */
+export async function checkAvailabilityAndBuild(
+  adapter: ToolAdapter,
+  cwd: string,
+  pathOnly = false,
+): Promise<AvailabilityResult> {
+  const result = await checkAvailability(adapter, cwd, pathOnly);
+  if (!result.available || !adapter.goBuilt) return result;
+  const staleBuild = await staleGoBuild(adapter, cwd, pathOnly);
+  return staleBuild ? { ...result, staleBuild } : result;
+}
+
+/** `… go1.27.3` as its release [1, 27] and its own text; nothing for `devel +abc`. */
+function goRelease(
+  text: string,
+): { major: number; minor: number; text: string } | undefined {
+  const found = /\bgo(\d+)\.(\d+)(?:\.\d+)?\b/.exec(text);
+  return found
+    ? { major: Number(found[1]), minor: Number(found[2]), text: found[0] }
+    : undefined;
+}
+
+/**
+ * The sentence for a Go tool built with an older Go release than the
+ * toolchain (`built` is `go version -m`'s first line, `toolchain` is `go env
+ * GOVERSION`), or nothing: the same release, a newer build, or a version
+ * either side does not state. Patch releases do not matter: a file asks for
+ * a language version, go1.27, not for a patch.
+ */
+export function goBuildProblem(
+  built: string,
+  toolchain: string,
+): string | undefined {
+  const tool = goRelease(built);
+  const here = goRelease(toolchain);
+  if (!tool || !here) return undefined;
+  const older =
+    tool.major < here.major ||
+    (tool.major === here.major && tool.minor < here.minor);
+  return older
+    ? `built with ${tool.text}; Go here is ${here.text}, and code that asks for it stops this build`
+    : undefined;
+}
+
+/**
+ * Is the adapter's executable a Go program older than the toolchain in
+ * `cwd`? Never an obstacle: no `go`, or no file `go version -m` can read,
+ * gives no verdict. A version-manager shim is not a Go program and hands off
+ * to the tool it manages or to the next one on PATH, so those are read in
+ * its place.
+ */
+async function staleGoBuild(
+  adapter: ToolAdapter,
+  cwd: string,
+  pathOnly: boolean,
+): Promise<string | undefined> {
+  let bin: string;
+  try {
+    bin = resolveBin(adapter.bin, cwd, process.env, pathOnly);
+  } catch {
+    return undefined;
+  }
+  const toolchain = await run("go", ["env", "GOVERSION"], {
+    cwd,
+    timeoutMs: 15_000,
+  });
+  if (toolchain.exitCode !== 0) return undefined;
+  // A bare name is found on PATH when it is run: the same lookup, in order.
+  const name = basename(bin);
+  const onPath = (process.env.PATH ?? "")
+    .split(delimiter)
+    .map((dir) => join(dir, name))
+    .filter((path) => path !== bin && existsSync(path));
+  const candidates = isAbsolute(bin) ? [bin, ...onPath] : onPath;
+  // Each candidate, and after a mise shim the tool mise would run for it.
+  const files = (
+    await Promise.all(
+      candidates.map(async (candidate) => {
+        if (!/[\\/]mise[\\/]shims[\\/]/.test(candidate)) return [candidate];
+        const managed = await run("mise", ["which", name], {
+          cwd,
+          timeoutMs: 15_000,
+        });
+        return managed.exitCode === 0
+          ? [candidate, managed.stdout.trim()]
+          : [candidate];
+      }),
+    )
+  ).flat();
+  const builds = await Promise.all(
+    files.map((file) =>
+      run("go", ["version", "-m", realpathSync(file)], {
+        cwd,
+        timeoutMs: 15_000,
+      }),
+    ),
+  );
+  // The first that is a Go executable: a shim or a script is not, and hands
+  // off to the next.
+  const built = builds.find((build) => build.exitCode === 0);
+  return built
+    ? goBuildProblem(built.stdout.split("\n")[0] ?? "", toolchain.stdout)
+    : undefined;
+}
+
 /** Probes a tool's version from one folder. */
 export type AvailabilityProbe = (
   adapter: ToolAdapter,
@@ -394,6 +512,8 @@ export interface ToolAvailability {
    * tool's `optional`, since it was chosen, not left uninstalled.
    */
   configuredMissing: boolean;
+  /** A Go-built tool older than the Go toolchain (AvailabilityResult.staleBuild). */
+  staleBuild?: string;
 }
 
 /**
@@ -444,6 +564,8 @@ export async function toolAvailability(
           : lacking.length < all.length
             ? `${first.task.adapter.bin} was not found from ${dirs.join(", ")}`
             : undefined));
+  const staleBuild = all.find(({ result }) => result?.staleBuild)?.result
+    ?.staleBuild;
   return {
     versions,
     lacking: lacking.map(({ task }) => task),
@@ -451,6 +573,7 @@ export async function toolAvailability(
     configuredMissing: lacking.some(
       ({ configured }) => configured !== undefined,
     ),
+    ...(staleBuild ? { staleBuild } : {}),
   };
 }
 

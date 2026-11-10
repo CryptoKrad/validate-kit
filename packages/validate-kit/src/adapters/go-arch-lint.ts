@@ -51,6 +51,7 @@ interface DeepScanWarning {
 export const goArchLint: ToolAdapter = {
   id: "go-arch-lint",
   layer: "lint",
+  goBuilt: true,
   languages: ["go"],
   bin: "go-arch-lint",
   versionArgs: ["version"],

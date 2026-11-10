@@ -456,6 +456,11 @@ export interface AvailabilityResult {
   installHint: string;
   /** Why a binary that exists cannot run: its version command failed. */
   problem?: string;
+  /**
+   * A Go-built tool older than the Go toolchain: "built with go1.26.4; Go
+   * here is go1.27.3". It runs, and fails on code that asks for the newer Go.
+   */
+  staleBuild?: string;
 }
 
 export interface DetectedLanguage {
@@ -525,6 +530,13 @@ export interface ToolAdapter {
    * tested): found in a `vendor/bin` from where it runs before anywhere else.
    */
   readonly composerVendor?: boolean;
+  /**
+   * A Go program that loads Go packages (go/packages). Built with an older
+   * Go than the toolchain in use, it cannot read code that asks for the
+   * newer one, and fails on the first such file: `check doctor` compares the
+   * two and says to rebuild it.
+   */
+  readonly goBuilt?: boolean;
   /** Args to print the version. Default ["--version"]. */
   readonly versionArgs?: readonly string[];
   /**

@@ -187,6 +187,7 @@ function inModule(
 export const golangci: ToolAdapter = {
   id: "golangci-lint",
   layer: "lint",
+  goBuilt: true,
   languages: ["go"],
   bin: "golangci-lint",
   supportsFix: true,
