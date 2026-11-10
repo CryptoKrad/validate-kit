@@ -29,13 +29,17 @@ code, and applies the fixes that are safe.
 ```bash
 pnpm --filter validate-kit pack --pack-destination ~/
 cd /path/to/other-repo
-pnpm add -D --allow-build=@ast-grep/cli ~/validate-kit-<version>.tgz
+pnpm add -D --allow-build=@ast-grep/cli ~/validate-kit-<version>.tgz   # pnpm 10; see below for 11
 pnpm exec validate-kit init     # config, git hooks through lefthook, MCP entry
 pnpm exec validate-kit doctor   # which tools this machine can run
 pnpm exec validate-kit check
 ```
 
 Never install it by name from npm: the unscoped name there belongs to an unrelated package.
+
+With pnpm 11, leave `--allow-build` out and write `"@ast-grep/cli": true` under `allowBuilds` in
+`pnpm-workspace.yaml` yourself: there the flag replaces the project's whole list, and an approval
+the project already had (an `esbuild: true`) is gone afterwards (recorded on 11.9.0).
 
 `init` wires two git hooks: `check --staged` before a commit and `check --profile ci` before a
 push, both with `--quiet`. A passing hook prints nothing; a failing one prints one line per finding

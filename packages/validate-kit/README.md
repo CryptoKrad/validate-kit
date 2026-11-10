@@ -18,10 +18,24 @@ pnpm add -D ~/validate-kit-0.2.5.tgz
 > published under a scope its owner controls, the tarball path is the only
 > install.
 
-With pnpm ≥ 10, allow the ast-grep postinstall in the same command:
+With pnpm 10, allow the ast-grep postinstall in the same command:
 
 ```bash
 pnpm add -D --allow-build=@ast-grep/cli ~/validate-kit-0.2.5.tgz
+```
+
+With pnpm 11, write the approval yourself and leave the flag out. There the flag replaces
+the project's whole `allowBuilds` list (recorded on 11.9.0: an existing `esbuild: true` was
+gone afterwards, and esbuild's build script no longer ran):
+
+```yaml
+# pnpm-workspace.yaml
+allowBuilds:
+  "@ast-grep/cli": true
+```
+
+```bash
+pnpm add -D ~/validate-kit-0.2.5.tgz
 ```
 
 > pnpm ≥ 10 blocks `@ast-grep/cli`'s postinstall by default and hard-fails

@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { accessSync, constants, existsSync, statSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import {
   basename,
   delimiter,
@@ -398,6 +405,104 @@ function tied(name: string): boolean {
   return REPOSITORY_ENV.has(name.toUpperCase());
 }
 
+/** The file a path leads to, or the path when it leads nowhere. */
+function real(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+/**
+ * GOROOT and the `go` on PATH are one toolchain, or every Go tool crashes
+ * (`compile: version "go1.26.10" does not match go tool version "go1.27.3"`,
+ * recorded 2026-11-09 in a project's pre-push hook). They come apart when a
+ * version manager exported GOROOT beside its go and a git hook then put
+ * another go first on PATH, and when a GOROOT is left over from another
+ * project. The module file says which one this project builds with: GOROOT's
+ * go goes first on PATH when it can build the nearest go.mod, and GOROOT is
+ * left out when it cannot, or when there is no go.mod to say (a go finds its
+ * own root).
+ */
+function withOneGo(env: NodeJS.ProcessEnv, cwd: string): NodeJS.ProcessEnv {
+  const goroot = envValue(env, "GOROOT");
+  if (!goroot) return env;
+  const onPathGo = onPath("go", true, env);
+  if (onPathGo === undefined) return env;
+  const theirs = executableVariants(join(goroot, "bin", "go"), env).find(
+    isRunnableFile,
+  );
+  if (theirs !== undefined && real(theirs) === real(onPathGo)) return env;
+  const needs = goOfModule(cwd);
+  const has = theirs === undefined ? undefined : goOfRoot(goroot);
+  if (needs !== undefined && has !== undefined && !olderGo(has, needs)) {
+    const key =
+      Object.keys(env)
+        .toSorted()
+        .find((name) => name.toUpperCase() === "PATH") ?? "PATH";
+    return {
+      ...env,
+      [key]: `${join(goroot, "bin")}${delimiter}${env[key] ?? ""}`,
+    };
+  }
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      ([name]) => (WINDOWS ? name.toUpperCase() : name) !== "GOROOT",
+    ),
+  );
+}
+
+const MISE_SHIM = /[\\/]mise[\\/]shims[\\/][^\\/]+$/;
+/** `bin` on PATH with the version manager's shim folders left out. */
+function pastShims(bin: string, env: NodeJS.ProcessEnv): string | undefined {
+  const key =
+    Object.keys(env)
+      .toSorted()
+      .find((name) => name.toUpperCase() === "PATH") ?? "PATH";
+  const kept = (env[key] ?? "")
+    .split(delimiter)
+    .filter((entry) => !MISE_SHIM.test(join(entry, bin)));
+  return onPath(bin, true, { ...env, [key]: kept.join(delimiter) });
+}
+
+type GoVersion = [number, number, number];
+function goVersion(text: string | undefined): GoVersion | undefined {
+  const found = /^(?:go)?(\d+)\.(\d+)(?:\.(\d+))?/.exec(text ?? "");
+  return found
+    ? [Number(found[1]), Number(found[2]), Number(found[3] ?? 0)]
+    : undefined;
+}
+function olderGo(a: GoVersion, b: GoVersion): boolean {
+  const at = a.findIndex((part, i) => part !== b[i]);
+  return at !== -1 && (a[at] ?? 0) < (b[at] ?? 0);
+}
+/** The release a Go root holds: the first line of its VERSION file. */
+function goOfRoot(goroot: string): GoVersion | undefined {
+  try {
+    return goVersion(readFileSync(join(goroot, "VERSION"), "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+/** The Go the nearest go.mod at or above `cwd` asks for: `go`, or `toolchain` when newer. */
+function goOfModule(cwd: string): GoVersion | undefined {
+  for (let dir = resolve(cwd); ; dir = dirname(dir)) {
+    let text;
+    try {
+      text = readFileSync(join(dir, "go.mod"), "utf8");
+    } catch {
+      if (dirname(dir) === dir) return undefined;
+      continue;
+    }
+    const go = goVersion(/^go\s+(\S+)/m.exec(text)?.[1]);
+    const toolchain = goVersion(/^toolchain\s+(\S+)/m.exec(text)?.[1]);
+    return go && toolchain && olderGo(go, toolchain)
+      ? toolchain
+      : (go ?? toolchain);
+  }
+}
+
 function withoutRepository(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   if (!Object.keys(env).some(tied)) return env;
   return Object.fromEntries(
@@ -436,12 +541,13 @@ export async function run(
     const own = /^git(\.exe)?$/i.test(basename(bin))
       ? process.env
       : withoutRepository(process.env);
-    const env = WINDOWS
+    const given = WINDOWS
       ? opts.env
         ? { ...own, ...opts.env }
         : own
       : { ...own, ...opts.env, PWD: resolve(opts.cwd) };
-    const resolved = resolveBin(
+    const env = withOneGo(given, opts.cwd);
+    const found = resolveBin(
       bin,
       opts.cwd,
       env,
@@ -449,6 +555,19 @@ export async function run(
       opts.pythonEnv,
       opts.composerVendor,
     );
+    // Where the two Gos were apart, a version manager's shim would part them
+    // again: mise rebuilds the tool's environment and puts the hook's go
+    // back ahead of its own, beside its own GOROOT. Past the shim, to the
+    // tool itself, when it is on PATH.
+    // A bare name is one PATH will resolve: where to, is asked here.
+    const where =
+      env === given || isAbsolute(found)
+        ? found
+        : (onPath(found, true, env) ?? found);
+    const resolved =
+      env !== given && MISE_SHIM.test(where)
+        ? (pastShims(basename(where), env) ?? found)
+        : found;
     // A shell outside PATH (Git for Windows' usr/bin) needs its own directory
     // on PATH so the script can reach tee/cat/sed. Not on POSIX: /bin first
     // would put the system's python3 or java ahead of the user's.

@@ -1,4 +1,6 @@
-import { resolve } from "node:path";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { astgrep } from "../src/adapters/astgrep.js";
 import { oxlint } from "../src/adapters/oxlint.js";
@@ -98,6 +100,15 @@ function ctx(partial: Partial<ToolContext> = {}): ToolContext {
   return { cwd: process.cwd(), fix: false, extraArgs: [], ...partial };
 }
 
+/** A folder holding a script named probe-tool that prints `says`. */
+function probeTool(dir: string, says: string): string {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "probe-tool"), `#!/bin/sh\necho ${says}\n`, {
+    mode: 0o755,
+  });
+  return dir;
+}
+
 describe("review fixes (2026-07-01)", () => {
   // C1 — wildcard severity override must NOT shadow a later specific re-enable.
   it("keeps a specific-rule override winning over a '*' off entry (no false CLEAN)", async () => {
@@ -155,6 +166,87 @@ describe("review fixes (2026-07-01)", () => {
     expect(raw.timedOut).not.toBe(true);
     expect(raw.stdout).toBe("eof\n");
   });
+
+  // A project's pre-push hook, 2026-11-09: the shell exported one Go's GOROOT
+  // (a version manager's), the hook put another go first on PATH, and every
+  // Go tool crashed: compile: version "go1.26.10" does not match go tool
+  // version "go1.27.3". The fake go is a POSIX script.
+  it.skipIf(process.platform === "win32")(
+    "runs a tool with one Go: GOROOT's when it can build the module, else the one on PATH",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "vk-goroot-"));
+      try {
+        const go = (name: string, version: string): string => {
+          const dir = join(root, name);
+          mkdirSync(join(dir, "bin"), { recursive: true });
+          writeFileSync(join(dir, "bin", "go"), "#!/bin/sh\n", { mode: 0o755 });
+          writeFileSync(join(dir, "VERSION"), `go${version}\ntime 2026\n`);
+          return dir;
+        };
+        const hooks = go("hooks-go", "1.27.3");
+        const pinned = go("pinned-go", "1.26.10");
+        const stale = go("stale-go", "1.25.4");
+        const module = (name: string, text: string | undefined): string => {
+          const dir = join(root, name, "pkg");
+          mkdirSync(dir, { recursive: true });
+          if (text !== undefined)
+            writeFileSync(join(root, name, "go.mod"), `module m\n\n${text}\n`);
+          return dir;
+        };
+        // What a tool sees: its GOROOT, and the folder of the first go on PATH.
+        const seen = async (cwd: string, goroot: string): Promise<string> => {
+          const raw = await run(
+            process.execPath,
+            [
+              "-e",
+              "const p=require('node:path');process.stdout.write(`${p.basename(process.env.GOROOT??'unset')} ${p.basename(p.dirname(process.env.PATH.split(p.delimiter)[0]))}`)",
+            ],
+            {
+              cwd,
+              env: {
+                PATH: `${join(hooks, "bin")}${delimiter}${join(pinned, "bin")}${delimiter}${process.env["PATH"] ?? ""}`,
+                GOROOT: goroot,
+              },
+            },
+          );
+          return raw.stdout;
+        };
+        const builds = module("builds", "go 1.26.10");
+        // The project's pinned Go, shadowed on PATH by the hook's: reunited.
+        expect(await seen(builds, pinned)).toBe("pinned-go pinned-go");
+        // A GOROOT left over from elsewhere, too old for this module: left out.
+        expect(await seen(builds, stale)).toBe("unset hooks-go");
+        // go.mod's toolchain line counts when it is the newer one.
+        expect(
+          await seen(module("newer", "go 1.26\n\ntoolchain go1.27.0"), pinned),
+        ).toBe("unset hooks-go");
+        // No go.mod to say: the go on PATH, with its own root.
+        expect(await seen(module("none", undefined), pinned)).toBe(
+          "unset hooks-go",
+        );
+        // Already one toolchain: nothing changes.
+        expect(await seen(builds, hooks)).toBe("hooks-go hooks-go");
+        // A version manager's shim would part the two again (mise rebuilds
+        // the environment): where they were apart, the tool itself is run.
+        const shims = probeTool(join(root, "mise", "shims"), "shim");
+        const real = probeTool(join(root, "gobin"), "real");
+        const ran = async (goroot: string | undefined): Promise<string> => {
+          const raw = await run("probe-tool", [], {
+            cwd: builds,
+            env: {
+              PATH: `${join(hooks, "bin")}${delimiter}${shims}${delimiter}${real}${delimiter}${process.env["PATH"] ?? ""}`,
+              ...(goroot === undefined ? {} : { GOROOT: goroot }),
+            },
+          });
+          return raw.stdout.trim();
+        };
+        expect(await ran(pinned)).toBe("real");
+        expect(await ran(hooks)).toBe("shim");
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
 
   // C2 — oxlint schema drift (missing `diagnostics`) must fail loud, not CLEAN.
   it("oxlint throws when its output is missing the diagnostics key", () => {

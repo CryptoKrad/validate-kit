@@ -316,8 +316,26 @@ function binOf(folder) {
   );
 }
 
+// The install folder is its own pnpm workspace. pnpm takes the nearest
+// pnpm-workspace.yaml, and in a project that is itself a workspace that was
+// the project's: `pnpm add --allow-build` there replaced the project's build
+// approvals with the kit's one (pnpm 11.9.0) and relinked its node_modules.
+// The approval is written here instead, under both names pnpm has used.
+const OWN_WORKSPACE = `# validate-kit installs here as its own pnpm workspace, so pnpm never reads
+# or rewrites the pnpm-workspace.yaml of the project around it.
+allowBuilds:
+  "@ast-grep/cli": true
+onlyBuiltDependencies:
+  - "@ast-grep/cli"
+`;
+function ownWorkspace(folder) {
+  const file = join(folder, "pnpm-workspace.yaml");
+  if (!existsSync(file)) writeFileSync(file, OWN_WORKSPACE);
+}
+
 /** Point an install folder at `spec` and install it. */
 function install(folder, spec) {
+  ownWorkspace(folder);
   const manifest = join(folder, "package.json");
   const pkg = JSON.parse(readFileSync(manifest, "utf8"));
   const table = pkg.dependencies?.["validate-kit"]
@@ -351,9 +369,29 @@ function install(folder, spec) {
   );
 }
 
+/**
+ * An install folder after an install that is not kept: gone when the install
+ * made it, and otherwise holding what it held (`held`), no more and no less.
+ */
+function putBack(folder, held) {
+  if (!held) {
+    rmSync(folder, { recursive: true, force: true });
+    return;
+  }
+  for (const name of readdirSync(folder))
+    if (!held.names.includes(name))
+      rmSync(join(folder, name), { recursive: true, force: true });
+  if (held.manifest !== undefined)
+    writeFileSync(join(folder, "package.json"), held.manifest);
+}
+
 /** Is someone working in the project: a commit or an edit in the last hour? */
 function inUse(project) {
-  const since = Date.now() - BUSY_MS;
+  return changedSince(project, Date.now() - BUSY_MS);
+}
+
+/** Was the project committed to, or an uncommitted file edited, since then? */
+function changedSince(project, since) {
   if (Number(git(project, ["log", "-1", "--format=%ct"])) * 1000 > since)
     return true;
   return changes(project).some(([, path]) => {
@@ -403,8 +441,8 @@ export function spokenOf(text) {
  * the install's own files go, and nothing that was uncommitted before it
  * began is touched.
  */
-function undo(project, folder, before) {
-  rmSync(folder, { recursive: true, force: true });
+function undo(project, folder, before, held) {
+  putBack(folder, held);
   for (const [state, path] of wrote(before, changes(project))) {
     if (state === "??")
       rmSync(join(project, path), { recursive: true, force: true });
@@ -442,21 +480,32 @@ function installInto(project, commit, config) {
       `${name} has uncommitted changes to ${shared.map(([, path]) => path).join(", ")}, which the install also writes: commit or set them aside first`,
     );
   const packed = tarball();
+  // What the folder holds now, when it is there: an install that is not kept
+  // puts exactly that back.
+  const manifest = join(folder, "package.json");
+  const held = existsSync(folder)
+    ? {
+        names: readdirSync(folder),
+        manifest: existsSync(manifest)
+          ? readFileSync(manifest, "utf8")
+          : undefined,
+      }
+    : undefined;
   mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, "package.json"), '{ "private": true }\n');
+  writeFileSync(manifest, '{ "private": true }\n');
+  ownWorkspace(folder);
   copyFileSync(packed, join(folder, basename(packed)));
   const added = inFolder(folder, "pnpm", [
     "add",
     "-D",
-    "--allow-build=@ast-grep/cli",
     ...PNPM_POLICY,
     `./${basename(packed)}`,
   ]);
   if (added.status !== 0) {
-    rmSync(folder, { recursive: true, force: true });
+    putBack(folder, held);
     fail(
       1,
-      `pnpm add failed in ${folder}, which is removed:\n${`${added.stdout}${added.stderr}`.trim().split("\n").slice(-15).join("\n")}`,
+      `pnpm add failed in ${folder}, which is ${held ? "put back as it was" : "removed"}:\n${`${added.stdout}${added.stderr}`.trim().split("\n").slice(-15).join("\n")}`,
     );
   }
   // The install is this machine's: never tracked.
@@ -483,9 +532,18 @@ function installInto(project, commit, config) {
   if (config) copyFileSync(config, join(project, "validate.config.json"));
   const init = kit(["init"]);
   const found = init.status === 0 ? count(gate(bin, project)) : 0;
-  if (found > 0) kit(["baseline"]);
-  const quiet =
-    init.status === 0 ? kit(["check", "--profile", "ci", "--quiet"]) : init;
+  // A step that stopped is said by name, with what it printed: init, or the
+  // baseline (unchecked, its failure read as "the gate is not silent").
+  const baseline = found > 0 ? kit(["baseline"]) : init;
+  const stopped =
+    init.status === 0
+      ? baseline.status === 0
+        ? undefined
+        : ["baseline", baseline]
+      : ["init", init];
+  const quiet = stopped
+    ? stopped[1]
+    : kit(["check", "--profile", "ci", "--quiet"]);
   // The stop hook on a tree with nothing of the agent's in it.
   const hook = inFolder(project, bin, ["hook", "claude"], {
     input: JSON.stringify({ hook_event_name: "Stop", cwd: project }),
@@ -496,21 +554,24 @@ function installInto(project, commit, config) {
   // about: findings there are the hook doing its job, not a gate that starts
   // red. Anything else it says, and the install is undone.
   const work = new Set(before.map(([, path]) => path));
-  const spoken = init.status === 0 ? spokenOf(said) : undefined;
+  const spoken = stopped ? undefined : spokenOf(said);
   const theirs =
     spoken !== undefined &&
     spoken.length > 0 &&
     spoken.every((path) => work.has(path));
   const silent = quiet.status === 0 && hook.status === 0 && said === "";
-  if (init.status !== 0 || !(silent || theirs)) {
+  if (stopped || !(silent || theirs)) {
     process.stdout.write(
-      `${name}: not installed, and put back as it was: ${init.status === 0 ? "its gate does not end silent with today's findings as the baseline" : "init stopped"}\n${`${init.status === 0 ? said : init.stdout + init.stderr}`
+      `${name}: not installed, and put back as it was: ${stopped ? `${stopped[0]} stopped (exit ${String(stopped[1].status)})` : "its gate does not end silent with today's findings as the baseline"}\n${(stopped
+        ? `${stopped[1].stdout}${stopped[1].stderr}`.trim()
+        : said
+      )
         .split("\n")
         .slice(0, 40)
         .map((line) => `  ${line}`)
         .join("\n")}\n`,
     );
-    undo(project, folder, before);
+    undo(project, folder, before, held);
     process.exit(1);
   }
   const own = wrote(before, changes(project));
@@ -638,7 +699,18 @@ function main() {
   if (!target)
     fail(2, "usage: consumer-upgrade.mjs <project> [--apply] | --self-test");
   const project = resolve(target);
-  const folder = join(project, ".tools", "validate-kit");
+  // --kit=<folder>: a project that keeps its kit elsewhere (one install per
+  // pinned commit, moved by its own script) is compared from there, and
+  // nothing of it is changed.
+  const elsewhere = args.find((arg) => arg.startsWith("--kit="))?.slice(6);
+  if (elsewhere && (apply || args.includes("--install")))
+    fail(
+      2,
+      "--kit only compares: a project that keeps its kit elsewhere moves it by its own process",
+    );
+  const folder = elsewhere
+    ? resolve(project, elsewhere)
+    : join(project, ".tools", "validate-kit");
   // --wait=<minutes>: a project in use is looked at again each minute, and
   // the work starts when it has been left alone for an hour.
   const wait = Number(
@@ -662,8 +734,11 @@ function main() {
     );
   }
   const named = namedKit(folder);
-  if (!named)
-    fail(2, `${project} has no kit installed under .tools/validate-kit`);
+  if (!named || (elsewhere && !existsSync(binOf(folder))))
+    fail(
+      2,
+      `${project} has no kit installed under ${relative(project, folder)}`,
+    );
   // It names a kit and holds no binary (an install that failed after pnpm
   // cleared node_modules): what it names is installed again first, in use
   // or not, since its hooks have nothing to run until then.
@@ -690,6 +765,7 @@ function main() {
       if (existsSync(join(folder, name)))
         copyFileSync(join(folder, name), join(trial, name));
     install(trial, `file:${packed}`);
+    const began = Date.now();
     const oldRun = gate(binOf(folder), project);
     const newRun = gate(binOf(trial), project);
     const verdict = compare(oldRun, newRun, project);
@@ -720,9 +796,19 @@ function main() {
     copyFileSync(packed, join(folder, basename(packed)));
     install(folder, `file:${basename(packed)}`);
     const after = gate(binOf(folder), project);
-    if (!compare(newRun, after, project).safe)
+    const again = compare(newRun, after, project);
+    // Someone committed or edited there while the gate ran (--even-if-busy):
+    // findings can differ for that reason alone. An install that went wrong
+    // shows as a tool that is missing or crashes, and that is still refused.
+    const theirs =
+      changedSince(project, began) &&
+      again.incomplete.length === 0 &&
+      again.crashed.length === 0;
+    if (!again.safe && !theirs)
       fail(1, "the installed kit does not report what the trial did");
-    process.stdout.write(`  upgraded to ${basename(packed)}\n`);
+    process.stdout.write(
+      `  upgraded to ${basename(packed)}${again.safe ? "" : "; the project changed while its gate ran, so the confirming run differs in findings only"}\n`,
+    );
   } finally {
     rmSync(trial, { recursive: true, force: true });
   }
