@@ -248,15 +248,20 @@ function namedKit(folder) {
   }
 }
 
+/**
+ * Projects that are not installed into or upgraded from here, with the
+ * reason: one that moves its own pin, one that runs the kit by its own
+ * script and decided against a baseline. A private file: it names them.
+ */
+function heldProjects() {
+  const file = join(repoRoot, "docs", "consumers", "holds.json");
+  return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+}
+
 function listBehind(root) {
   const current = kitCommit();
   const behind = [];
-  // Projects that stay behind on purpose, with the reason (a private file:
-  // it names them).
-  const holdsFile = join(repoRoot, "docs", "consumers", "holds.json");
-  const holds = existsSync(holdsFile)
-    ? JSON.parse(readFileSync(holdsFile, "utf8"))
-    : {};
+  const holds = heldProjects();
   for (const name of readdirSync(root).toSorted()) {
     if (Object.hasOwn(holds, name)) continue;
     const folder = join(root, name, ".tools", "validate-kit");
@@ -681,6 +686,27 @@ function selfTest() {
     false,
     "a config the new kit refuses is not safe",
   );
+  // A held project is refused before anything is read or written there: the
+  // call, through the command line (no holds file in a copy without one).
+  const [name] = Object.keys(heldProjects());
+  if (name) {
+    const scratch = mkdtempSync(join(tmpdir(), "vk-held-"));
+    try {
+      mkdirSync(join(scratch, name));
+      for (const flag of ["--install", "--apply"]) {
+        const refused = spawnSync(
+          process.execPath,
+          [fileURLToPath(import.meta.url), join(scratch, name), flag],
+          { encoding: "utf8" },
+        );
+        assert.equal(refused.status, 1, `${flag} on a held project`);
+        assert.match(refused.stderr, / is held, and is not installed into /);
+      }
+      assert.deepEqual(readdirSync(join(scratch, name)), []);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }
   process.stdout.write("consumer-upgrade self-test: ok\n");
 }
 
@@ -699,6 +725,16 @@ function main() {
   if (!target)
     fail(2, "usage: consumer-upgrade.mjs <project> [--apply] | --self-test");
   const project = resolve(target);
+  // A held project is compared at most: its kit and its baseline are its own.
+  const holds = heldProjects();
+  if (
+    Object.hasOwn(holds, basename(project)) &&
+    (apply || args.includes("--install"))
+  )
+    fail(
+      1,
+      `${basename(project)} is held, and is not installed into or upgraded from here: ${holds[basename(project)]}`,
+    );
   // --kit=<folder>: a project that keeps its kit elsewhere (one install per
   // pinned commit, moved by its own script) is compared from there, and
   // nothing of it is changed.
