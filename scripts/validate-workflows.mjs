@@ -504,12 +504,12 @@ function validateHostedValidateKitTestScope(lines, file) {
       "dtolnay/rust-toolchain@",
       "components: clippy, rustfmt",
       "toolchain: stable",
-      'go-version: "1.25"',
+      'go-version: "1.27"',
       "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0",
       "mvdan.cc/gofumpt@v0.12.0",
       "astral-sh/setup-uv@",
-      'version: "0.9.30"',
-      "uv tool install ruff==0.17.3",
+      'version: "0.13.7"',
+      "uv tool install ruff==0.17.4",
       "npm install -g @ast-grep/cli@0.51.1",
       "cd packages/validate-kit && ./node_modules/.bin/tsup",
     ]) {
@@ -590,8 +590,10 @@ function validateTestTsWorkflow(lines, file) {
   }
 
   const unitJobText = unitJob.body.join("\n");
-  if (!/node:\s*\[\s*22,\s*24\s*\]/.test(unitJobText)) {
-    fail(`${file}:${unitJob.line}: test-ts unit job must run node: [22, 24]`);
+  if (!/node:\s*\[\s*22,\s*24,\s*26\s*\]/.test(unitJobText)) {
+    fail(
+      `${file}:${unitJob.line}: test-ts unit job must run node: [22, 24, 26]`,
+    );
   }
   if (!/node-version:\s*\$\{\{\s*matrix\.node\s*\}\}/.test(unitJobText)) {
     fail(
@@ -632,13 +634,13 @@ function validateSecurityWorkflow(lines, file) {
 
   const text = lines.join("\n");
   for (const snippet of [
-    'SEMGREP_VERSION: "1.183.0"',
+    'SEMGREP_VERSION: "1.184.0"',
     "actions/setup-python@",
     'python-version: "3.12"',
     'python -m pip install "semgrep==${SEMGREP_VERSION}"',
     "semgrep --config packages/validate-kit/semgrep/custom.yml --error --disable-version-check .",
     "pnpm/action-setup@",
-    "version: 10.34.7",
+    "version: 10.34.9",
     "actions/setup-node@",
     "node-version: 22",
     "pnpm install --frozen-lockfile",

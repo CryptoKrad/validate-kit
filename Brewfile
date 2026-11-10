@@ -23,6 +23,7 @@ tap "go-gremlins/tap"
 brew "go-gremlins/tap/gremlins"  # Go mutation, where a module has .gremlins.yaml (ci profile)
 # Stryker and mutmut are the project's own dev dependencies (mutmut in .venv)
 brew "zizmor"         # GitHub Actions security, where a zizmor.yml is (this repo: .github/zizmor.yml)
+brew "oasdiff"        # OpenAPI breaking changes (this repo: pnpm run openapi:check; CI pins the same version)
 brew "typos-cli"      # misspellings, where a typos config is (this repo: _typos.toml)
 # uv tool install deptry           (Python imports vs declared deps; or the project's dev dep)
 # uv tool install check-jsonschema==0.39.0  (Renovate, Dependabot, Compose, CI configs against their schemas, offline)

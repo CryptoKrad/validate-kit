@@ -7,11 +7,11 @@
 # `check doctor` verifies every tool independently of mise.
 [tools]
 node = "22"
-pnpm = "10.34.7"
+pnpm = "10.34.9"
 rust = "stable"          # cargo, clippy, rustfmt
-go = "1.25.11"
+go = "1.27.3"
 python = "3.12"
-uv = "0.9.30"
+uv = "0.13.7"
 
 [env]
 # Keep tool caches inside the repo-local dir tree where practical.

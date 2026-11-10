@@ -484,7 +484,7 @@ describe("cooldown", () => {
     );
     writeFileSync(
       join(root, "package.json"),
-      '{"name":"c","packageManager":"pnpm@10.34.7"}\n',
+      '{"name":"c","packageManager":"pnpm@10.34.9"}\n',
     );
     writeFileSync(
       join(root, "pyproject.toml"),
@@ -509,7 +509,7 @@ describe("cooldown", () => {
     // pnpm 10 also reads them from .npmrc.
     writeFileSync(
       join(root, "package.json"),
-      '{"name":"c","packageManager":"pnpm@10.34.7"}\n',
+      '{"name":"c","packageManager":"pnpm@10.34.9"}\n',
     );
     writeFileSync(
       join(root, ".npmrc"),

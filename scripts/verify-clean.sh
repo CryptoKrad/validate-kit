@@ -139,6 +139,7 @@ run "pnpm --filter validate-kit run typecheck"
 run "pnpm --filter validate-kit run test"
 run "pnpm run check"
 run "node scripts/consumer-upgrade.mjs --self-test"
+run "node scripts/outdated.mjs --self-test"
 # A formal case that would be skipped here is a failure, as in CI.
 run "SMOKE_REQUIRE_FORMAL=1 pnpm run smoke:external-package"
 if [ "$ci" -eq 1 ]; then
@@ -168,7 +169,7 @@ if [ "$ci" -eq 1 ]; then
 
 	left "validate.yml#windows" "Windows runner"
 	left "e2e.yml#playwright" "baselines rendered in CI's Linux container"
-	left "test-ts.yml#unit-component-api" "Node 24 leg; here $(node --version)"
+	left "test-ts.yml#unit-component-api" "the other Node legs of 22, 24 and 26; here $(node --version)"
 	if [ "$docker" -eq 0 ]; then
 		left "test-ts.yml#integration" "Docker not running"
 	fi

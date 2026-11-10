@@ -280,7 +280,7 @@ export const quint: ToolAdapter = {
   timeoutMs: 600_000,
   minVersion: "0.32.0",
   installHint:
-    "Quint: `npm install -g @informalsystems/quint@0.32.0` (puts `quint` on PATH)",
+    "Quint: `npm install -g @informalsystems/quint@0.33.1` (puts `quint` on PATH)",
   versionArgs: ["--version"],
   parseVersion: (out) => /(\d+\.\d+\.\d+)/.exec(out)?.[1],
 
