@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync } from "node:fs";
 import { parse as parseYamlDocument } from "yaml";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 
 const workflowDir = ".github/workflows";
 const workflowFiles = readdirSync(workflowDir)
   .filter((file) => /\.ya?ml$/.test(file))
-  .map((file) => join(workflowDir, file))
+  .map((file) => posix.join(workflowDir, file))
   .toSorted();
 const checkedFiles = [...workflowFiles, "package.json"];
 let failed = false;

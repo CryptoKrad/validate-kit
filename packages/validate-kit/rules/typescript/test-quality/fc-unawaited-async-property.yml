@@ -1,0 +1,102 @@
+id: ts-fc-unawaited-async-property
+language: typescript
+severity: error
+message: "This `fc.assert(fc.asyncProperty(...))` is not awaited: the test ends before the property has run, so a failing property is lost or reported against no test. `await` it, or return it."
+note: |
+  `fc.assert` returns a promise for an async property. As a bare statement
+  the test function returns first; on fast-check 4.10.2 the failure then
+  arrives as an unhandled rejection after the test passed. The docs: "you
+  must use fc.asyncProperty instead of fc.property, and await the call to
+  fc.assert". A call that is awaited, returned or chained is left alone.
+  Typed ESLint's no-floating-promises reports it too; this rule needs no
+  types and reads plain JS. A property held in a variable first
+  (`fc.assert(prop)`) is not seen.
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        regex: "^(\\w+\\.)?assert$"
+    - has:
+        field: arguments
+        has:
+          kind: call_expression
+          has:
+            field: function
+            regex: "^(\\w+\\.)?asyncProperty\\b"
+    - inside:
+        kind: expression_statement
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: tsx-fc-unawaited-async-property
+language: tsx
+severity: error
+message: "This `fc.assert(fc.asyncProperty(...))` is not awaited: the test ends before the property has run, so a failing property is lost or reported against no test. `await` it, or return it."
+note: |
+  `fc.assert` returns a promise for an async property. As a bare statement
+  the test function returns first; on fast-check 4.10.2 the failure then
+  arrives as an unhandled rejection after the test passed. The docs: "you
+  must use fc.asyncProperty instead of fc.property, and await the call to
+  fc.assert". A call that is awaited, returned or chained is left alone.
+  Typed ESLint's no-floating-promises reports it too; this rule needs no
+  types and reads plain JS. A property held in a variable first
+  (`fc.assert(prop)`) is not seen.
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        regex: "^(\\w+\\.)?assert$"
+    - has:
+        field: arguments
+        has:
+          kind: call_expression
+          has:
+            field: function
+            regex: "^(\\w+\\.)?asyncProperty\\b"
+    - inside:
+        kind: expression_statement
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: js-fc-unawaited-async-property
+language: javascript
+severity: error
+message: "This `fc.assert(fc.asyncProperty(...))` is not awaited: the test ends before the property has run, so a failing property is lost or reported against no test. `await` it, or return it."
+note: |
+  `fc.assert` returns a promise for an async property. As a bare statement
+  the test function returns first; on fast-check 4.10.2 the failure then
+  arrives as an unhandled rejection after the test passed. The docs: "you
+  must use fc.asyncProperty instead of fc.property, and await the call to
+  fc.assert". A call that is awaited, returned or chained is left alone.
+  Typed ESLint's no-floating-promises reports it too; this rule needs no
+  types and reads plain JS. A property held in a variable first
+  (`fc.assert(prop)`) is not seen.
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        regex: "^(\\w+\\.)?assert$"
+    - has:
+        field: arguments
+        has:
+          kind: call_expression
+          has:
+            field: function
+            regex: "^(\\w+\\.)?asyncProperty\\b"
+    - inside:
+        kind: expression_statement
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

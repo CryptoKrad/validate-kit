@@ -92,7 +92,13 @@ On by default, `cooldown` checks that each package manager a lockfile shows in
 use waits before installing a new release. It also reports a lockfile that
 gained a package published inside that wait, looking the date up in the
 registry. The bundled `test-no-assertion` rules report a test that checks
-nothing (a same-file helper that asserts counts). Where a project configured them, the kit also runs dependency-cruiser
+nothing (a same-file helper that asserts counts). Five rules report a
+property test that tests less than it looks: a fast-check replay left in, an
+async property nobody awaits, Hypothesis's `@reproduce_failure`, a blanket
+health-check suppression and `.example()` in a test. `saved-failures` reports
+a failing case proptest, rapid or `go test -fuzz` saved that git does not
+track, and `review-md` what Claude Code's Code Review would drop from a
+REVIEW.md. Where a project configured them, the kit also runs dependency-cruiser
 (it needs the project's `typescript` below 7; a run that read no TypeScript
 file is a crash, not a pass) and import-linter (import rules), and, when enabled, lizard (a complexity
 ratchet with the baseline) and diff-cover (changed lines no test runs).
@@ -114,15 +120,20 @@ own. Otherwise it exits 2, which hands the agent every finding: its own
 first, then those in files changed before it started (another agent's or the
 user's), which it is told to leave. A finding in a file nobody changed counts
 as its own (a changed signature breaks the callers), and so does a deletion.
-On the retry Claude Code lets it stop, so it is sent back once. Explore and
-Plan cannot edit and are never judged. A JS package that declares
+The main agent is sent back up to three times on one prompt and a subagent
+once; the stop after that passes, and the user reads what is still open.
+Explore and Plan cannot edit and are never judged, and neither is a project
+subagent defined without an editing tool (`.claude/agents/<name>.md` with a
+`tools:` line that holds no Edit or Write): a reviewer is not sent back for
+what the author edits while it reads. A JS package that declares
 dependencies and has no `node_modules` up to the work tree's top says so
-instead of passing unchecked. Two agents writing one file at once cannot be
+instead of passing unchecked, and so does a work tree whose files git cannot
+list; both are counted in the same rounds as a finding. Two agents writing one file at once cannot be
 told apart: each sees the other's edits there as its own.
 
 ## Tools
 
-144 tools. Each is silent when it passes, and a missing one is skipped with a
+146 tools. Each is silent when it passes, and a missing one is skipped with a
 note, or leaves the run incomplete (exit 3) under `--profile ci`. Most run
 only where the project chose them: its config file, a dependency that names
 the tool, a task or CI step that runs it, or `tools.<id>.enabled`. `check
@@ -146,7 +157,7 @@ doctor` which this machine can run. `tools.<id>.enabled: false` turns one off.
 | Solidity               | forge fmt, forge lint, solhint, Slither, aderyn                                                                                                                                        |
 | Security               | Semgrep, gitleaks, zizmor, actionlint, osv-scanner, cooldown, policy                                                                                                                   |
 | Formal                 | TLC, Lean, Quint                                                                                                                                                                       |
-| The kit's own          | ast-grep rules, blobs, paths, scripts, unicode, migrations, env, file-length, lizard, diff-cover                                                                                       |
+| The kit's own          | ast-grep rules, blobs, paths, scripts, unicode, migrations, env, file-length, review-md, saved-failures, lizard, diff-cover                                                            |
 | Agent files            | agnix (CLAUDE.md, AGENTS.md, .claude/, .mcp.json, as the agent reads them)                                                                                                             |
 
 Tiers decide when a tool runs: a fast one on every commit (`--profile dev`

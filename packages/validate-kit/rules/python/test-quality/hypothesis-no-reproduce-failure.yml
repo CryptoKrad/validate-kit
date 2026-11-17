@@ -1,0 +1,20 @@
+id: py-hypothesis-no-reproduce-failure
+language: python
+severity: error
+message: "`@reproduce_failure` runs one saved failure and nothing else, and its blob stops working on the next Hypothesis version. Remove it now the bug is fixed; keep the input with `@example(...)`."
+note: |
+  Hypothesis prints this decorator so a failure found in CI can be replayed
+  once. Its docs: "It is not intended to be a permanent addition to your
+  test suite", and it "will error if used on a different Hypothesis version
+  than it was created for". A test that carries it generates no inputs.
+rule:
+  kind: decorator
+  has:
+    kind: call
+    has:
+      field: function
+      regex: "^(hypothesis\\.)?reproduce_failure$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

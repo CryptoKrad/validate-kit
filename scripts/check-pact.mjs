@@ -22,12 +22,16 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
+import { spawnNodeCommandSync } from "./node-command.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function step(label, args) {
   console.log(`check-pact: ${label}`);
-  const result = spawnSync("pnpm", args, { cwd: repoRoot, stdio: "inherit" });
+  const result = spawnNodeCommandSync("pnpm", args, {
+    cwd: repoRoot,
+    stdio: "inherit",
+  });
   if (result.status !== 0) fail(`${label} failed (exit ${result.status})`);
 }
 

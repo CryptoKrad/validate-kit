@@ -1,0 +1,22 @@
+id: py-test-no-skip
+language: python
+severity: warning
+message: "A skipped test checks nothing, and nobody is told. Fix it, or delete it and say why in the commit. A skip that depends on the machine takes a condition: `@pytest.mark.skipif(...)`, `@unittest.skipUnless(...)`."
+note: |
+  `@pytest.mark.skip` and `@unittest.skip` turn a test off for every run on
+  every machine, and so does a bare `@skip` imported from either. A flaky
+  test is not fixed by skipping it. `skipif`, `skipIf`, `skipUnless` and
+  `xfail` are left alone.
+files:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+rule:
+  kind: decorator
+  regex: "^@\\s*((pytest\\.)?mark\\.|unittest\\.)?skip\\s*(\\(|#|$)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

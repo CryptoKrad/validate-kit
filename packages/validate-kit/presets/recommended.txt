@@ -51,3 +51,13 @@ ts-no-hollow-impl
 tsx-no-hollow-impl
 js-no-hollow-impl
 py-no-hollow-impl
+# Property tests used in a way that tests less than it looks (fast-check, Hypothesis).
+ts-fc-no-replay-leftover
+tsx-fc-no-replay-leftover
+js-fc-no-replay-leftover
+ts-fc-unawaited-async-property
+tsx-fc-unawaited-async-property
+js-fc-unawaited-async-property
+py-hypothesis-no-reproduce-failure
+py-hypothesis-no-blanket-health-check
+py-hypothesis-no-example-in-test

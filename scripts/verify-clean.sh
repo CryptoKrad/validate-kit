@@ -14,6 +14,14 @@
 #                                               on each commit git is pushing
 #                                               (its refs on stdin), once per
 #                                               commit
+#   scripts/verify-clean.sh --stamps [<range>]  how each commit was verified:
+#                                               `preflight`, `gate` or `none`
+#                                               (default range: what is not
+#                                               on origin/main); exit 1 when
+#                                               a commit has no stamp. The
+#                                               third column is the session's
+#                                               stamp, the commit's `Verified:`
+#                                               trailer (`-` when it has none)
 #
 # A pass prints one line. A failing step prints its command, exit code, last
 # lines and log path; the rest stay in their logs. Exit 0 only if every step
@@ -34,6 +42,9 @@ unset GOROOT
 top="$(git rev-parse --show-toplevel)" || exit 2
 # Commits the preflight passed, per API base, so a retried push runs it once.
 passed_dir="$(git -C "$top" rev-parse --path-format=absolute --git-common-dir)/preflight" || exit 2
+# Commits the done gate passed, in a folder of their own: a preflight record
+# is named for its API base.
+gate_dir="$passed_dir/gate"
 # The base check-openapi compares the API with: the remote's tip a push names
 # (github.event.before in CI), else origin/main, as check-openapi itself does.
 api_base() {
@@ -43,6 +54,33 @@ api_base() {
 		git -C "$top" rev-parse --verify --quiet origin/main
 	fi
 }
+
+# Every commit carries a stamp of how it was verified, `none` included, so
+# the ones nothing verified can be listed (Anthropic, "How the Claude Code
+# team thinks about verification", 2026-11-16). The stamp is the record a
+# pass leaves below; it stays on this machine.
+if [ "${1:-}" = "--stamps" ]; then
+	range="${2:-}"
+	if [ -z "$range" ]; then
+		base="$(api_base)"
+		range="${base:+$base..HEAD}"
+	fi
+	# shellcheck disable=SC2086 # the fallback range is two words
+	commits="$(git -C "$top" rev-list ${range:--20 HEAD})" || exit 2
+	status=0
+	for commit in $commits; do
+		stamp=none
+		[ -f "$gate_dir/$commit" ] && stamp=gate
+		for record in "$passed_dir/$commit".*; do
+			[ -f "$record" ] && stamp=preflight
+		done
+		[ "$stamp" = none ] && status=1
+		# The session's own stamp, a trailer the commit gate adds (scripts/commit-gate.mjs).
+		session="$(git -C "$top" log -1 --format='%(trailers:key=Verified,valueonly,separator=%x2C )' "$commit")"
+		printf '%s %-9s %-16s %s\n' "$(git -C "$top" rev-parse --short "$commit")" "$stamp" "${session:--}" "$(git -C "$top" log -1 --format=%s "$commit")"
+	done
+	exit "$status"
+fi
 
 if [ "${1:-}" = "--pushed" ]; then
 	status=0
@@ -75,6 +113,31 @@ fi
 ref="${1:-HEAD}"
 full="$(git -C "$top" rev-parse --verify "$ref^{commit}")" || exit 2
 sha="$(git -C "$top" rev-parse --short=12 "$full")" || exit 2
+
+# The smoke below requires TLC and Lean (SMOKE_REQUIRE_FORMAL; it installs
+# its own Quint), and a missing one fails it minutes in, without saying how to
+# get it. Say so before anything is built, with the line that installs it.
+# CI puts TLC in ~/.local/bin and that folder on PATH (validate.yml, "Install
+# TLC"). Here the folder goes last, so no step finds another binary than
+# before; whatever else this machine keeps there is found too, as in CI.
+PATH="$PATH${HOME:+:$HOME/.local/bin}"
+export PATH
+missing=""
+need() {
+	command -v "$1" >/dev/null 2>&1 && return
+	missing="$missing
+  $1: $2"
+}
+need tlc "the pinned jar and a launcher in ~/.local/bin, as the step 'Install TLC' of .github/workflows/validate.yml does (shasum -a 256 -c on macOS)"
+need lean "brew install elan-init"
+# TLC is a jar. macOS has a /usr/bin/java with no JDK behind it, so ask java.
+java -version >/dev/null 2>&1 || missing="$missing
+  java: a JDK on PATH (brew install openjdk@21, then the link line brew prints)"
+if [ -n "$missing" ]; then
+	printf '%s cannot start: the smoke requires these tools, and they are not on PATH:%s\n' "$([ "$ci" -eq 1 ] && echo preflight || echo verify-clean)" "$missing" >&2
+	exit 2
+fi
+
 scratch="$(mktemp -d)" || exit 2
 work="$scratch/verify-clean-$sha"
 logs="$scratch/logs"
@@ -176,6 +239,7 @@ if [ "$ci" -eq 1 ]; then
 fi
 
 [ "$ci" -eq 1 ] && [ "$fail" -eq 0 ] && mkdir -p "$passed_dir" && : >"$passed_dir/$full.${OPENAPI_BASE_REF:-none}"
+[ "$ci" -eq 0 ] && [ "$fail" -eq 0 ] && mkdir -p "$gate_dir" && : >"$gate_dir/$full"
 name="$([ "$ci" -eq 1 ] && echo preflight || echo verify-clean)"
 if [ "$fail" -eq 0 ]; then
 	printf '%s PASS on %s: %s steps, %ss%s\n' "$name" "$sha" "$step" "$(($(date +%s) - began))" "${left_to_ci:+; left to CI: $left_to_ci}"

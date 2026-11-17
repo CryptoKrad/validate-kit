@@ -94,3 +94,21 @@ ex-test-no-assertion
 dart-test-no-assertion
 cpp-test-no-assertion
 lua-test-no-assertion
+# Property tests used in a way that tests less than it looks (fast-check, Hypothesis).
+ts-fc-no-replay-leftover
+tsx-fc-no-replay-leftover
+js-fc-no-replay-leftover
+ts-fc-unawaited-async-property
+tsx-fc-unawaited-async-property
+js-fc-unawaited-async-property
+py-hypothesis-no-reproduce-failure
+py-hypothesis-no-blanket-health-check
+py-hypothesis-no-example-in-test
+# A flaky test rerun until it passes, or turned off (in TS and JS a skipped
+# test is the runner's own lint rule: vitest/no-disabled-tests). Strict only
+# until they have met more code.
+ts-test-no-retry
+tsx-test-no-retry
+js-test-no-retry
+py-test-no-skip
+py-test-no-rerun

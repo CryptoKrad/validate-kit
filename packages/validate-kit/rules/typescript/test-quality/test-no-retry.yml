@@ -1,0 +1,156 @@
+id: ts-test-no-retry
+language: typescript
+severity: warning
+message: "A retry hides a test that fails some of the time. Find why it fails. If the cause cannot be found, delete the test and write down why."
+note: |
+  `jest.retryTimes(n)`, a per-test `{ retry: n }` (Vitest),
+  `test.describe.configure({ retries: n })` (Playwright) and Mocha's
+  `this.retries(n)` rerun a failing test until it passes once. A retry in a
+  runner's config file is not matched here.
+files:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+rule:
+  any:
+    - kind: call_expression
+      all:
+        - has:
+            field: function
+            regex: "^(jest\\.retryTimes|this\\.retries)$"
+        - not:
+            has:
+              field: arguments
+              regex: "^\\(\\s*0\\s*[,)]"
+    - kind: pair
+      all:
+        - has:
+            field: key
+            regex: "^(retry|retries)$"
+        - not:
+            has:
+              field: value
+              regex: "^0$"
+        - inside:
+            kind: object
+            inside:
+              kind: arguments
+              inside:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: "(?s)^(it|test|describe|suite)(\\.\\w+)*(\\(.*\\))?$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: tsx-test-no-retry
+language: tsx
+severity: warning
+message: "A retry hides a test that fails some of the time. Find why it fails. If the cause cannot be found, delete the test and write down why."
+note: |
+  `jest.retryTimes(n)`, a per-test `{ retry: n }` (Vitest),
+  `test.describe.configure({ retries: n })` (Playwright) and Mocha's
+  `this.retries(n)` rerun a failing test until it passes once. A retry in a
+  runner's config file is not matched here.
+files:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+rule:
+  any:
+    - kind: call_expression
+      all:
+        - has:
+            field: function
+            regex: "^(jest\\.retryTimes|this\\.retries)$"
+        - not:
+            has:
+              field: arguments
+              regex: "^\\(\\s*0\\s*[,)]"
+    - kind: pair
+      all:
+        - has:
+            field: key
+            regex: "^(retry|retries)$"
+        - not:
+            has:
+              field: value
+              regex: "^0$"
+        - inside:
+            kind: object
+            inside:
+              kind: arguments
+              inside:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: "(?s)^(it|test|describe|suite)(\\.\\w+)*(\\(.*\\))?$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: js-test-no-retry
+language: javascript
+severity: warning
+message: "A retry hides a test that fails some of the time. Find why it fails. If the cause cannot be found, delete the test and write down why."
+note: |
+  `jest.retryTimes(n)`, a per-test `{ retry: n }` (Vitest),
+  `test.describe.configure({ retries: n })` (Playwright) and Mocha's
+  `this.retries(n)` rerun a failing test until it passes once. A retry in a
+  runner's config file is not matched here.
+files:
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*-spec.*"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/tests/**"
+  - "**/e2e/**"
+rule:
+  any:
+    - kind: call_expression
+      all:
+        - has:
+            field: function
+            regex: "^(jest\\.retryTimes|this\\.retries)$"
+        - not:
+            has:
+              field: arguments
+              regex: "^\\(\\s*0\\s*[,)]"
+    - kind: pair
+      all:
+        - has:
+            field: key
+            regex: "^(retry|retries)$"
+        - not:
+            has:
+              field: value
+              regex: "^0$"
+        - inside:
+            kind: object
+            inside:
+              kind: arguments
+              inside:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: "(?s)^(it|test|describe|suite)(\\.\\w+)*(\\(.*\\))?$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

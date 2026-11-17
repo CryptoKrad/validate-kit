@@ -9,11 +9,18 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveNodeCommand } from "./node-command.mjs";
+import { nativeOasdiff } from "./native-oasdiff.mjs";
 
 const SPEC = "apps/api/openapi.json";
 
 function emit() {
-  return execFileSync("pnpm", ["exec", "tsx", "scripts/emit-openapi.ts"], {
+  const invocation = resolveNodeCommand("pnpm", [
+    "exec",
+    "tsx",
+    "scripts/emit-openapi.ts",
+  ]);
+  return execFileSync(invocation.command, invocation.args, {
     encoding: "utf8",
   });
 }
@@ -32,8 +39,10 @@ console.log(
 );
 
 // (b) cross-commit breaking gate — runs where oasdiff + a base spec exist.
+const oasdiff =
+  process.env.CI || process.env.OPENAPI_BASE_REF ? nativeOasdiff() : "oasdiff";
 const hasOasdiff =
-  spawnSync("oasdiff", ["--version"], { stdio: "ignore" }).status === 0;
+  spawnSync(oasdiff, ["--version"], { stdio: "ignore" }).status === 0;
 if (!hasOasdiff) {
   // In CI the breaking gate is mandatory: a missing binary (install step
   // refactored away, PATH not persisted via $GITHUB_PATH) must fail loud,
@@ -102,7 +111,7 @@ writeFileSync(join(tmp, "head.json"), fresh);
 // changes (docs/research/lint-toolchain/exit-codes-and-json-shapes.md), and
 // this gate never failed (found 2026-10-04 by a planted removed path).
 const result = spawnSync(
-  "oasdiff",
+  oasdiff,
   [
     "breaking",
     "--fail-on",

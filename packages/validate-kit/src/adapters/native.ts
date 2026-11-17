@@ -155,12 +155,21 @@ export function ownFiles(
   );
 }
 
-/** The config's `ignore`, as a test of a project-relative path. */
-export function ignoredBy(env: PlanEnv): (path: string) => boolean {
-  const patterns = env.config.ignore.map((pattern) =>
+/** The config's `ignore` patterns, as written for a project-relative path. */
+export function ignorePatterns(env: PlanEnv): string[] {
+  return env.config.ignore.map((pattern) =>
     toPosix(pattern).replace(/^\.\//, ""),
   );
+}
+
+/** A test of a project-relative path against `ignore` patterns. */
+export function ignoring(patterns: string[]): (path: string) => boolean {
   return patterns.length > 0 ? picomatch(patterns, { dot: true }) : () => false;
+}
+
+/** The config's `ignore`, as a test of a project-relative path. */
+export function ignoredBy(env: PlanEnv): (path: string) => boolean {
+  return ignoring(ignorePatterns(env));
 }
 
 /**

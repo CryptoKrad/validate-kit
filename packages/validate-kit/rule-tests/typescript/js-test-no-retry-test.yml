@@ -1,0 +1,25 @@
+id: js-test-no-retry
+valid:
+  - |
+    it("adds", { timeout: 500 }, () => { expect(add(1, 2)).toBe(3); });
+  - |
+    it("adds", { retry: 0 }, () => {});
+  - |
+    const client = connect({ retries: 3 });
+  - |
+    jest.retryTimes(0);
+  - |
+    describe("feed", function () { this.retries(0); });
+invalid:
+  - |
+    jest.retryTimes(3);
+  - |
+    it("reads the feed", { retry: 2 }, async () => { await read(); });
+  - |
+    test.describe.configure({ retries: 2 });
+  - |
+    describe("feed", function () { this.retries(4); });
+  - |
+    test.each([1, 2])("reads %s", { retry: 2 }, (n) => { read(n); });
+  - |
+    it.fails("reads", { retry: 2 }, () => {});

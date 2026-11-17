@@ -1,15 +1,33 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
+import { beforeAll, describe, expect, it } from "vitest";
 import { ConfigError, parseConfig } from "../src/config/schema.js";
 import { resolveConfig } from "../src/config/resolve.js";
 import { osvScanner } from "../src/adapters/osv.js";
 import { runCheck } from "../src/index.js";
 import { EXIT } from "../src/core/exit-codes.js";
-import { resolveBin } from "../src/core/exec.js";
+import { resolveBin, run } from "../src/core/exec.js";
 import type { ToolContext } from "../src/core/types.js";
+type NativeOutput = { status: number; stdout: string; stderr: string };
+type NativeSpawn = (
+  command: string,
+  args: string[],
+  options: Record<string, unknown>,
+) => NativeOutput;
+const { nativeOasdiff } = (await import(
+  new URL("../../../scripts/native-oasdiff.mjs", import.meta.url).href
+)) as {
+  nativeOasdiff: (settings?: { spawnSync: NativeSpawn }) => string;
+};
 
 function oasSpec(paths: Record<string, unknown>): string {
   return JSON.stringify({
@@ -175,6 +193,85 @@ describe("vulnAudit plugin (osv-scanner)", () => {
 });
 
 describe("apiDiff plugin (oasdiff)", () => {
+  let binary: string;
+  beforeAll(() => {
+    binary = nativeOasdiff();
+  }, 660_000);
+
+  it("accepts a competing install only with final pinned module and CLI proof", () => {
+    const workflow = readFileSync(
+      new URL("../../../.github/workflows/validate.yml", import.meta.url),
+      "utf8",
+    );
+    const version =
+      /go install github\.com\/oasdiff\/oasdiff@(v\d+\.\d+\.\d+)/.exec(
+        workflow,
+      )?.[1];
+    if (!version) throw new Error("The native test requires the CI tool pin");
+    const module = "github.com/oasdiff/oasdiff";
+    const receipt = `path\t${module}\nmod\t${module}\t${version}\th1:fixture\nbuild\t-ldflags=-X ${module}/build.Version=${version.slice(1)}\n`;
+    let installs = 0;
+    const competition = (
+      metadata: string,
+      reportedVersion: string,
+    ): NativeSpawn => {
+      let reads = 0;
+      return (command, args) => {
+        if (command === "go" && args[0] === "version") {
+          reads += 1;
+          return { status: 0, stdout: reads === 1 ? "" : metadata, stderr: "" };
+        }
+        if (command === "go" && args[0] === "install") {
+          installs += 1;
+          return {
+            status: 1,
+            stdout: "",
+            stderr: "A competing install completed the target",
+          };
+        }
+        return {
+          status: 0,
+          stdout: `oasdiff version ${reportedVersion}`,
+          stderr: "",
+        };
+      };
+    };
+    expect(
+      nativeOasdiff({ spawnSync: competition(receipt, version.slice(1)) }),
+    ).toBe(binary);
+    expect(installs).toBe(1);
+    expect(() =>
+      nativeOasdiff({
+        spawnSync: competition(
+          receipt.replace(module, "wrong/module"),
+          version.slice(1),
+        ),
+      }),
+    ).toThrow("could not be installed");
+    expect(() =>
+      nativeOasdiff({ spawnSync: competition(receipt, "0.0.0") }),
+    ).toThrow("did not report");
+  });
+
+  it("runs the native OpenAPI gate for an explicit base and refuses a missing base", async () => {
+    const cwd = fileURLToPath(new URL("../../../", import.meta.url));
+    const gate = (base: string) =>
+      run(process.execPath, ["scripts/check-openapi.mjs"], {
+        cwd,
+        env: { OPENAPI_BASE_REF: base },
+        timeoutMs: 60_000,
+      });
+    const current = await gate("HEAD");
+    expect(current.exitCode).toBe(0);
+    expect(current.stdout).toContain("no breaking API changes vs HEAD");
+    const missing = await gate("origin/validate-kit-base-that-does-not-exist");
+    expect(missing.exitCode).toBe(1);
+    expect(missing.stderr).toContain(
+      "origin/validate-kit-base-that-does-not-exist is unavailable",
+    );
+    expect(missing.stdout).not.toContain("skipping cross-commit");
+  }, 120_000);
+
   it("reports breaking API changes vs the base ref from a real git repo", async () => {
     const root = mkdtempSync(resolve(tmpdir(), "vk-oas-"));
     git(root, "init", "-q");
@@ -187,6 +284,7 @@ describe("apiDiff plugin (oasdiff)", () => {
       resolve(root, "validate.config.json"),
       JSON.stringify(
         {
+          tools: { oasdiff: { bin: binary } },
           apiDiff: {
             enabled: true,
             specs: ["openapi.json"],
@@ -205,6 +303,8 @@ describe("apiDiff plugin (oasdiff)", () => {
     writeFileSync(resolve(root, "openapi.json"), oasSpec({ "/users": get }));
 
     const result = await runCheck({ cwd: root, onlyTools: ["oasdiff"] });
+    expect(result.summary.ranTools).toContain("oasdiff");
+    expect(result.summary.skippedOptional).toEqual([]);
     expect(result.summary.crashed).toEqual([]);
     const breaking = result.summary.findings.find(
       (f) => f.ruleId === "api-path-removed-without-deprecation",
@@ -226,6 +326,7 @@ describe("apiDiff plugin (oasdiff)", () => {
       resolve(root, "validate.config.json"),
       JSON.stringify(
         {
+          tools: { oasdiff: { bin: binary } },
           apiDiff: {
             enabled: true,
             specs: ["openapi.json"],

@@ -10,7 +10,7 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "test": "vitest run",
-    "test:integration:docker": "docker info >/dev/null 2>&1 || { echo \"Docker is required for Testcontainers integration replay\" >&2; exit 1; }; vitest run --config vitest.integration.config.ts --reporter verbose",
+    "test:integration:docker": "node scripts/run-docker-integration.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

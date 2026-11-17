@@ -1,0 +1,20 @@
+id: py-test-no-rerun
+language: python
+severity: warning
+message: "A rerun hides a test that fails some of the time. Find why it fails. If the cause cannot be found, delete the test and write down why."
+note: |
+  `@pytest.mark.flaky(reruns=n)` (pytest-rerunfailures) and `@flaky` (the
+  flaky plugin) rerun a failing test until it passes once.
+files:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+rule:
+  kind: decorator
+  regex: "^@\\s*((pytest\\.)?mark\\.)?flaky\\s*(\\(|#|$)"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

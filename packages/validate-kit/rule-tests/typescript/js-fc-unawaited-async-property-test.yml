@@ -1,0 +1,23 @@
+id: js-fc-unawaited-async-property
+valid:
+  - |
+    await fc.assert(fc.asyncProperty(fc.scheduler(), async (s) => { await s.waitIdle(); }));
+  - |
+    const run = () => fc.assert(fc.asyncProperty(fc.nat(), async (n) => check(n)));
+  - |
+    async function t() { return fc.assert(fc.asyncProperty(fc.nat(), async (n) => check(n))); }
+  - |
+    fc.assert(fc.property(fc.nat(), (n) => check(n)));
+  - |
+    assert(property(nat(), (n) => check(n)));
+invalid:
+  - |
+    fc.assert(fc.asyncProperty(fc.nat(), async (n) => { await check(n); }));
+  - |
+    test("orders", async () => {
+      fc.assert(fc.asyncProperty(fc.scheduler(), async (s) => { await s.waitIdle(); }), { numRuns: 50 });
+    });
+  - |
+    fc.assert(fc.asyncProperty(fc.nat(), async (n) => check(n)).beforeEach(reset));
+  - |
+    assert(asyncProperty(nat(), async (n) => check(n)));

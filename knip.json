@@ -3,6 +3,9 @@
   "ignore": ["docs/**", "packages/validate-kit/samples/**"],
   "ignoreBinaries": ["go", "tsup", "ast-grep", "oasdiff", "mise", "k6", "brew"],
   "workspaces": {
+    "apps/api": {
+      "entry": ["vitest.integration.config.ts"]
+    },
     ".": {
       "entry": ["validate.config.ts", "scripts/**/*.mjs", "perf/k6/*.js"],
       "ignoreDependencies": [

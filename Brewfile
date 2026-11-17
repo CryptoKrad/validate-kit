@@ -26,7 +26,7 @@ brew "zizmor"         # GitHub Actions security, where a zizmor.yml is (this rep
 brew "oasdiff"        # OpenAPI breaking changes (this repo: pnpm run openapi:check; CI pins the same version)
 brew "typos-cli"      # misspellings, where a typos config is (this repo: _typos.toml)
 # uv tool install deptry           (Python imports vs declared deps; or the project's dev dep)
-# uv tool install check-jsonschema==0.39.0  (Renovate, Dependabot, Compose, CI configs against their schemas, offline)
+brew "check-jsonschema"  # Renovate, Dependabot, Compose, CI configs against their schemas, offline (this repo: renovate.json). uv installs it outside PATH
 # cargo install --locked cargo-machete  (unused Rust deps, where [package.metadata.cargo-machete] is)
 # uv tool install import-linter==2.15   (Python import contracts, where [tool.importlinter] is)
 # On demand, never in a hook (docs/research/agent-tooling-gaps/on-demand-tools.md):
@@ -87,7 +87,8 @@ brew "buildifier"          # Bazel BUILD and .bzl files
 brew "stylelint"           # CSS, where a stylelint config is
 brew "solhint"             # Solidity, where .solhint.json is
 brew "foundry"             # forge fmt for Solidity
-# cargo install --locked cargo-semver-checks deadnix agnix-cli  (agnix: agent files; its tap is untrusted, its npm package downloads a binary)
+# cargo install --locked agnix-cli  (agent files; this repo's gate needs it, so `just install-tools` runs it. Its tap is untrusted, its npm package downloads a binary)
+# cargo install --locked cargo-semver-checks deadnix
 # GOTOOLCHAIN=auto go install github.com/google/capslock/cmd/capslock@v0.3.4
 # go install golang.org/x/exp/cmd/gorelease@latest github.com/fe3dback/go-arch-lint@v1.19.0
 # uv tool install crosshair-tool==0.0.111 ; gem install --user-install brakeman
@@ -99,3 +100,4 @@ brew "go"
 brew "rust"          # or rustup; provides cargo/clippy/rustfmt
 brew "k6"
 brew "mise"          # optional, for the mise.toml runtimes
+brew "elan-init"           # Lean (lean, lake): the lean adapter, and the preflight's smoke requires it. TLC: as the step "Install TLC" of .github/workflows/validate.yml installs it

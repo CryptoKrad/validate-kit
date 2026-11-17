@@ -1,0 +1,32 @@
+id: py-test-no-skip
+snapshots:
+  "@pytest.mark.skip\ndef test_order():\n    assert order()\n":
+    labels:
+    - source: "@pytest.mark.skip"
+      style: primary
+      start: 0
+      end: 17
+  "@pytest.mark.skip  # flaky on CI\ndef test_late():\n    assert late()\n":
+    labels:
+    - source: "@pytest.mark.skip  # flaky on CI"
+      style: primary
+      start: 0
+      end: 32
+  "@pytest.mark.skip(reason=\"flaky on CI\")\ndef test_feed():\n    assert feed()\n":
+    labels:
+    - source: "@pytest.mark.skip(reason=\"flaky on CI\")"
+      style: primary
+      start: 0
+      end: 39
+  "@skip(\"later\")\ndef test_soon():\n    assert soon()\n":
+    labels:
+    - source: "@skip(\"later\")"
+      style: primary
+      start: 0
+      end: 14
+  "class T(unittest.TestCase):\n    @unittest.skip(\"later\")\n    def test_x(self):\n        self.assertTrue(x())\n":
+    labels:
+    - source: "@unittest.skip(\"later\")"
+      style: primary
+      start: 32
+      end: 55

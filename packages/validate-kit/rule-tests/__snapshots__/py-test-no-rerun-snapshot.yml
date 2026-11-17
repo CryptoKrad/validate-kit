@@ -1,0 +1,26 @@
+id: py-test-no-rerun
+snapshots:
+  "@flaky\ndef test_port():\n    assert port()\n":
+    labels:
+    - source: "@flaky"
+      style: primary
+      start: 0
+      end: 6
+  "@flaky  # todo\ndef test_sock():\n    assert sock()\n":
+    labels:
+    - source: "@flaky  # todo"
+      style: primary
+      start: 0
+      end: 14
+  "@flaky(max_runs=5, min_passes=1)\ndef test_ws():\n    assert ws()\n":
+    labels:
+    - source: "@flaky(max_runs=5, min_passes=1)"
+      style: primary
+      start: 0
+      end: 32
+  "@pytest.mark.flaky(reruns=3)\ndef test_feed():\n    assert feed()\n":
+    labels:
+    - source: "@pytest.mark.flaky(reruns=3)"
+      style: primary
+      start: 0
+      end: 28

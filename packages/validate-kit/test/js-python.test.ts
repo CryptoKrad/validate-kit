@@ -115,10 +115,12 @@ describe("astro-check", () => {
     result(2);
 
   it("reports each diagnostic at its line with the code as the rule", () => {
-    const { findings } = astroCheck.parseOutput(ran(1, two), ctx("/site"));
+    const root = tmp("vk-astro-output-");
+    const file = `${root}/src/pages/index.astro`;
+    const { findings } = astroCheck.parseOutput(ran(1, two), ctx(root));
     expect(findings).toMatchObject([
       {
-        file: "/site/src/pages/index.astro",
+        file,
         line: 7,
         col: 6,
         ruleId: "ts2322",
@@ -126,7 +128,7 @@ describe("astro-check", () => {
         layer: "type-check",
       },
       {
-        file: "/site/src/pages/index.astro",
+        file,
         line: 3,
         col: 7,
         ruleId: "ts2322",

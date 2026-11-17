@@ -319,12 +319,14 @@ export const astgrep: ToolAdapter = {
       };
     }
     const findings = [];
+    let matches = 0;
     const known = new Map<string, boolean>();
     const read = new Map<string, RustModule | undefined>();
     for (const line of raw.stdout.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       const m = parseJsonLine<AgMatch>("ast-grep", trimmed);
+      matches++;
       if (suppressed(m)) continue;
       const file = absPosix(ctx.cwd, m.file);
       if (
@@ -352,10 +354,11 @@ export const astgrep: ToolAdapter = {
       );
     }
     // Fail loud on a rule/config error: ast-grep exits non-zero with the error
-    // on stderr and empty stdout. okExitCodes:[0,1] would otherwise route this
-    // through as a clean run (a false CLEAN on the custom-rules layer).
+    // on stderr and empty stdout. Count matches before filtering: exit 1 and
+    // the error-count summary are valid when every match is suppressed or
+    // belongs to an exempt test module.
     if (
-      findings.length === 0 &&
+      matches === 0 &&
       raw.exitCode !== 0 &&
       !raw.spawnError &&
       raw.stderr.trim()

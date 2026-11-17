@@ -7,8 +7,7 @@ import type {
   ToolContext,
 } from "../core/types.js";
 import { toolAdopted } from "../detect/adoption.js";
-import { toPosix } from "../detect/languages.js";
-import { finding, findingsArray, parseJsonOutput } from "./base.js";
+import { absPosix, finding, findingsArray, parseJsonOutput } from "./base.js";
 import { formatChanged } from "./mutation.js";
 
 interface Item {
@@ -92,7 +91,6 @@ export const periphery: ToolAdapter = {
       "periphery",
       parseJsonOutput<unknown>("periphery", raw, []),
     );
-    const cwd = toPosix(ctx.cwd);
     const findings: Finding[] = items.map((item) => {
       const at =
         typeof item.location === "string" ? LOCATION.exec(item.location) : null;
@@ -105,12 +103,11 @@ export const periphery: ToolAdapter = {
         ? item.hints.filter((h): h is string => typeof h === "string")
         : [];
       const hint = hints[0] ?? "unused";
-      const path = toPosix(at[1] ?? "");
       return finding({
         tool: "periphery",
         layer: "lint",
         language: "swift",
-        file: path.startsWith("/") ? path : `${cwd}/${path}`,
+        file: absPosix(ctx.cwd, at[1] ?? ""),
         line: Number(at[2]),
         col: Number(at[3]),
         ruleId: hint,

@@ -123,6 +123,8 @@ import { swiftlint } from "./swiftlint.js";
 import { lean } from "./lean.js";
 import { quint } from "./quint.js";
 import { reuse } from "./reuse.js";
+import { reviewMd } from "./review-md.js";
+import { savedFailures } from "./saved-failures.js";
 import { tflint } from "./tflint.js";
 import { tlc } from "./tlc.js";
 import { tofu } from "./tofu.js";
@@ -246,13 +248,16 @@ export const TOOL_REGISTRY: ToolAdapter[] = [
   pluto,
   tflint,
   // the kit's own checks of what git stores: compiled output, names another
-  // system cannot check out, scripts that cannot start
+  // system cannot check out, scripts that cannot start, a REVIEW.md Code
+  // Review would drop, a saved failing case git does not track
   blobs,
   paths,
   scripts,
   migrations,
   env,
   fileLength,
+  reviewMd,
+  savedFailures,
   // lint, deep tier: feature combinations, public API against a release,
   // imports between components
   cargoHack,

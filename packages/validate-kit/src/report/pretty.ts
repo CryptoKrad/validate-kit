@@ -5,6 +5,7 @@ import { isGating, type RunSummary } from "../core/runner.js";
 import { countsBySeverity } from "./json.js";
 import type { Finding, Severity } from "../core/types.js";
 import { groupBy } from "../core/group.js";
+import { toPosix } from "../detect/languages.js";
 
 const SEV_COLOR: Record<Severity, (s: string) => string> = {
   error: pc.red,
@@ -190,7 +191,7 @@ export function gatingFindings(summary: RunSummary): Finding[] {
 
 /** `path:line:col severity tool/rule message`, one finding on one line. */
 export function quietLine(f: Finding, projectRoot: string): string {
-  return `${relative(projectRoot, f.file) || f.file}:${f.line}:${f.col} ${f.severity} ${ruleName(f)} ${f.message.replace(/\s+/g, " ").trim()}${f.fixable ? " [fixable]" : ""}`;
+  return `${toPosix(relative(projectRoot, f.file) || f.file)}:${f.line}:${f.col} ${f.severity} ${ruleName(f)} ${f.message.replace(/\s+/g, " ").trim()}${f.fixable ? " [fixable]" : ""}`;
 }
 
 /** Above this many, the rest are counted: `--ai-json -` lists them all. */

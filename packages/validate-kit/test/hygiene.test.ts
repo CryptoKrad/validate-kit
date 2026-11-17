@@ -6,7 +6,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { actionlint } from "../src/adapters/actionlint.js";
@@ -21,7 +21,7 @@ import { shfmt } from "../src/adapters/shfmt.js";
 import { isZsh, zshSyntax } from "../src/adapters/zsh-syntax.js";
 import { sobelow } from "../src/adapters/sobelow.js";
 import { spectral } from "../src/adapters/spectral.js";
-import { strykerNet } from "../src/adapters/stryker-net.js";
+import { strykerNet, withGlobalTools } from "../src/adapters/stryker-net.js";
 import { cargoMachete } from "../src/adapters/cargo-machete.js";
 import { cooldown } from "../src/adapters/cooldown.js";
 import { deptry } from "../src/adapters/deptry.js";
@@ -463,86 +463,95 @@ async function cooldownGaps(
 }
 
 describe("cooldown", () => {
-  it("asks each package manager in use for a release-age cooldown, where its setting goes", async () => {
-    const root = tmp("vk-cooldown-");
-    writeFileSync(join(root, "pnpm-lock.yaml"), 'lockfileVersion: "9.0"\n');
-    writeFileSync(
-      join(root, "package.json"),
-      '{"name":"c","packageManager":"pnpm@10.12.0"}\n',
-    );
-    writeFileSync(join(root, "uv.lock"), "version = 1\n");
-    writeFileSync(join(root, "pyproject.toml"), '[project]\nname = "u"\n');
-    writeFileSync(join(root, "package-lock.json"), "{}\n");
-    expect(await cooldownGaps(root)).toEqual([
-      ["pnpm-lock.yaml", "pnpm-minimum-release-age"],
-      ["pnpm-lock.yaml", "pnpm-trust-policy"],
-      ["package.json", "pnpm-too-old"],
-      ["pyproject.toml", "uv-exclude-newer"],
-      ["package-lock.json", "npm-min-release-age"],
-    ]);
-    writeFileSync(
-      join(root, "pnpm-workspace.yaml"),
-      "minimumReleaseAge: 1440\ntrustPolicy: no-downgrade\n",
-    );
-    writeFileSync(
-      join(root, "package.json"),
-      '{"name":"c","packageManager":"pnpm@10.34.9"}\n',
-    );
-    writeFileSync(
-      join(root, "pyproject.toml"),
-      '[project]\nname = "u"\n\n[tool.uv]\nexclude-newer = "7 days"\n',
-    );
-    // npm reads the last line, without its quotes or inline comment.
-    writeFileSync(
-      join(root, ".npmrc"),
-      'min-release-age=0\nmin-release-age = "7" ; a week\n',
-    );
-    expect(await cooldownGaps(root)).toEqual([]);
-    // A cooldown of 0 is none.
-    writeFileSync(join(root, ".npmrc"), "min-release-age=0\n");
-    expect(await cooldownGaps(root)).toEqual([
-      [".npmrc", "npm-min-release-age"],
-    ]);
-  });
+  it.each(["\n", "\r\n"])(
+    "reads npm cooldown settings with line ending %j",
+    async (eol) => {
+      const root = tmp("vk-cooldown-");
+      writeFileSync(join(root, "pnpm-lock.yaml"), 'lockfileVersion: "9.0"\n');
+      writeFileSync(
+        join(root, "package.json"),
+        '{"name":"c","packageManager":"pnpm@10.12.0"}\n',
+      );
+      writeFileSync(join(root, "uv.lock"), "version = 1\n");
+      writeFileSync(join(root, "pyproject.toml"), '[project]\nname = "u"\n');
+      writeFileSync(join(root, "package-lock.json"), "{}\n");
+      expect(await cooldownGaps(root)).toEqual([
+        ["pnpm-lock.yaml", "pnpm-minimum-release-age"],
+        ["pnpm-lock.yaml", "pnpm-trust-policy"],
+        ["package.json", "pnpm-too-old"],
+        ["pyproject.toml", "uv-exclude-newer"],
+        ["package-lock.json", "npm-min-release-age"],
+      ]);
+      writeFileSync(
+        join(root, "pnpm-workspace.yaml"),
+        "minimumReleaseAge: 1440\ntrustPolicy: no-downgrade\n",
+      );
+      writeFileSync(
+        join(root, "package.json"),
+        '{"name":"c","packageManager":"pnpm@10.34.9"}\n',
+      );
+      writeFileSync(
+        join(root, "pyproject.toml"),
+        '[project]\nname = "u"\n\n[tool.uv]\nexclude-newer = "7 days"\n',
+      );
+      // npm reads the last line, without its quotes or inline comment.
+      writeFileSync(
+        join(root, ".npmrc"),
+        ["min-release-age=0", 'min-release-age = "7" ; a week', ""].join(eol),
+      );
+      expect(await cooldownGaps(root)).toEqual([]);
+      // A cooldown of 0 is none.
+      writeFileSync(
+        join(root, ".npmrc"),
+        ["min-release-age=7", "min-release-age=0", ""].join(eol),
+      );
+      expect(await cooldownGaps(root)).toEqual([
+        [".npmrc", "npm-min-release-age"],
+      ]);
+    },
+  );
 
-  it("reads each manager's settings where that version of it does", async () => {
-    const root = tmp("vk-cooldown-");
-    writeFileSync(join(root, "pnpm-lock.yaml"), 'lockfileVersion: "9.0"\n');
-    // pnpm 10 also reads them from .npmrc.
-    writeFileSync(
-      join(root, "package.json"),
-      '{"name":"c","packageManager":"pnpm@10.34.9"}\n',
-    );
-    writeFileSync(
-      join(root, ".npmrc"),
-      "minimum-release-age=1440\ntrust-policy=no-downgrade\n",
-    );
-    expect(await cooldownGaps(root)).toEqual([]);
-    // pnpm 11 waits a day unless told 0, and reads no setting from .npmrc.
-    writeFileSync(
-      join(root, "package.json"),
-      '{"name":"c","packageManager":"pnpm@11.9.0"}\n',
-    );
-    expect(await cooldownGaps(root)).toEqual([
-      ["pnpm-lock.yaml", "pnpm-trust-policy"],
-    ]);
-    writeFileSync(
-      join(root, "pnpm-workspace.yaml"),
-      "minimumReleaseAge: 0\ntrustPolicy: no-downgrade\n",
-    );
-    expect(await cooldownGaps(root)).toEqual([
-      ["pnpm-workspace.yaml", "pnpm-minimum-release-age"],
-    ]);
-    // With a uv.toml, uv ignores [tool.uv].
-    const uv = tmp("vk-cooldown-");
-    writeFileSync(join(uv, "uv.lock"), "version = 1\n");
-    writeFileSync(
-      join(uv, "pyproject.toml"),
-      '[project]\nname = "u"\n\n[tool.uv]\nexclude-newer = "7 days"\n',
-    );
-    writeFileSync(join(uv, "uv.toml"), "native-tls = true\n");
-    expect(await cooldownGaps(uv)).toEqual([["uv.toml", "uv-exclude-newer"]]);
-  });
+  it.each(["\n", "\r\n"])(
+    "reads pnpm settings with line ending %j where that version does",
+    async (eol) => {
+      const root = tmp("vk-cooldown-");
+      writeFileSync(join(root, "pnpm-lock.yaml"), 'lockfileVersion: "9.0"\n');
+      // pnpm 10 also reads them from .npmrc.
+      writeFileSync(
+        join(root, "package.json"),
+        '{"name":"c","packageManager":"pnpm@10.34.9"}\n',
+      );
+      writeFileSync(
+        join(root, ".npmrc"),
+        ["minimum-release-age=1440", "trust-policy=no-downgrade", ""].join(eol),
+      );
+      expect(await cooldownGaps(root)).toEqual([]);
+      // pnpm 11 waits a day unless told 0, and reads no setting from .npmrc.
+      writeFileSync(
+        join(root, "package.json"),
+        '{"name":"c","packageManager":"pnpm@11.9.0"}\n',
+      );
+      expect(await cooldownGaps(root)).toEqual([
+        ["pnpm-lock.yaml", "pnpm-trust-policy"],
+      ]);
+      writeFileSync(
+        join(root, "pnpm-workspace.yaml"),
+        "minimumReleaseAge: 0\ntrustPolicy: no-downgrade\n",
+      );
+      expect(await cooldownGaps(root)).toEqual([
+        ["pnpm-workspace.yaml", "pnpm-minimum-release-age"],
+      ]);
+      // With a uv.toml, uv ignores [tool.uv].
+      const uv = tmp("vk-cooldown-");
+      writeFileSync(join(uv, "uv.lock"), "version = 1\n");
+      writeFileSync(
+        join(uv, "pyproject.toml"),
+        '[project]\nname = "u"\n\n[tool.uv]\nexclude-newer = "7 days"\n',
+      );
+      writeFileSync(join(uv, "uv.toml"), "native-tls = true\n");
+      expect(await cooldownGaps(uv)).toEqual([["uv.toml", "uv-exclude-newer"]]);
+    },
+  );
 
   it("checks each folder with a lockfile, outside the config's ignore", async () => {
     const root = tmp("vk-cooldown-");
@@ -2116,6 +2125,28 @@ describe("periphery", () => {
         "assignOnlyProperty: var 'count'",
       ],
     ]);
+    expect(
+      periphery.parseOutput(
+        ran(
+          0,
+          JSON.stringify([
+            peripheryItem(
+              "function.free",
+              "relative()",
+              "Sources/Demo/Demo.swift:3:5",
+            ),
+          ]),
+        ),
+        ctx(root),
+      ).findings[0],
+    ).toMatchObject({
+      file: `${root}/Sources/Demo/Demo.swift`,
+      line: 3,
+      col: 5,
+      ruleId: "unused",
+      severity: "warning",
+      message: "Unused function 'relative()'",
+    });
     expect(periphery.parseOutput(ran(0, "[\n\n]"), ctx(root)).findings).toEqual(
       [],
     );
@@ -2434,6 +2465,29 @@ describe("stryker-net", () => {
       { solution: "Demo.slnx", project: "Demo/Demo.csproj", breakAt: 90 },
     ]);
     const scratch = tmp("vk-stryker-net-scratch-");
+    // dotnet finds a global tool on PATH only: the tools folder is added,
+    // last, and once.
+    const home = process.env["DOTNET_CLI_HOME"];
+    const tools = join(
+      home === undefined || home === "" ? homedir() : home,
+      ".dotnet",
+      "tools",
+    );
+    const before = `${join(root, "bin")}${delimiter}${join(root, "other")}`;
+    expect(withGlobalTools(before)).toBe(`${before}${delimiter}${tools}`);
+    expect(withGlobalTools(withGlobalTools(before))).toBe(
+      withGlobalTools(before),
+    );
+    // An empty PATH gets no empty entry: that is the current folder.
+    expect(withGlobalTools("")).toBe(tools);
+    expect(
+      strykerNet
+        .buildArgs({
+          ...ctx(root, { options: tasks[0]?.options }),
+          tempDir: () => scratch,
+        })
+        .env?.["PATH"]?.split(delimiter),
+    ).toContain(tools);
     expect(
       strykerNet.buildArgs({
         ...ctx(root, { options: tasks[0]?.options }),

@@ -1,0 +1,56 @@
+id: py-hypothesis-no-example-in-test
+snapshots:
+  "def test_sort():\n    xs = st.lists(st.integers()).example()\n    assert sorted(xs) == sorted(sorted(xs))\n":
+    labels:
+    - source: st.lists(st.integers()).example()
+      style: primary
+      start: 26
+      end: 59
+    - source: st.lists(st.integers()).example
+      style: secondary
+      start: 26
+      end: 57
+    - source: ()
+      style: secondary
+      start: 57
+      end: 59
+    - source: test_sort
+      style: secondary
+      start: 4
+      end: 13
+    - source: |-
+        def test_sort():
+            xs = st.lists(st.integers()).example()
+            assert sorted(xs) == sorted(sorted(xs))
+      style: secondary
+      start: 0
+      end: 103
+  "def test_user():\n    user = users().example()\n    assert user.name\n":
+    labels:
+    - source: users().example()
+      style: primary
+      start: 28
+      end: 45
+    - source: example
+      style: secondary
+      start: 36
+      end: 43
+    - source: users().example
+      style: secondary
+      start: 28
+      end: 43
+    - source: ()
+      style: secondary
+      start: 43
+      end: 45
+    - source: test_user
+      style: secondary
+      start: 4
+      end: 13
+    - source: |-
+        def test_user():
+            user = users().example()
+            assert user.name
+      style: secondary
+      start: 0
+      end: 66

@@ -56,6 +56,7 @@ test:
 install-tools:
     mise install
     brew bundle --no-upgrade
+    command -v agnix >/dev/null || cargo install --locked agnix-cli
     corepack prepare pnpm@10.34.9 --activate
     pnpm install --frozen-lockfile
 

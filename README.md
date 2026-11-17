@@ -48,7 +48,9 @@ and the exit code.
 ## Work on this repository
 
 ```bash
+git clone https://github.com/CryptoKrad/validate-kit.git && cd validate-kit
 mise install && brew bundle      # runtimes, then the native tools (Brewfile)
+cargo install --locked agnix-cli # the one tool of the gate that Homebrew does not hold
 pnpm install --frozen-lockfile
 pnpm run build                   # packages/validate-kit/dist/cli.js
 pnpm run check                   # the gate CI runs
@@ -56,6 +58,52 @@ pnpm --filter validate-kit run test
 pnpm run smoke:external-package  # packs the kit and runs it in temporary repositories
 scripts/verify-clean.sh --ci     # what CI's push jobs run, on a clean worktree of HEAD
 ```
+
+## Work with an agent
+
+The kit checks what an agent wrote at three points. Each one follows Anthropic's write-up on
+verification or its article on verification loops with skills.
+
+- **When the agent ends a turn.** `validate-kit init` writes a Claude Code stop hook
+  (`validate-kit hook claude`). It checks the files the agent changed. It prints nothing when
+  they pass and hands the findings back when they do not: up to three times on one prompt for
+  the main agent, and once for a subagent. After that the user reads what is still open.
+- **When the agent shows its change running.** A `verify` skill beside the code says how to run
+  it and what a pass shows. `apps/web/.claude/skills/verify/SKILL.md` and
+  `apps/api/.claude/skills/verify/SKILL.md` are two examples; a project writes its own.
+- **When the agent commits.** `scripts/commit-gate.mjs` stamps each commit of a Claude Code
+  session with what verified it, for the tree it ran on: `Verified: review, verify`, or `none`.
+  Nothing starts it in this copy. Its header names the four hook events to put in a
+  `.claude/settings.json`, and `pnpm run smoke:commit-gate` runs every case.
+
+Two more scripts read a repository's history. `scripts/review-scope.mjs` reads `REVIEW.md` and
+the CODEOWNERS file from the base commit of a repository that has both, and prints the change's
+risk tier and the checklist items it fires; this copy has no `REVIEW.md`.
+`scripts/review-metrics.mjs` counts, from git, the changes that were reverted or that a later
+fix had to touch again.
+
+Property tests are the project's own: the kit's rules catch one that tests less than it looks,
+and its `saved-failures` check keeps a failing case a library saved in the commit. The package
+README names both.
+
+## What must be on PATH
+
+`git`, `brew` and `mise`, with mise activated in your shell so that the runtimes it installs are
+on PATH. Nothing else by hand: the three install lines above put every tool of this
+repository's gate in a folder mise adds, in Homebrew's folder or in `node_modules/.bin`.
+`pnpm exec check doctor --profile ci` prints one line per tool with its version, or the install
+line when it is missing.
+
+The smoke that the preflight (`scripts/verify-clean.sh --ci`) and the plain
+`scripts/verify-clean.sh` run also runs the formal tools, and requires three things: Lean (`brew bundle` installs elan), TLC (as the step "Install TLC"
+of `.github/workflows/validate.yml` installs it) and a JDK. It installs its own pinned Quint.
+The script adds `~/.local/bin`, where TLC's launcher goes, to the end of its own PATH, and when
+one of the three is missing it stops at its start and prints the line that installs it.
+
+Two installers keep their tools outside PATH, and the kit starts those itself: rustup's cargo,
+and .NET's global tools (`~/.dotnet/tools`) for `dotnet stryker`. A tool you add with
+`uv tool install` or `go install` lands in `~/.local/bin` or `~/go/bin`: put that folder on
+PATH (`uv tool update-shell` does it for uv).
 
 ## CI
 

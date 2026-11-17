@@ -1,0 +1,25 @@
+# The files that decide what passes. A change to one needs the owner, whoever
+# or whatever wrote it (REVIEW.md, "Risk"). The last matching line wins.
+/.github/ @CryptoKrad
+/lefthook.yml @CryptoKrad
+/.lefthook/ @CryptoKrad
+/validate.config.ts @CryptoKrad
+/AGENTS.md @CryptoKrad
+/REVIEW.md @CryptoKrad
+/scripts/verify-clean.sh @CryptoKrad
+/scripts/stop-check.mjs @CryptoKrad
+/scripts/export-public/ @CryptoKrad
+/packages/validate-kit/src/core/runner.ts @CryptoKrad
+/packages/validate-kit/src/core/exit-codes.ts @CryptoKrad
+/packages/validate-kit/src/adapters/policy.ts @CryptoKrad
+/packages/validate-kit/src/commands/hook.ts @CryptoKrad
+/packages/validate-kit/src/commands/init.ts @CryptoKrad
+/packages/validate-kit/src/commands/init-hook.ts @CryptoKrad
+# What judges a change: the commit gate, the review scope, the reviewer,
+# verifier and grader, their skills, the rubric and the reviewer's eval.
+/.claude/ @CryptoKrad
+/scripts/commit-gate.mjs @CryptoKrad
+/scripts/review-scope.mjs @CryptoKrad
+/scripts/review-eval.mjs @CryptoKrad
+/docs/rubrics/ @CryptoKrad
+/docs/evals/ @CryptoKrad

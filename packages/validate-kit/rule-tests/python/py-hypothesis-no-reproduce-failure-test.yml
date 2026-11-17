@@ -1,0 +1,23 @@
+id: py-hypothesis-no-reproduce-failure
+valid:
+  - |
+    @given(st.integers())
+    @example(0)
+    def test_x(n):
+        assert n == n
+  - |
+    @settings(print_blob=True)
+    @given(st.floats())
+    def test_f(f):
+        assert f == f
+invalid:
+  - |
+    @reproduce_failure('6.131.23', b'ACh/+AAAAAAAAA==')
+    @given(st.floats())
+    def test_f(f):
+        assert f == f
+  - |
+    @hypothesis.reproduce_failure("6.170.15", b"AXic")
+    @given(st.integers())
+    def test_n(n):
+        assert n < 50

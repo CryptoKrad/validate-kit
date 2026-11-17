@@ -1,0 +1,36 @@
+id: py-test-no-skip
+valid:
+  - |
+    @pytest.mark.skipif(sys.platform == "win32", reason="no fork")
+    def test_fork():
+        assert fork()
+  - |
+    @unittest.skipUnless(HAS_DOCKER, "needs docker")
+    def test_db():
+        assert db()
+  - |
+    @pytest.mark.xfail(reason="issue 12", strict=True)
+    def test_known():
+        assert False
+invalid:
+  - |
+    @pytest.mark.skip(reason="flaky on CI")
+    def test_feed():
+        assert feed()
+  - |
+    @pytest.mark.skip
+    def test_order():
+        assert order()
+  - |
+    class T(unittest.TestCase):
+        @unittest.skip("later")
+        def test_x(self):
+            self.assertTrue(x())
+  - |
+    @pytest.mark.skip  # flaky on CI
+    def test_late():
+        assert late()
+  - |
+    @skip("later")
+    def test_soon():
+        assert soon()

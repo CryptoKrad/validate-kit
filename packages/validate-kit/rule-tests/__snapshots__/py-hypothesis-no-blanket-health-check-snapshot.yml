@@ -1,0 +1,72 @@
+id: py-hypothesis-no-blanket-health-check
+snapshots:
+  "@settings(max_examples=10, suppress_health_check=tuple(HealthCheck))\n@given(st.integers())\ndef test_x(n):\n    assert n == n\n":
+    labels:
+    - source: suppress_health_check=tuple(HealthCheck)
+      style: primary
+      start: 27
+      end: 67
+    - source: suppress_health_check
+      style: secondary
+      start: 27
+      end: 48
+    - source: tuple(HealthCheck)
+      style: secondary
+      start: 49
+      end: 67
+  "@settings(suppress_health_check=[*HealthCheck])\ndef test_y():\n    assert True\n":
+    labels:
+    - source: suppress_health_check=[*HealthCheck]
+      style: primary
+      start: 10
+      end: 46
+    - source: suppress_health_check
+      style: secondary
+      start: 10
+      end: 31
+    - source: "[*HealthCheck]"
+      style: secondary
+      start: 32
+      end: 46
+  "@settings(suppress_health_check={*HealthCheck})\ndef test_z():\n    assert True\n":
+    labels:
+    - source: suppress_health_check={*HealthCheck}
+      style: primary
+      start: 10
+      end: 46
+    - source: suppress_health_check
+      style: secondary
+      start: 10
+      end: 31
+    - source: "{*HealthCheck}"
+      style: secondary
+      start: 32
+      end: 46
+  "settings.register_profile(\"fast\", suppress_health_check=list(HealthCheck))\n":
+    labels:
+    - source: suppress_health_check=list(HealthCheck)
+      style: primary
+      start: 34
+      end: 73
+    - source: suppress_health_check
+      style: secondary
+      start: 34
+      end: 55
+    - source: list(HealthCheck)
+      style: secondary
+      start: 56
+      end: 73
+  "settings.register_profile(\"x\", suppress_health_check=HealthCheck)\n":
+    labels:
+    - source: suppress_health_check=HealthCheck
+      style: primary
+      start: 31
+      end: 64
+    - source: suppress_health_check
+      style: secondary
+      start: 31
+      end: 52
+    - source: HealthCheck
+      style: secondary
+      start: 53
+      end: 64

@@ -17,8 +17,10 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { delimiter, dirname, extname, join, resolve } from "node:path";
+import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
+import { resolveNodeCommand, spawnNodeCommandSync } from "./node-command.mjs";
 
 // The fixtures live in temp folders mise does not cover, where `go` is
 // whichever one PATH finds; a GOROOT a mise shim exported for this repo's go
@@ -439,7 +441,13 @@ try {
     mode: 0o755,
   });
   const withGlobal = join(tempRoot, "dv21-gitconfig-hooks");
-  writeFileSync(withGlobal, `[core]\n\thooksPath = ${globalHooks}\n`);
+  run("git", [
+    "config",
+    "--file",
+    withGlobal,
+    "core.hooksPath",
+    globalHooks.replaceAll("\\", "/"),
+  ]);
   const global = dv21Init("dv21-global", () => {}, dv21Env(withGlobal));
   dv21.globalRefused =
     global.init.status === 2 &&
@@ -687,13 +695,21 @@ try {
     { mode: 0o755 },
   );
   const halfConfig = join(tempRoot, "pf1-gitconfig-hooks");
-  writeFileSync(halfConfig, `[core]\n\thooksPath = ${halfHooks}\n`);
+  run("git", [
+    "config",
+    "--file",
+    halfConfig,
+    "core.hooksPath",
+    halfHooks.replaceAll("\\", "/"),
+  ]);
   const half = dv21Init("pf1-global", () => {}, dv21Env(halfConfig));
   pf1.globalPushRefused =
     half.init.status === 2 &&
     readdirSync(halfHooks).join() === "pre-commit" &&
     // git names the folder by its real path (/private/var on macOS).
-    /There is no \S*\/pf1-global-hooks\/pre-push /.test(half.init.stderr);
+    /There is no \S*\/pf1-global-hooks\/pre-push /.test(
+      half.init.stderr.replaceAll("\\", "/"),
+    );
   // The user's config runs the staged check but no preflight: kept as it
   // is, and init prints the one job it lacks.
   const commitOnly =
@@ -1286,13 +1302,26 @@ try {
   );
   // A gate's timeout must stop everything the shell started, not just the
   // shell: `sleep; echo` would otherwise keep the pipes open for 30 s more.
-  const slowStarted = Date.now();
+  const slowStarted = performance.now();
   const gateSlow = gate(["gate-slow"], [4]);
-  const slowSeconds = (Date.now() - slowStarted) / 1000;
-  const survivors = run("ps", ["-axo", "command"])
-    .stdout.split("\n")
-    // The process itself, not any command line that merely mentions it.
-    .filter((line) => line.trim() === "sleep 31.7");
+  const slowSeconds = (performance.now() - slowStarted) / 1000;
+  const survivors =
+    process.platform === "win32"
+      ? run("powershell.exe", [
+          "-NoLogo",
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          // Match the actual executable and its complete argument, not a
+          // parent command line that merely mentions this fixture.
+          `Get-CimInstance Win32_Process -ErrorAction Stop -Filter "Name = 'sleep.exe'" | Where-Object { $_.CommandLine -match '(?:^|\\s)"?31\\.7"?(?:\\s|$)' } | ForEach-Object { $_.ProcessId }`,
+        ])
+          .stdout.split(/\r?\n/)
+          .filter((line) => line.trim() !== "")
+      : run("ps", ["-axo", "command"])
+          .stdout.split("\n")
+          // The process itself, not any command line that merely mentions it.
+          .filter((line) => line.trim() === "sleep 31.7");
   assert(
     gateSlow.json.crashed.some((issue) => /timed out/.test(issue.stderr)) &&
       slowSeconds < 20 &&
@@ -1389,9 +1418,9 @@ try {
 
   // tools.<id>: the config's timeout wins over the tool's own, and options
   // reach the adapter (engine-generalisation.md, C5).
-  const hangStarted = Date.now();
+  const hangStarted = performance.now();
   const gateHang = gate(["gate-hang"], [4]);
-  const hangSeconds = (Date.now() - hangStarted) / 1000;
+  const hangSeconds = (performance.now() - hangStarted) / 1000;
   assert(
     gateHang.json.crashed.some((issue) =>
       /timed out after 1s/.test(issue.stderr),
@@ -1524,7 +1553,7 @@ try {
         join(tlaRoot, "validate.config.json"),
         `${JSON.stringify({ ...scope, tools: { tlc } }, null, 2)}\n`,
       );
-    writeTlcConfig({
+    const initialTlcConfig = {
       options: {
         models: [
           {
@@ -1542,7 +1571,8 @@ try {
           { spec: "holds/Counter.tla", config: "configs/CounterElsewhere.cfg" },
         ],
       },
-    });
+    };
+    writeTlcConfig(initialTlcConfig);
     commitAll(tlaRoot);
     // TLC's state directories go under the kit's temp directory; a private
     // one shows whether the kit removed them.
@@ -1623,7 +1653,7 @@ try {
       allowedStatuses: [1],
       env: { TMPDIR: tlcTemp },
     }).stdout;
-    gitIn(tlaRoot)(["checkout", "--quiet", "--", "validate.config.json"]);
+    writeTlcConfig(initialTlcConfig);
     assert(
       twinSafety.length === 0 &&
         twinAny.length === 0 &&
@@ -1745,6 +1775,22 @@ try {
     cpSync(join(repoRoot, "tests", "fixtures", "formal", "lean"), leanRoot, {
       recursive: true,
     });
+    const leanToolchain =
+      /--default-toolchain\s+(leanprover\/lean4:v(\d+\.\d+\.\d+))\b/.exec(
+        readFileSync(
+          join(repoRoot, ".github", "workflows", "validate.yml"),
+          "utf8",
+        ),
+      );
+    assert(leanToolchain, "The formal-test workflow must pin Lean");
+    writeFileSync(join(leanRoot, "lean-toolchain"), `${leanToolchain[1]}\n`);
+    const leanVersion = run("lean", ["--version"], { cwd: leanRoot }).stdout;
+    assert(
+      new RegExp(
+        `\\bversion ${leanToolchain[2].replaceAll(".", "\\.")}(?:[,\\s)])`,
+      ).test(leanVersion),
+      `The formal fixture must run ${leanToolchain[1]}: ${leanVersion.trim()}`,
+    );
     const writeLeanConfig = (lean) =>
       writeFileSync(
         join(leanRoot, "validate.config.json"),
@@ -1891,7 +1937,24 @@ try {
 
   // Quint through the quint adapter (engine-generalisation.md, G2.3), on the
   // fixtures in tests/fixtures/formal/quint.
-  if (hasTool("quint", ["--version"])) {
+  const quintParentPath = process.env.PATH;
+  const quintRuntime =
+    process.env.SMOKE_REQUIRE_FORMAL === "1"
+      ? (await import("./native-quint.mjs")).nativeQuint()
+      : undefined;
+  const quintEnv = quintRuntime
+    ? { PATH: [quintRuntime.binDirectory, process.env.PATH].join(delimiter) }
+    : {};
+  if (hasTool("quint", ["--version"], quintEnv)) {
+    if (quintRuntime) {
+      const actualVersion = run("sh", ["-c", "quint --version"], {
+        env: quintEnv,
+      }).stdout.trim();
+      assert(
+        actualVersion === quintRuntime.version,
+        `The formal fixture shell must run Quint ${quintRuntime.version}: ${actualVersion}`,
+      );
+    }
     const quintRoot = join(tempRoot, "quint");
     cpSync(join(repoRoot, "tests", "fixtures", "formal", "quint"), quintRoot, {
       recursive: true,
@@ -1914,10 +1977,15 @@ try {
     commitAll(quintRoot);
     const quintTemp = join(tempRoot, "quint-temp");
     mkdirSync(quintTemp);
+    const runQuint = (args, options = {}) =>
+      run(installedKit, args, {
+        cwd: quintRoot,
+        ...options,
+        env: { ...quintEnv, ...options.env },
+      });
     const quintTreeBefore = treeHash(quintRoot);
     const quintFindings = parseJsonOutput(
-      run(installedKit, ["--only", "quint", "--json"], {
-        cwd: quintRoot,
+      runQuint(["--only", "quint", "--json"], {
         env: { TMPDIR: quintTemp },
         allowedStatuses: [1],
       }),
@@ -1958,9 +2026,7 @@ try {
     );
     const quintTasks = (args) =>
       JSON.parse(
-        run(installedKit, ["list", "--only", "quint", "--json", ...args], {
-          cwd: quintRoot,
-        }).stdout,
+        runQuint(["list", "--only", "quint", "--json", ...args]).stdout,
       ).tasks.length;
     const quintAll = quintTasks([]);
     writeFileSync(join(quintRoot, "notes.md"), "not read by Quint\n");
@@ -1980,8 +2046,7 @@ try {
     writeQuintConfig({ options: { specs, maxSample: 1 } });
     const quintConfigErrors = [[], ["--staged"]].map(
       (args) =>
-        run(installedKit, ["list", "--only", "quint", "--json", ...args], {
-          cwd: quintRoot,
+        runQuint(["list", "--only", "quint", "--json", ...args], {
           allowedStatuses: [2],
         }).stderr,
     );
@@ -1995,6 +2060,10 @@ try {
   } else {
     formal.quint = "skipped: quint not installed";
   }
+  assert(
+    process.env.PATH === quintParentPath,
+    "Quint fixture commands must preserve the parent PATH",
+  );
 
   // G1.7 (engine-generalisation.md): scope from git, trusted policy, bisect,
   // kitVersion. Each assertion names the failure mode it closes.
@@ -2175,7 +2244,9 @@ try {
     "ext-case",
   ).findings.filter((f) => f.ruleId === "ts-no-console").length;
   assert(
-    miscased.includes("src/B.TS") && changedOnly === 1 && caseIgnored === 1,
+    miscased.replaceAll("\\", "/").includes("src/B.TS") &&
+      changedOnly === 1 &&
+      caseIgnored === 1,
     `a mis-cased source extension is exit 2 naming it in a full run, not in a run of other changed files, and ignorable: ${miscased} / ${changedOnly} / ${caseIgnored}`,
   );
   // Review 2026-10-03: ESLint is planned only where a flat config reaches
@@ -2332,12 +2403,12 @@ try {
     const caseDir = join(tsRoot, name);
     mkdirSync(join(caseDir, "node_modules", ".bin"), { recursive: true });
     const tscPath = join(caseDir, "node_modules", ".bin", "tsc");
-    if (tsc) writeFileSync(tscPath, tsc(tscBin, caseDir), { mode: 0o755 });
-    else symlinkSync(tscBin, tscPath);
+    if (tsc) writeShellFixture(tscPath, tsc(tscBin, caseDir));
+    else linkNodeFixture(tscBin, tscPath);
     for (const [path, text] of Object.entries(files)) {
       mkdirSync(dirname(join(caseDir, path)), { recursive: true });
       if (typeof text === "string") writeFileSync(join(caseDir, path), text);
-      else symlinkSync(text.link, join(caseDir, path));
+      else linkDirectoryFixture(text.link, join(caseDir, path));
     }
     if (git) {
       writeFileSync(join(caseDir, ".gitignore"), "node_modules/\n");
@@ -3518,7 +3589,7 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
   const otherDirty = stagedRun("dv staged: another file dirty");
   // Through a symlink to the project, the same (Go-based tools read PWD).
   const stagedLink = join(tempRoot, "dv-staged-link");
-  symlinkSync(dvStaged, stagedLink);
+  linkDirectoryFixture(dvStaged, stagedLink);
   const throughLink = stagedRun("dv staged: through a symlink", stagedLink);
   rmSync(stagedLink);
   // A file the commit does not stage that does not parse stops tsc from
@@ -3856,7 +3927,7 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     // lint prints real paths, which a baseline keyed by the project's
     // spelling would miss (found in review).
     const dv4Link = join(tempRoot, "dv4-link");
-    symlinkSync(dv4Root, dv4Link);
+    linkDirectoryFixture(dv4Root, dv4Link);
     const respelled = parseJsonOutput(
       run(
         installedKit,
@@ -5371,12 +5442,11 @@ console.log(JSON.stringify(Object.fromEntries(Object.entries(owners).toSorted())
     "eslint.js",
   );
   mkdirSync(join(cfgRoot, "node_modules", ".bin"), { recursive: true });
-  writeFileSync(
+  writeShellFixture(
     join(cfgRoot, "node_modules", ".bin", "eslint"),
     `#!/bin/sh\nexec "${process.execPath}" "${eslintJs}" "$@"\n`,
-    { mode: 0o755 },
   );
-  symlinkSync(tscBin, join(cfgRoot, "node_modules", ".bin", "tsc"));
+  linkNodeFixture(tscBin, join(cfgRoot, "node_modules", ".bin", "tsc"));
   const cfgAi = join(cfgRoot, "ai.json");
   const cfgRun = parseJsonOutput(
     run(
@@ -6793,7 +6863,8 @@ function policyFound(result) {
  * and whether it is an error; every request fails after 60 s.
  */
 async function mcpSession(cwd, bin) {
-  const child = spawn(bin, ["mcp"], {
+  const invocation = resolveNodeCommand(bin, ["mcp"]);
+  const child = spawn(invocation.command, invocation.args, {
     cwd,
     env: { ...process.env, CI: "1" },
     stdio: ["pipe", "pipe", "pipe"],
@@ -6873,9 +6944,15 @@ function archiveConsoleFiles(result) {
 }
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const env = { ...process.env, CI: "1", ...options.env };
+  // Native Windows Node selects os.tmpdir() from TEMP/TMP, not TMPDIR.
+  if (process.platform === "win32" && options.env?.TMPDIR !== undefined) {
+    env.TEMP = options.env.TMPDIR;
+    env.TMP = options.env.TMPDIR;
+  }
+  const result = spawnNodeCommandSync(command, args, {
     cwd: options.cwd ?? repoRoot,
-    env: { ...process.env, CI: "1", ...options.env },
+    env,
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024,
     ...(options.input === undefined ? {} : { input: options.input }),
@@ -6896,6 +6973,27 @@ function run(command, args, options = {}) {
   }
 
   return result;
+}
+
+/** A package manager's Node entry, without a Windows file-symlink privilege. */
+function linkNodeFixture(entry, path) {
+  if (process.platform === "win32")
+    writeFileSync(`${path}.cmd`, `@"${process.execPath}" "${entry}" %*\r\n`);
+  else symlinkSync(entry, path);
+}
+
+/** Keep the actual POSIX fixture script and give Windows its native shim. */
+function writeShellFixture(path, script) {
+  writeFileSync(path, script, { mode: 0o755 });
+  if (process.platform === "win32")
+    writeFileSync(`${path}.cmd`, '@sh "%~dpn0" %*\r\n');
+}
+
+/** A real directory alias on each platform; Windows junctions need no elevation. */
+function linkDirectoryFixture(target, path) {
+  if (process.platform === "win32")
+    symlinkSync(resolve(dirname(path), target), path, "junction");
+  else symlinkSync(target, path);
 }
 
 function gatesConfig(gateFailRun) {
@@ -6989,8 +7087,36 @@ function commitAll(root) {
   git(["commit", "--quiet", "-m", "base"]);
 }
 
-function hasTool(bin, args) {
-  return !spawnSync(bin, args, { stdio: "ignore" }).error;
+function hasTool(bin, args, env) {
+  const kitRequire = createRequire(
+    join(repoRoot, "packages", "validate-kit", "package.json"),
+  );
+  const { execaSync } = kitRequire("execa");
+  const { whichCommandSync } = createRequire(kitRequire.resolve("execa"))(
+    "which-command",
+  );
+  const extension = extname(bin);
+  const executable = whichCommandSync(bin, {
+    ...(env?.PATH === undefined ? {} : { path: env.PATH }),
+    ...(extension
+      ? {
+          pathExt: [extension, process.env.PATHEXT]
+            .filter(Boolean)
+            .join(delimiter),
+        }
+      : {}),
+  });
+  if (executable === undefined) return false;
+  const result = execaSync(executable, args, {
+    stdio: "ignore",
+    reject: false,
+    timeout: 30_000,
+    windowsHide: true,
+    ...(env === undefined ? {} : { env }),
+  });
+  // Many installed tools return nonzero for help. A failed launch or deadline
+  // cannot count as a usable tool.
+  return typeof result.exitCode === "number" && !result.timedOut;
 }
 
 /** The first `bin` on this process's PATH, absolute, for a fixture's `tools.<id>.bin`. */
