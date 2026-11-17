@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -24,7 +25,7 @@ import { ruffFormat } from "../src/adapters/ruff-format.js";
 import { rustfmt } from "../src/adapters/rustfmt.js";
 import { semgrep } from "../src/adapters/semgrep.js";
 import { tsc } from "../src/adapters/tsc.js";
-import { hookIndex, resolveBin, run } from "../src/core/exec.js";
+import { hookIndex, msysShell, resolveBin, run } from "../src/core/exec.js";
 import { toPosix } from "../src/detect/languages.js";
 import { commandGate } from "../src/gates/command-gate.js";
 import { renderPretty } from "../src/report/pretty.js";
@@ -262,6 +263,31 @@ describe("runner", () => {
       expect(warnings).toEqual([]);
     },
   );
+
+  it("an owned Windows group runs Git's shell, not the launcher that GitHub's runners have on PATH", () => {
+    const root = mkdtempSync(resolve(tmpdir(), "vk-msys-shell-"));
+    const file = (...parts: string[]) => {
+      const path = join(root, ...parts);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, "");
+      return path;
+    };
+    const launcher = file("bin", "sh.exe");
+    const shell = file("usr", "bin", "sh.exe");
+    // No timeout.exe anywhere yet: nothing better is known, so no change.
+    expect(msysShell(launcher)).toBe(launcher);
+    file("usr", "bin", "timeout.exe");
+    expect(msysShell(launcher)).toBe(shell);
+    // Only a shell is looked up: git.exe has the same two places.
+    const gitLauncher = file("bin", "git.exe");
+    file("usr", "bin", "git.exe");
+    expect(msysShell(gitLauncher)).toBe(gitLauncher);
+    // The shell itself, and a shell with its own timeout, stay as they are.
+    expect(msysShell(shell)).toBe(shell);
+    file("bin", "timeout.exe");
+    expect(msysShell(launcher)).toBe(launcher);
+    rmSync(root, { recursive: true, force: true });
+  });
 
   it.each([
     { signal: "SIGINT", unproved: false, ready: true },

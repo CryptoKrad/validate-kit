@@ -105,6 +105,22 @@ function watchGroup(
   };
 }
 
+/**
+ * The shell an owned Windows group runs. Git for Windows has a launcher at
+ * `<git>/bin/sh.exe`; the shell itself, and the timeout, ps and kill that own
+ * the group, are in `<git>/usr/bin`. GitHub's Windows runners have the
+ * launcher's folder first on PATH. Anything else is returned as it came.
+ */
+export function msysShell(sh: string): string {
+  if (!/^sh(\.exe)?$/i.test(basename(sh))) return sh;
+  if (existsSync(join(dirname(sh), "timeout.exe"))) return sh;
+  const inUsrBin = join(dirname(dirname(sh)), "usr", "bin", basename(sh));
+  return existsSync(inUsrBin) &&
+    existsSync(join(dirname(inUsrBin), "timeout.exe"))
+    ? inUsrBin
+    : sh;
+}
+
 /** Signal only the MSYS group led by this still-live native wrapper. */
 function killMsysGroup(
   pid: number,
@@ -635,10 +651,12 @@ export async function run(
       env === given || isAbsolute(found)
         ? found
         : (onPath(found, true, env) ?? found);
-    const resolved =
+    const located =
       env !== given && MISE_SHIM.test(where)
         ? (pastShims(basename(where), env) ?? found)
         : found;
+    const resolved =
+      WINDOWS && opts.ownProcessGroup === true ? msysShell(located) : located;
     // A shell outside PATH (Git for Windows' usr/bin) needs its own directory
     // on PATH so the script can reach tee/cat/sed. Not on POSIX: /bin first
     // would put the system's python3 or java ahead of the user's.
@@ -668,12 +686,12 @@ export async function run(
         });
       } catch {
         throw new Error(
-          "Owned Windows shell groups require GNU timeout.exe beside sh.exe",
+          `Owned Windows shell groups require GNU timeout.exe beside sh.exe (looked for ${timeoutBin})`,
         );
       }
       if (!version.startsWith("timeout (GNU coreutils)"))
         throw new Error(
-          "Owned Windows shell groups require GNU timeout.exe beside sh.exe",
+          `Owned Windows shell groups require GNU timeout.exe beside sh.exe (looked for ${timeoutBin})`,
         );
     }
     const subprocess = execa(
