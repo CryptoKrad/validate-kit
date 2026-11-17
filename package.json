@@ -34,6 +34,7 @@
     "smoke:commit-gate": "node scripts/smoke-commit-gate.mjs",
     "review:scope": "node scripts/review-scope.mjs",
     "review:metrics": "node scripts/review-metrics.mjs",
+    "ci:metrics": "node scripts/ci-metrics.mjs",
     "smoke:external-package:cleanup-probe": "node scripts/smoke-external-package-cleanup-probe.mjs",
     "format:check": "prettier \".github/workflows/*.{yml,yaml}\" \"apps/**/*.{ts,tsx,css,md}\" \"packages/validate-kit/{src,test}/**/*.ts\" \"packages/validate-kit/*.config.ts\" \"packages/validate-kit/*.md\" \"perf/**/*.{js,ts,md}\" \"scripts/**/*.mjs\" \"*.{ts,mjs,md,json,yml}\" \"pnpm-workspace.yaml\" --check",
     "lint:self": "check --profile ci --lang ts js --only prettier oxlint eslint ast-grep",

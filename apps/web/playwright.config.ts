@@ -8,6 +8,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  // The retry is there to leave a trace, not to make the run pass: a test
+  // that passes only on a retry is flaky, and the run fails.
+  failOnFlakyTests: !!process.env.CI,
   reporter: [
     ["list"],
     ["html", { outputFolder: "playwright-report", open: "never" }],

@@ -157,6 +157,24 @@ it("runs workflow-specific rejection rules through the actual validator on every
   const valid = check();
   expect(valid.stderr, "the unchanged workflow policy must pass").toBe("");
   expect(valid.status).toBe(0);
+  // A cache of the Go tools under a key that does not change with their pins
+  // would serve a new pin the old binary. An install step that does not ask
+  // the cache compiles the tools each run.
+  const poly = join(root, ".github/workflows/poly.yml");
+  const pinned = readFileSync(poly, "utf8");
+  for (const [held, named] of [
+    ["${{ hashFiles('.github/workflows/poly.yml') }}", "key: go-tools-"],
+    ["        if: steps.go-tools.outputs.cache-hit != 'true'\n", "if: steps"],
+  ] as const) {
+    expect(pinned).toContain(held);
+    writeFileSync(poly, pinned.replace(held, ""));
+    const broken = check();
+    expect(broken.status).toBe(1);
+    expect(broken.stderr).toContain(
+      `poly workflow must include native-toolchain proof: ${named}`,
+    );
+  }
+  writeFileSync(poly, pinned);
   const workflow = join(root, ".github/workflows/validate.yml");
   const original = readFileSync(workflow, "utf8");
   expect(original).toContain("cancel-in-progress: true");

@@ -20,7 +20,11 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, extname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
-import { resolveNodeCommand, spawnNodeCommandSync } from "./node-command.mjs";
+import {
+  resolveNodeCommand,
+  spawnNodeCommandSync as spawnNodeCommand,
+} from "./node-command.mjs";
+import { timed, timingReport } from "./smoke-timings.mjs";
 
 // The fixtures live in temp folders mise does not cover, where `go` is
 // whichever one PATH finds; a GOROOT a mise shim exported for this repo's go
@@ -40,6 +44,9 @@ const requiredRuleIds = [
 // Anything that would resolve the kit through a package registry.
 const registryFetch = /\bnpx\b|\bdlx\b|-p validate-kit/;
 let scaffoldedFilesChecked = 0;
+// Where the time goes, for SMOKE_TIMINGS=1: each command this script starts
+// through the launcher is timed.
+const spawnNodeCommandSync = timed(spawnNodeCommand);
 const tempRoot = mkdtempSync(join(tmpdir(), "validate-kit-external-smoke-"));
 const packDir = join(tempRoot, "pack");
 const consumerRoot = join(tempRoot, "consumer");
@@ -6838,6 +6845,7 @@ export default {
 
   rmSync(tempRoot, { recursive: true, force: true });
   console.log(JSON.stringify(summary, null, 2));
+  if (process.env.SMOKE_TIMINGS === "1") console.error(timingReport());
 } catch (error) {
   console.error(
     `external package smoke failed; tempRoot preserved at ${tempRoot}`,
