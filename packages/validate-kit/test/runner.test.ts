@@ -272,21 +272,23 @@ describe("runner", () => {
       writeFileSync(path, "");
       return path;
     };
-    const launcher = file("bin", "sh.exe");
-    const shell = file("usr", "bin", "sh.exe");
-    // No timeout.exe anywhere yet: nothing better is known, so no change.
-    expect(msysShell(launcher)).toBe(launcher);
-    file("usr", "bin", "timeout.exe");
-    expect(msysShell(launcher)).toBe(shell);
-    // Only a shell is looked up: git.exe has the same two places.
-    const gitLauncher = file("bin", "git.exe");
-    file("usr", "bin", "git.exe");
-    expect(msysShell(gitLauncher)).toBe(gitLauncher);
-    // The shell itself, and a shell with its own timeout, stay as they are.
-    expect(msysShell(shell)).toBe(shell);
-    file("bin", "timeout.exe");
-    expect(msysShell(launcher)).toBe(launcher);
-    rmSync(root, { recursive: true, force: true });
+    try {
+      const launcher = file("bin", "sh.exe");
+      const shell = file("usr", "bin", "sh.exe");
+      // No timeout.exe anywhere yet: nothing better is known, so no change.
+      expect(msysShell(launcher)).toBe(launcher);
+      file("usr", "bin", "timeout.exe");
+      expect(msysShell(launcher)).toBe(shell);
+      // Only a shell is looked up: git.exe has the same two places.
+      const gitLauncher = file("bin", "git.exe");
+      file("usr", "bin", "git.exe");
+      expect(msysShell(gitLauncher)).toBe(gitLauncher);
+      // A shell that has a timeout beside it stays as it is.
+      file("bin", "timeout.exe");
+      expect(msysShell(launcher)).toBe(launcher);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it.each([
