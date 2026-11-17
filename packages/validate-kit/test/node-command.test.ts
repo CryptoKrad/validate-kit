@@ -414,6 +414,9 @@ describe("script Node and pinned pnpm launch", () => {
         script,
         "node-command.mjs",
         ...(script === "check-openapi.mjs" ? ["native-oasdiff.mjs"] : []),
+        ...(script === "smoke-external-package.mjs"
+          ? ["smoke-timings.mjs"]
+          : []),
       ])
         writeFileSync(
           join(fixture, "scripts", file),

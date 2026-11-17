@@ -3,6 +3,7 @@
 # devDependencies. Keep pnpm out of Homebrew so packageManager stays pinned.
 brew "node"          # >= 22.13 (24/26 fine)
 brew "just"
+brew "gh" # GitHub's CLI: `pnpm run ci:metrics` reads the workflow runs through it
 brew "ast-grep"
 brew "ruff"
 brew "golangci-lint"

@@ -1,5 +1,11 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -16,6 +22,38 @@ const start = (env: Record<string, string>, ...args: string[]) =>
     env,
     timeout: 20_000,
   });
+
+/** A program that exits 0, or does what `body` says. */
+const stub = (path: string, body = "") => {
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, `#!/bin/sh\n${body}`, { mode: 0o755 });
+};
+const testLines = (count: number) => "expect(1).toBe(1);\n".repeat(count);
+/** A new repository on `main`: its folder, git in it, and a commit of files. */
+const repository = (prefix: string) => {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  const git = (...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-c", "user.email=e@x.invalid", "-c", "user.name=e", ...args],
+      { cwd: root, encoding: "utf8" },
+    ).trim();
+  const commit = (files: Record<string, string>, subject: string) => {
+    for (const [name, text] of Object.entries(files))
+      writeFileSync(join(root, name), text);
+    git("add", ".");
+    git("commit", "-q", "-m", subject);
+    return git("rev-parse", "HEAD");
+  };
+  git("init", "-q", "-b", "main");
+  return { root, git, commit };
+};
+const recorded = (...allowances: object[]) => JSON.stringify({ allowances });
+// What ./isolated-git.js set, for a child that is given its own environment.
+const gitAlone = {
+  GIT_CONFIG_GLOBAL: process.env["GIT_CONFIG_GLOBAL"] ?? "",
+  GIT_CONFIG_NOSYSTEM: "1",
+};
 
 describe("verify-clean.sh --stamps: how each commit was verified", () => {
   // The preflight is a POSIX shell script; Windows runs it in CI's own job.
@@ -113,6 +151,46 @@ describe("verify-clean.sh --stamps: how each commit was verified", () => {
       const homeless = start({ PATH: bin }, "--ci");
       expect(homeless.status, homeless.stderr).toBe(2);
       expect(homeless.stderr).toContain("preflight cannot start");
+    },
+  );
+
+  // The whole preflight on a repository of stand-ins: every program a step
+  // starts is a script that exits 0, and `date` counts seven seconds a call,
+  // so the pass is quick and the record it leaves can be read.
+  it.runIf(process.platform !== "win32")(
+    "a pass keeps the seconds of each step in its record",
+    () => {
+      const { root, git } = repository("vk-preflight-pass-");
+      const bin = mkdtempSync(join(tmpdir(), "vk-preflight-stubs-"));
+      stub(
+        join(bin, "date"),
+        'n=$(($(cat "$0.n" 2>/dev/null || echo 0) + 7))\necho "$n" | tee "$0.n"\n',
+      );
+      for (const name of ["pnpm", "node", "semgrep", "tlc", "lean", "java"])
+        stub(join(bin, name));
+      for (const name of ["tsup", "ast-grep"])
+        stub(join(root, "packages/validate-kit/node_modules/.bin", name));
+      git("add", "-f", ".");
+      git("commit", "-q", "-m", "stand-ins");
+      const head = git("rev-parse", "HEAD");
+      const run = spawnSync("/bin/sh", [script, "--ci"], {
+        cwd: root,
+        encoding: "utf8",
+        // No docker here, so that job is left to CI on every machine.
+        env: { ...gitAlone, PATH: `${bin}:/usr/bin:/bin`, HOME: root },
+        timeout: 60_000,
+      });
+      expect(run.status, run.stdout + run.stderr).toBe(0);
+      const steps = Number(/: (\d+) steps, /.exec(run.stdout)?.[1]);
+      expect(run.stdout).toMatch(/^preflight PASS on [0-9a-f]{12}: \d+ steps/);
+      const record = readFileSync(
+        join(root, ".git", "preflight", `${head}.none`),
+        "utf8",
+      );
+      const lines = record.trimEnd().split("\n");
+      expect(lines).toHaveLength(steps);
+      expect(lines[0]).toBe("7s pnpm install --frozen-lockfile");
+      for (const line of lines) expect(line).toMatch(/^7s \S/);
     },
   );
 });
@@ -282,4 +360,196 @@ describe("the review workflow's scripts", () => {
       /^commits: 1$/m,
     );
   });
+
+  it("the smoke's timing report adds the seconds per program and lists the slowest commands", async () => {
+    const { timed, timingReport } = (await import(
+      pathToFileURL(join(scripts, "smoke-timings.mjs")).href
+    )) as {
+      timed: <T>(
+        spawn: (command: string, args: string[]) => T,
+      ) => (command: string, args: string[]) => T;
+      timingReport: (entries?: [number, string, string[]][]) => string;
+    };
+    // A timed launcher answers as the launcher does, and a launcher that
+    // throws is counted too.
+    expect(timed(() => "out")("pnpm", ["pack"])).toBe("out");
+    expect(() =>
+      timed(() => {
+        throw new Error("no such program");
+      })("git", ["status"]),
+    ).toThrow("no such program");
+    expect(timingReport()).toMatch(
+      /^smoke timings: 2 commands, .*\n.*(pnpm|git) x1\n.*(pnpm|git) x1\nslowest:/,
+    );
+    // The kit's CLI is one program, whichever node starts it.
+    expect(
+      timingReport([
+        [1500, "/usr/bin/node", ["/x/dist/cli.js", "--only", "oxlint"]],
+        [250, "pnpm", ["pack"]],
+        [90_000, "node", ["/y/cli.js", "check", "--json"]],
+      ]).split("\n"),
+    ).toEqual([
+      "smoke timings: 3 commands, 91.8s in them",
+      "  91.5s  validate-kit x2",
+      "   0.3s  pnpm x1",
+      "slowest:",
+      "  90.0s  validate-kit check --json",
+      "   1.5s  validate-kit --only oxlint",
+      "   0.3s  pnpm pack",
+    ]);
+  });
+
+  it("the CI metrics count billed minutes, repeated proof and waiting time", () => {
+    const selfTest = run("ci-metrics.mjs", "--self-test");
+    expect(selfTest.stderr).toBe("");
+    expect(selfTest.status).toBe(0);
+  });
+
+  // The pre-push mode of the preflight judges every commit of the push, and
+  // not its tip alone, before it starts the preflight.
+  it.runIf(publishes && process.platform !== "win32")(
+    "a push with a commit over the test-line budget is refused before the preflight starts",
+    () => {
+      const { root, commit } = repository("vk-budget-push-");
+      const base = commit({ "a.ts": "export {};\n" }, "source");
+      const over = commit({ "a.test.ts": testLines(401) }, "over the limit");
+      const tip = commit({ "notes.md": "a note\n" }, "a note on top");
+      mkdirSync(join(root, "scripts"));
+      writeFileSync(
+        join(root, "scripts/test-budget.mjs"),
+        readFileSync(join(scripts, "test-budget.mjs")),
+      );
+      const pushed = (from: string) =>
+        spawnSync("/bin/sh", [script, "--pushed"], {
+          cwd: root,
+          encoding: "utf8",
+          input: `refs/heads/main ${tip} refs/heads/main ${from}\n`,
+          env: {
+            ...gitAlone,
+            PATH: `${join(process.execPath, "..")}:/usr/bin:/bin`,
+            HOME: root,
+          },
+        });
+      const push = pushed(base);
+      expect(push.status).toBe(1);
+      expect(push.stderr).toContain(
+        `commit ${over.slice(0, 12)} adds 401 net lines`,
+      );
+      expect(push.stdout + push.stderr).not.toContain("preflight");
+      // The same push from the commit over the limit holds one commit of
+      // notes: the budget passes, and the preflight starts.
+      expect(pushed(over).stderr).toContain("preflight");
+    },
+  );
+
+  // The limit on test-code growth, on a real repository: what is staged, each
+  // commit by itself, a merge, a push of several commits, and the record.
+  it.runIf(publishes)(
+    "a commit over the test-line budget is refused until it records why",
+    () => {
+      const selfTest = run("test-budget.mjs", "--self-test");
+      expect(selfTest.stderr).toBe("");
+      expect(selfTest.status).toBe(0);
+      const { root, git, commit } = repository("vk-test-budget-");
+      const budget = (args: string[] = [], cwd = root, env = process.env) =>
+        spawnSync(
+          process.execPath,
+          [join(scripts, "test-budget.mjs"), ...args],
+          { cwd, encoding: "utf8", env },
+        );
+      // Before the first commit, and for it, the change is compared with
+      // nothing; source is not counted.
+      writeFileSync(join(root, "a.ts"), testLines(900));
+      git("add", ".");
+      expect(budget(["--staged"]).status).toBe(0);
+      commit({}, "source");
+      expect(budget().status).toBe(0);
+
+      writeFileSync(join(root, "a.test.ts"), testLines(401));
+      git("add", ".");
+      const refused = budget(["--staged"]);
+      expect(refused.status).toBe(1);
+      expect(refused.stderr).toContain("adds 401 net lines to test files");
+      expect(refused.stderr).toContain("+401 a.test.ts");
+      expect(refused.stderr).toContain('{ "lines": 1, "why": ');
+      const allowance = { lines: 1, why: "a.ts had no test" };
+      writeFileSync(join(root, "test-budget.json"), recorded(allowance));
+      git("add", ".");
+      expect(budget(["--staged"]).status).toBe(0);
+      const reasoned = commit({}, "tests, with the reason");
+      expect(budget().status).toBe(0);
+
+      // The entry is still in the file: it was for that commit, not this one.
+      writeFileSync(join(root, "b.spec.ts"), testLines(401));
+      git("add", ".");
+      expect(budget(["--staged"]).stderr).toContain("the limit is 400.");
+      // A line taken out of another test pays for the one line over.
+      commit({ "a.test.ts": testLines(400) }, "more tests, one line out");
+      expect(budget().status).toBe(0);
+
+      // A commit over the limit that no hook judged, under a commit of notes:
+      // the tip passes, and the range of the push names the commit.
+      const over = commit({ "c.test.ts": testLines(401) }, "over the limit");
+      const tip = commit({ "notes.md": "a note\n" }, "a note on top");
+      expect(budget().status).toBe(0);
+      const named = `commit ${over.slice(0, 12)} adds 401 net lines`;
+      expect(budget([reasoned, tip]).stderr).toContain(named);
+      expect(budget([over, tip]).status).toBe(0);
+      expect(budget([over]).status).toBe(1);
+      // A runner's event file names the same range.
+      const event = join(
+        mkdtempSync(join(tmpdir(), "vk-event-")),
+        "event.json",
+      );
+      writeFileSync(event, JSON.stringify({ before: reasoned, after: tip }));
+      const onRunner = budget([], root, {
+        ...process.env,
+        GITHUB_EVENT_PATH: event,
+      });
+      expect(onRunner.status).toBe(1);
+      expect(onRunner.stderr).toContain(named);
+
+      // A merge is judged by what it changed itself. The commit it brings,
+      // 600 lines with its own allowance, was judged where it was made: the
+      // merge has neither those lines nor that allowance for the 401 it adds.
+      git("checkout", "-q", "-b", "side", reasoned);
+      const sides = recorded(allowance, { lines: 200, why: "side's reason" });
+      commit(
+        { "d.test.ts": testLines(600), "test-budget.json": sides },
+        "side, with its reason",
+      );
+      expect(budget().status).toBe(0);
+      git("checkout", "-q", "main");
+      // While the merge is being concluded, its lines are staged: not judged.
+      git("merge", "-q", "--no-ff", "--no-commit", "side");
+      expect(budget(["--staged"]).status).toBe(0);
+      commit({ "e.test.ts": testLines(401) }, "merge side, and more tests");
+      const merged = budget();
+      expect(merged.status).toBe(1);
+      expect(merged.stderr).toContain("adds 401 net lines to test files");
+      expect(merged.stderr).toContain("the limit is 400.");
+      // git has no such diff for a merge of more than two parents, and prints
+      // no lines for it: it is judged against its first parent.
+      writeFileSync(join(root, "f.test.ts"), testLines(401));
+      git("add", ".");
+      const parents = ["-p", "HEAD", "-p", "side", "-p", reasoned];
+      const many = git("commit-tree", git("write-tree"), "-m", "x", ...parents);
+      expect(budget([many]).stderr).toContain("adds 401 net lines");
+
+      // A clone without history cannot be judged, and says so.
+      const shallow = mkdtempSync(join(tmpdir(), "vk-shallow-"));
+      execFileSync("git", [
+        "clone",
+        "-q",
+        "--depth",
+        "1",
+        `file://${root}`,
+        shallow,
+      ]);
+      const cut = budget([], shallow);
+      expect(cut.status).toBe(2);
+      expect(cut.stderr).toContain("not a full clone");
+      expect(budget(["no-such-ref"]).status).toBe(2);
+    },
+  );
 });

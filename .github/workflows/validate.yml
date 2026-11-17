@@ -60,7 +60,7 @@ jobs:
       # The smoke runs the quint adapter against real Quint, the release whose
       # output was recorded (docs/research/formal-adapters/quint-cli.md); npm
       # checks the package against the integrity hash the registry publishes.
-      - name: Install Quint 0.32.0
+      - name: Install Quint 0.33.1
         # zizmor: ignore[adhoc-packages] an exact version, as the lockfile would pin it
         run: npm install --global @informalsystems/quint@0.33.1
       # `check --profile ci` is strict: semgrep is a planned tool, so it must

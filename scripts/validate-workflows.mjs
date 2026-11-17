@@ -507,6 +507,11 @@ function validateHostedValidateKitTestScope(lines, file) {
       'go-version: "1.27"',
       "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0",
       "mvdan.cc/gofumpt@v0.12.0",
+      // The two binaries are cached. The key must change with the file that
+      // pins them, or a new pin is served the old binary; and they are
+      // compiled only when the cache did not have them.
+      "key: go-tools-${{ runner.os }}-${{ hashFiles('.github/workflows/poly.yml') }}",
+      "if: steps.go-tools.outputs.cache-hit != 'true'",
       "astral-sh/setup-uv@",
       'version: "0.13.7"',
       "uv tool install ruff==0.17.4",

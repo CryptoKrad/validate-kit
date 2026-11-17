@@ -177,11 +177,17 @@ export MISE_TRUSTED_CONFIG_PATHS="$work"
 step=0
 failed=0
 began=$(date +%s)
+# Seconds per step, kept in the record a pass leaves: where the minutes of a
+# preflight go (`pnpm run ci:metrics` prints the slowest).
+timings=""
 run() {
 	step=$((step + 1))
 	log="$logs/$step.log"
+	started=$(date +%s)
 	sh -c "$1" >"$log" 2>&1
 	rc=$?
+	timings="$timings$(($(date +%s) - started))s $1
+"
 	if [ "$rc" -ne 0 ]; then
 		fail=1
 		failed=$((failed + 1))
@@ -238,8 +244,8 @@ if [ "$ci" -eq 1 ]; then
 	fi
 fi
 
-[ "$ci" -eq 1 ] && [ "$fail" -eq 0 ] && mkdir -p "$passed_dir" && : >"$passed_dir/$full.${OPENAPI_BASE_REF:-none}"
-[ "$ci" -eq 0 ] && [ "$fail" -eq 0 ] && mkdir -p "$gate_dir" && : >"$gate_dir/$full"
+[ "$ci" -eq 1 ] && [ "$fail" -eq 0 ] && mkdir -p "$passed_dir" && printf '%s' "$timings" >"$passed_dir/$full.${OPENAPI_BASE_REF:-none}"
+[ "$ci" -eq 0 ] && [ "$fail" -eq 0 ] && mkdir -p "$gate_dir" && printf '%s' "$timings" >"$gate_dir/$full"
 name="$([ "$ci" -eq 1 ] && echo preflight || echo verify-clean)"
 if [ "$fail" -eq 0 ]; then
 	printf '%s PASS on %s: %s steps, %ss%s\n' "$name" "$sha" "$step" "$(($(date +%s) - began))" "${left_to_ci:+; left to CI: $left_to_ci}"

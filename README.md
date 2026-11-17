@@ -108,5 +108,18 @@ PATH (`uv tool update-shell` does it for uv).
 ## CI
 
 `.github/workflows/`: **validate** (build, kit tests, the smoke, the gate, workflow checks, and a
-Windows leg), **poly** (Rust, Go and Python), **test-ts** (the app's tests on Node 22 and 24),
+Windows leg), **poly** (Rust, Go and Python), **test-ts** (the app's tests on Node 22, 24 and 26),
 **e2e** (Playwright), **perf** (k6, informational) and **security** (Semgrep and `pnpm audit`).
+
+`pnpm run ci:metrics` prints what those workflows cost and what a pull request waits for: the
+billed minutes, each job's time, the slowest steps, and the time from created to merged. It
+also names each job whose median is over ten minutes, counts how often a workflow's push runs
+went red and how long until the next pass, and counts the trees a workflow ran twice without
+one result, which is the sign of a flaky test. Run it before and after a change to a workflow.
+
+A pass of `scripts/verify-clean.sh` keeps the seconds of each step in its record, and the
+report prints the slowest. `SMOKE_TIMINGS=1 pnpm run smoke:external-package` prints where the
+smoke's time goes. `poly` keeps its two Go tools in a cache whose key hashes the workflow file
+that pins them, and `pnpm run workflow:check` fails another key. In CI, a browser test that
+passes only on a retry fails the run (`failOnFlakyTests`); the retry stays, because it leaves
+the trace.
