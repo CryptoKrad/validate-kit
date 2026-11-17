@@ -1,0 +1,30 @@
+id: py-hypothesis-no-example-in-test
+valid:
+  - |
+    @given(st.integers())
+    def test_n(n):
+        assert n == n
+  - |
+    @given(st.data())
+    def test_d(data):
+        n = data.draw(st.integers())
+        assert n == n
+  - |
+    def show():
+        print(st.lists(st.integers()).example())
+  - |
+    def test_doc():
+        assert docs.example("intro") is not None
+  - |
+    def test_six(client):
+        body = client.schema.example()
+        assert body
+  - |
+    def test_user():
+        user = users().example()
+        assert user.name
+invalid:
+  - |
+    def test_sort():
+        xs = st.lists(st.integers()).example()
+        assert sorted(xs) == sorted(sorted(xs))

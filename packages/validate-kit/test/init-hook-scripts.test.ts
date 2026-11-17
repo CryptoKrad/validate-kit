@@ -1,4 +1,5 @@
 import "./isolated-git.js";
+import { strict as assert } from "node:assert";
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -39,6 +40,137 @@ function git(cwd: string, ...args: string[]): string {
 }
 
 describe("init pre-push scripts", () => {
+  it("runs a preserved pre-commit hook first through the generated script on native git", async () => {
+    const root = fixture();
+    const project = resolve(root, "project with space");
+    mkdirSync(project);
+    git(project, "init", "-q");
+    const hook = resolve(project, ".git/hooks/pre-commit");
+    const oldBody = '#!/bin/sh\nprintf "old\\n" >> .git/order\n';
+    writeFileSync(hook, oldBody, { mode: 0o755 });
+    writeFileSync(
+      resolve(project, "validate-kit"),
+      '#!/bin/sh\nprintf "kit\\n" >> .git/order\n',
+      { mode: 0o755 },
+    );
+    expect(
+      await scaffoldHook(project, "./validate-kit", writer),
+    ).toBeUndefined();
+    expect(readFileSync(`${hook}.old`, "utf8")).toBe(oldBody);
+    const configPath = resolve(project, "lefthook.yml");
+    const current = readFileSync(configPath, "utf8");
+    const config = parseYaml(current) as {
+      "pre-commit": { jobs: unknown[] };
+    };
+    expect(config["pre-commit"].jobs).toEqual([
+      {
+        name: "existing pre-commit hook",
+        script: oldScriptName,
+        runner: "sh",
+      },
+      { name: "validate", run: "./validate-kit check --staged --quiet" },
+    ]);
+    const customized = `${current}# Project-owned customization.\n`;
+    writeFileSync(configPath, customized);
+    expect(
+      await scaffoldHook(project, "./validate-kit", writer),
+    ).toBeUndefined();
+    expect(readFileSync(configPath, "utf8")).toBe(customized);
+    writeFileSync(configPath, current);
+    writeFileSync(resolve(project, "a.md"), "hello\n");
+    git(project, "add", "a.md");
+    git(project, "commit", "-qm", "first");
+    const orderPath = resolve(project, ".git/order");
+    const checkOrder = (): void => {
+      assert.equal(readFileSync(orderPath, "utf8"), "old\nkit\n");
+    };
+    checkOrder();
+
+    // Remove only the actual old-hook call in this owned fixture. The same
+    // order check must fail when the production call is absent.
+    const script = resolve(project, ".lefthook/pre-commit", oldScriptName);
+    const body = readFileSync(script, "utf8");
+    const withoutCall = body.replace('exec "$old"', "exit 0");
+    expect(withoutCall).not.toBe(body);
+    writeFileSync(script, withoutCall);
+    writeFileSync(orderPath, "");
+    writeFileSync(resolve(project, "a.md"), "changed\n");
+    git(project, "add", "a.md");
+    git(project, "commit", "-qm", "removed call");
+    expect(checkOrder).toThrow("old");
+    expect(readFileSync(orderPath, "utf8")).toBe("kit\n");
+  });
+
+  it.each([false, true])(
+    "migrates only the exact prior pre-commit run config with push scripts=%s",
+    async (pushScripts) => {
+      const root = fixture();
+      git(root, "init", "-q");
+      const hook = resolve(root, ".git/hooks/pre-commit");
+      writeFileSync(hook, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      expect(await scaffoldHook(root, "validate-kit", writer)).toBeUndefined();
+      const configPath = resolve(root, "lefthook.yml");
+      const current = readFileSync(configPath, "utf8");
+      const priorCommit = `      run: '"$(git rev-parse --path-format=absolute --git-path hooks)/pre-commit.old"'\n      only:\n        - run: 'test -x "$(git rev-parse --path-format=absolute --git-path hooks)/pre-commit.old"'`;
+      let previous = current.replace(
+        `      script: ${oldScriptName}\n      runner: sh`,
+        priorCommit,
+      );
+      if (!pushScripts)
+        previous = previous.replace(
+          `      script: ${scriptName}\n      runner: sh\n      args:`,
+          "      run:",
+        );
+      expect(previous).not.toBe(current);
+      writeFileSync(configPath, previous);
+      expect(await scaffoldHook(root, "validate-kit", writer)).toBeUndefined();
+      expect(readFileSync(configPath, "utf8")).toBe(current);
+
+      const edited = previous.replaceAll(
+        "--git-path hooks)/pre-commit.old",
+        "--git-path hooks)/user-hook",
+      );
+      expect(edited).not.toBe(previous);
+      writeFileSync(configPath, edited);
+      expect(await scaffoldHook(root, "validate-kit", writer)).toBe(
+        EXIT.CONFIG,
+      );
+      expect(readFileSync(configPath, "utf8")).toBe(edited);
+    },
+  );
+
+  it.each([false, true])(
+    "rejects pre-commit collisions before any writes with linked directory=%s",
+    async (linked) => {
+      const root = fixture();
+      git(root, "init", "-q");
+      const hook = resolve(root, ".git/hooks/pre-commit");
+      const oldBody = "#!/bin/sh\nexit 0\n";
+      writeFileSync(hook, oldBody, { mode: 0o755 });
+      const dir = resolve(root, ".lefthook/pre-commit");
+      mkdirSync(resolve(root, ".lefthook"));
+      const outside = fixture();
+      if (linked)
+        symlinkSync(
+          outside,
+          dir,
+          process.platform === "win32" ? "junction" : "dir",
+        );
+      else {
+        mkdirSync(dir);
+        writeFileSync(resolve(dir, oldScriptName), "user-owned\n");
+      }
+      expect(await scaffoldHook(root, "validate-kit", writer)).toBe(
+        EXIT.CONFIG,
+      );
+      expect(readFileSync(hook, "utf8")).toBe(oldBody);
+      expect(existsSync(`${hook}.old`)).toBe(false);
+      expect(existsSync(resolve(root, "lefthook.yml"))).toBe(false);
+      expect(existsSync(resolve(root, scriptDir, scriptName))).toBe(false);
+      expect(existsSync(resolve(outside, oldScriptName))).toBe(false);
+    },
+  );
+
   it("writes a script job with explicit command arguments and migrates its run-based config", async () => {
     const root = fixture();
     expect(await scaffoldHook(root, "validate-kit", writer)).toBeUndefined();

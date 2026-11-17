@@ -1,0 +1,106 @@
+id: js-fc-unawaited-async-property
+snapshots:
+  "assert(asyncProperty(nat(), async (n) => check(n)));\n":
+    labels:
+    - source: assert(asyncProperty(nat(), async (n) => check(n)))
+      style: primary
+      start: 0
+      end: 51
+    - source: assert
+      style: secondary
+      start: 0
+      end: 6
+    - source: asyncProperty
+      style: secondary
+      start: 7
+      end: 20
+    - source: asyncProperty(nat(), async (n) => check(n))
+      style: secondary
+      start: 7
+      end: 50
+    - source: asyncProperty(nat(), async (n) => check(n))
+      style: secondary
+      start: 7
+      end: 50
+    - source: assert(asyncProperty(nat(), async (n) => check(n)));
+      style: secondary
+      start: 0
+      end: 52
+  "fc.assert(fc.asyncProperty(fc.nat(), async (n) => check(n)).beforeEach(reset));\n":
+    labels:
+    - source: fc.assert(fc.asyncProperty(fc.nat(), async (n) => check(n)).beforeEach(reset))
+      style: primary
+      start: 0
+      end: 78
+    - source: fc.assert
+      style: secondary
+      start: 0
+      end: 9
+    - source: fc.asyncProperty(fc.nat(), async (n) => check(n)).beforeEach
+      style: secondary
+      start: 10
+      end: 70
+    - source: fc.asyncProperty(fc.nat(), async (n) => check(n)).beforeEach(reset)
+      style: secondary
+      start: 10
+      end: 77
+    - source: fc.asyncProperty(fc.nat(), async (n) => check(n)).beforeEach(reset)
+      style: secondary
+      start: 10
+      end: 77
+    - source: fc.assert(fc.asyncProperty(fc.nat(), async (n) => check(n)).beforeEach(reset));
+      style: secondary
+      start: 0
+      end: 79
+  "fc.assert(fc.asyncProperty(fc.nat(), async (n) => { await check(n); }));\n":
+    labels:
+    - source: fc.assert(fc.asyncProperty(fc.nat(), async (n) => { await check(n); }))
+      style: primary
+      start: 0
+      end: 71
+    - source: fc.assert
+      style: secondary
+      start: 0
+      end: 9
+    - source: fc.asyncProperty
+      style: secondary
+      start: 10
+      end: 26
+    - source: fc.asyncProperty(fc.nat(), async (n) => { await check(n); })
+      style: secondary
+      start: 10
+      end: 70
+    - source: fc.asyncProperty(fc.nat(), async (n) => { await check(n); })
+      style: secondary
+      start: 10
+      end: 70
+    - source: fc.assert(fc.asyncProperty(fc.nat(), async (n) => { await check(n); }));
+      style: secondary
+      start: 0
+      end: 72
+  "test(\"orders\", async () => {\n  fc.assert(fc.asyncProperty(fc.scheduler(), async (s) => { await s.waitIdle(); }), { numRuns: 50 });\n});\n":
+    labels:
+    - source: "fc.assert(fc.asyncProperty(fc.scheduler(), async (s) => { await s.waitIdle(); }), { numRuns: 50 })"
+      style: primary
+      start: 31
+      end: 129
+    - source: fc.assert
+      style: secondary
+      start: 31
+      end: 40
+    - source: fc.asyncProperty
+      style: secondary
+      start: 41
+      end: 57
+    - source: fc.asyncProperty(fc.scheduler(), async (s) => { await s.waitIdle(); })
+      style: secondary
+      start: 41
+      end: 111
+    - source: fc.asyncProperty(fc.scheduler(), async (s) => { await s.waitIdle(); })
+      style: secondary
+      start: 41
+      end: 111
+    - source: "fc.assert(fc.asyncProperty(fc.scheduler(), async (s) => { await s.waitIdle(); }), { numRuns: 50 });"
+      style: secondary
+      start: 31
+      end: 130

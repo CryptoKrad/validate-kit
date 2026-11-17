@@ -370,6 +370,14 @@ export const tlc: ToolAdapter = {
   versionArgs: ["-h"],
   // TLC prints its help, version included, and exits 1.
   versionExitCodes: [0, 1],
+  get versionEnv() {
+    // The help probe has no task scratch and needs no JVM perf store.
+    return {
+      JAVA_TOOL_OPTIONS: [process.env["JAVA_TOOL_OPTIONS"], "-XX:-UsePerfData"]
+        .filter(Boolean)
+        .join(" "),
+    };
+  },
   parseVersion: (out) => {
     const m = /Version (\d+)\.(\d+)/.exec(out);
     return m ? `${m[1]}.${m[2]}.0` : undefined;
@@ -430,6 +438,11 @@ export const tlc: ToolAdapter = {
         ...ctx.extraArgs,
       ],
       env: {
+        // HotSpot's native perf store uses the OS temp variables on Windows,
+        // independently of java.io.tmpdir. Keep both stores in owned scratch.
+        TMPDIR: javaTmp,
+        TMP: javaTmp,
+        TEMP: javaTmp,
         JAVA_TOOL_OPTIONS: [
           process.env["JAVA_TOOL_OPTIONS"],
           // Quoted: the JVM splits the variable at whitespace and has no

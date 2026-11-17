@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { delimiter, join } from "node:path";
 import { globSync } from "tinyglobby";
 import { z } from "zod";
 import type {
@@ -61,6 +62,28 @@ function latestReport(dir: string): string | undefined {
     .map((path) => ({ path, mtime: statSync(path).mtimeMs }))
     .toSorted((a, b) => b.mtime - a.mtime);
   return reports[0]?.path;
+}
+
+/**
+ * PATH with the folder of .NET's global tools at its end. `dotnet stryker`
+ * starts `dotnet-stryker`, which dotnet finds on PATH only, and `dotnet tool
+ * install -g` leaves adding the folder to the user (a Homebrew dotnet adds
+ * nothing): the tool list shows the tool, and the run finds no command. Last,
+ * so a `dotnet-stryker` already on PATH is the one that runs.
+ */
+export function withGlobalTools(path = process.env["PATH"] ?? ""): string {
+  // An empty variable is not a folder: `.dotnet/tools` would be read under
+  // the project, and an empty PATH entry is the current folder.
+  const home = process.env["DOTNET_CLI_HOME"];
+  const tools = join(
+    home === undefined || home === "" ? homedir() : home,
+    ".dotnet",
+    "tools",
+  );
+  if (path === "") return tools;
+  return path.split(delimiter).includes(tools)
+    ? path
+    : `${path}${delimiter}${tools}`;
 }
 
 /**
@@ -154,7 +177,11 @@ export const strykerNet: ToolAdapter = {
         ...(ctx.configPath ? ["-f", ctx.configPath] : []),
         ...ctx.extraArgs,
       ],
-      env: { DOTNET_CLI_TELEMETRY_OPTOUT: "1", DOTNET_NOLOGO: "1" },
+      env: {
+        DOTNET_CLI_TELEMETRY_OPTOUT: "1",
+        DOTNET_NOLOGO: "1",
+        PATH: withGlobalTools(),
+      },
       // 0 with survivors; 2 below --break-at; 1 when it could not mutate.
       okExitCodes: [0, 2],
     };

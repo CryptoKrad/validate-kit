@@ -1,0 +1,30 @@
+id: py-hypothesis-no-reproduce-failure
+snapshots:
+  "@hypothesis.reproduce_failure(\"6.170.15\", b\"AXic\")\n@given(st.integers())\ndef test_n(n):\n    assert n < 50\n":
+    labels:
+    - source: "@hypothesis.reproduce_failure(\"6.170.15\", b\"AXic\")"
+      style: primary
+      start: 0
+      end: 50
+    - source: hypothesis.reproduce_failure
+      style: secondary
+      start: 1
+      end: 29
+    - source: hypothesis.reproduce_failure("6.170.15", b"AXic")
+      style: secondary
+      start: 1
+      end: 50
+  "@reproduce_failure('6.131.23', b'ACh/+AAAAAAAAA==')\n@given(st.floats())\ndef test_f(f):\n    assert f == f\n":
+    labels:
+    - source: "@reproduce_failure('6.131.23', b'ACh/+AAAAAAAAA==')"
+      style: primary
+      start: 0
+      end: 51
+    - source: reproduce_failure
+      style: secondary
+      start: 1
+      end: 18
+    - source: reproduce_failure('6.131.23', b'ACh/+AAAAAAAAA==')
+      style: secondary
+      start: 1
+      end: 51

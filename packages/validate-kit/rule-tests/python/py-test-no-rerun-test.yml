@@ -1,0 +1,27 @@
+id: py-test-no-rerun
+valid:
+  - |
+    @pytest.mark.slow
+    def test_big():
+        assert big()
+  - |
+    @retry(stop=stop_after_attempt(3))
+    def fetch():
+        return get()
+invalid:
+  - |
+    @pytest.mark.flaky(reruns=3)
+    def test_feed():
+        assert feed()
+  - |
+    @flaky(max_runs=5, min_passes=1)
+    def test_ws():
+        assert ws()
+  - |
+    @flaky
+    def test_port():
+        assert port()
+  - |
+    @flaky  # todo
+    def test_sock():
+        assert sock()

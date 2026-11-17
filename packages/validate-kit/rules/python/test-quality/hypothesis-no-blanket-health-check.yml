@@ -1,0 +1,22 @@
+id: py-hypothesis-no-blanket-health-check
+language: python
+severity: warning
+message: "Every Hypothesis health check is switched off here, including the two that guard correctness (`function_scoped_fixture`, `differing_executors`). Suppress the one you met, by name."
+note: |
+  Hypothesis's docs: "We strongly recommend that you suppress health checks
+  as you encounter them, rather than using a blanket suppression", because
+  several "may save you hours of debugging". `[HealthCheck.too_slow]` and
+  other named lists are left alone.
+rule:
+  kind: keyword_argument
+  all:
+    - has:
+        field: name
+        regex: "^suppress_health_check$"
+    - has:
+        field: value
+        regex: "^(list|tuple|set)\\(\\s*(hypothesis\\.)?HealthCheck\\s*\\)$|^(hypothesis\\.)?HealthCheck(\\.all\\(\\))?$|^[\\[({]\\s*\\*\\s*(hypothesis\\.)?HealthCheck\\s*,?\\s*[\\])}]$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

@@ -54,7 +54,7 @@ const hook = (input, extra = {}) => {
     encoding: "utf8",
     env: { ...process.env, CLAUDE_PROJECT_DIR: dir, ...extra },
   });
-  return { status: r.status, err: r.stderr.trim() };
+  return { status: r.status, err: r.stderr.trim(), out: r.stdout.trim() };
 };
 const bad = (name) => `export const ${name} = 1;\nconsole.log(${name});\n`;
 const results = [];
@@ -76,8 +76,33 @@ expect(
   2,
   (e) => e.includes("src/mine.ts") && !e.includes("Also found"),
 );
-// C: the retry may stop.
-expect("C retry", hook({ hook_event_name: "Stop", stop_hook_active: true }), 0);
+// C: the finding is still there on the retries: sent back twice more, three
+// times in all. Then it may stop, and the user is told what is left.
+const retry = () => hook({ hook_event_name: "Stop", stop_hook_active: true });
+expect("C round 2", retry(), 2, (e) => e.includes("round 2 of 3"));
+expect("C round 3", retry(), 2, (e) => e.includes("round 3 of 3"));
+const fourth = retry();
+expect(
+  "C fourth stop passes, the user is told",
+  fourth,
+  0,
+  (e) =>
+    e === "" &&
+    /^validate-kit sent the agent back 3 times and this is still open:\n.*src\/mine\.ts/.test(
+      JSON.parse(fourth.out).systemMessage,
+    ) &&
+    !/round|fix them/.test(fourth.out),
+);
+// C2: another stop hook continued the turn and the kit never sent this agent
+// back: it is judged, as on a first stop.
+hook({ hook_event_name: "UserPromptSubmit" });
+writeFileSync(join(dir, "src/late.ts"), bad("late"));
+expect("C2 continued by another hook", retry(), 2, (e) =>
+  e.includes("src/late.ts"),
+);
+// C3: fixed on the retry: silent.
+writeFileSync(join(dir, "src/late.ts"), "export const late = 1;\n");
+expect("C3 fixed on the retry", retry(), 0, (e) => e === "");
 // D: another agent's dirty file (there before this prompt) has a finding,
 // this turn changed a clean file: not sent back.
 writeFileSync(join(dir, "src/mine.ts"), "export const mine = 1;\n");
@@ -136,6 +161,48 @@ expect(
   2,
   (e) => e.includes("src/sub.ts"),
 );
+// H1: a subagent is sent back once: with the finding still there, its next
+// stop passes and the user is told.
+const again = hook({
+  hook_event_name: "SubagentStop",
+  agent_id: "w1",
+  agent_type: "general-purpose",
+  stop_hook_active: true,
+});
+expect(
+  "H1 a subagent is sent back once",
+  again,
+  0,
+  (e) =>
+    e === "" &&
+    /sent the agent back once.*src\/sub\.ts/s.test(
+      JSON.parse(again.out).systemMessage,
+    ),
+);
+// R: a project subagent defined with no editing tool (a reviewer) is not
+// judged, though a file changed while it ran; one defined with Edit is.
+mkdirSync(join(dir, ".claude/agents"), { recursive: true });
+writeFileSync(
+  join(dir, ".claude/agents/reviewer.md"),
+  "---\nname: reviewer\ndescription: reviews\ntools: Read, Grep, Bash\n---\nReview.\n",
+);
+writeFileSync(
+  join(dir, ".claude/agents/fixer.md"),
+  "---\nname: fixer\ndescription: fixes\ntools: Read, Edit, Bash\n---\nFix.\n",
+);
+for (const [type, want] of [
+  ["reviewer", 0],
+  ["fixer", 2],
+]) {
+  hook({ hook_event_name: "SubagentStart", agent_id: type, agent_type: type });
+  writeFileSync(join(dir, "src/sub.ts"), bad(`sub${type}`));
+  expect(
+    `R ${type}: a subagent ${want === 0 ? "with no editing tool is not judged" : "that can edit is judged"}`,
+    hook({ hook_event_name: "SubagentStop", agent_id: type, agent_type: type }),
+    want,
+  );
+}
+rmSync(join(dir, ".claude"), { recursive: true });
 // H2: stopped again after fixing, with no change since its last stop: silent.
 writeFileSync(join(dir, "src/sub.ts"), "export const sub = 1;\n");
 hook({
@@ -279,6 +346,23 @@ expect(
   hook({ hook_event_name: "Stop", session_id: "" }),
   2,
   (e) => e.includes("src/nosession.ts"),
+);
+// P2: with no record to count rounds in, the retry is the last round: it may
+// stop, and the user is told.
+const unrecorded = hook({
+  hook_event_name: "Stop",
+  session_id: "",
+  stop_hook_active: true,
+});
+expect(
+  "P2 no session id, the retry passes and the user is told",
+  unrecorded,
+  0,
+  (e) =>
+    e === "" &&
+    /sent the agent back once.*src\/nosession\.ts/s.test(
+      JSON.parse(unrecorded.out).systemMessage,
+    ),
 );
 rmSync(join(dir, "src/nosession.ts"));
 // Q: another agent's file with 60 findings does not hide this agent's one.

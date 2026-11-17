@@ -213,7 +213,7 @@ function pinnedPnpm(root: string): string | undefined {
  */
 function npmrcValue(text: string | undefined, key: string): string | undefined {
   let value: string | undefined;
-  for (const line of (text ?? "").split("\n")) {
+  for (const line of (text ?? "").split(/\r?\n/)) {
     const m = new RegExp(`^\\s*${key}\\s*=(.*)$`).exec(line);
     if (m?.[1] === undefined) continue;
     value = m[1]

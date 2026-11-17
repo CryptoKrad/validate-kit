@@ -1,0 +1,26 @@
+id: py-hypothesis-no-blanket-health-check
+valid:
+  - |
+    settings.register_profile("ci", suppress_health_check=[HealthCheck.too_slow])
+  - |
+    @settings(suppress_health_check=[HealthCheck.filter_too_much, HealthCheck.data_too_large])
+    def test_x():
+        assert True
+invalid:
+  - |
+    settings.register_profile("fast", suppress_health_check=list(HealthCheck))
+  - |
+    @settings(max_examples=10, suppress_health_check=tuple(HealthCheck))
+    @given(st.integers())
+    def test_x(n):
+        assert n == n
+  - |
+    @settings(suppress_health_check=[*HealthCheck])
+    def test_y():
+        assert True
+  - |
+    @settings(suppress_health_check={*HealthCheck})
+    def test_z():
+        assert True
+  - |
+    settings.register_profile("x", suppress_health_check=HealthCheck)

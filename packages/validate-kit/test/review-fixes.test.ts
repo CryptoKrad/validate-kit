@@ -317,13 +317,57 @@ describe("review fixes (2026-07-01)", () => {
   });
 
   // H3 — a rule/config error (non-zero exit, empty stdout, stderr) must fail loud.
-  it("ast-grep throws on a config error exit with no findings", () => {
+  it.each([1, 2])(
+    "ast-grep throws on a config error exit %i with no findings",
+    (exitCode) => {
+      const raw: RawOutput = {
+        stdout: "",
+        stderr: "Error: could not parse rule file foo.yml",
+        exitCode,
+      };
+      expect(() => astgrep.parseOutput(raw, ctx())).toThrow(
+        /rule\/config error/,
+      );
+    },
+  );
+
+  it("ast-grep accepts a findings exit when every match has an inline suppression", () => {
     const raw: RawOutput = {
-      stdout: "",
-      stderr: "Error: could not parse rule file foo.yml",
-      exitCode: 2,
+      stdout: JSON.stringify({
+        file: "harness.py",
+        lines: "exec('pass')  # noqa: S102",
+        ruleId: "py-no-eval-exec",
+        metadata: { suppressedBy: "^exec\\(.*#\\s*noqa\\s*:\\s*S102\\b" },
+      }),
+      stderr: "Error: 1 error(s) found in code.\n",
+      exitCode: 1,
     };
-    expect(() => astgrep.parseOutput(raw, ctx())).toThrow(/rule\/config error/);
+    expect(astgrep.parseOutput(raw, ctx()).findings).toEqual([]);
+    expect(() =>
+      astgrep.parseOutput({ ...raw, stdout: "not JSON" }, ctx()),
+    ).toThrow(/invalid JSON/);
+  });
+
+  it("ast-grep accepts a findings exit when every match belongs to an exempt test module", () => {
+    const root = mkdtempSync(join(tmpdir(), "validate-kit-exempt-"));
+    try {
+      writeFileSync(join(root, "lib.rs"), "#![cfg(test)]\n");
+      expect(
+        astgrep.parseOutput(
+          {
+            stdout: JSON.stringify({
+              file: "lib.rs",
+              metadata: { cfgTestFiles: "exempt" },
+            }),
+            stderr: "Error: 1 error(s) found in code.\n",
+            exitCode: 1,
+          },
+          ctx({ cwd: root }),
+        ).findings,
+      ).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   // Reporter C1 — SARIF must emit repo-relative POSIX URIs, not absolute file://.

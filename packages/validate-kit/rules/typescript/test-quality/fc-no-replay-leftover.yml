@@ -1,0 +1,174 @@
+id: ts-fc-no-replay-leftover
+language: typescript
+severity: warning
+message: "A fast-check replay was left in: with `path` or `endOnFailure` the property starts at one old counterexample and sees a few inputs, not the whole run. Remove `seed`, `path` and `endOnFailure` (and `replayPath`) now the bug is fixed; keep the failing input in `examples`."
+note: |
+  fast-check prints `{ seed, path, endOnFailure: true }` so a failure can be
+  replayed, and `replayPath` for `fc.commands`. Measured on fast-check 4.10.2:
+  100 inputs without them, 26 with `path: "96:5"`, 4 with `path: "0:0"`.
+  `examples: [[...]]` keeps a case for good: it runs first, every time.
+  A `seed` alone only makes the run repeat and is left alone. Reported on
+  `fc.assert` and `fc.check`, and under any other import name when the
+  first argument is a `property(...)` or `asyncProperty(...)` call.
+rule:
+  any:
+    - kind: object
+      has:
+        kind: pair
+        has:
+          field: key
+          regex: "^[\"']?(path|endOnFailure)[\"']?$"
+      inside:
+        kind: arguments
+        any:
+          - inside:
+              kind: call_expression
+              has:
+                field: function
+                regex: "^fc\\.(assert|check)$"
+          - all:
+              - has:
+                  kind: call_expression
+                  has:
+                    field: function
+                    regex: "^(\\w+\\.)?(asyncProperty|property)\\b"
+              - inside:
+                  kind: call_expression
+                  has:
+                    field: function
+                    regex: "^(\\w+\\.)?(assert|check)$"
+    - kind: pair
+      has:
+        field: key
+        regex: "^[\"']?replayPath[\"']?$"
+      inside:
+        kind: object
+        inside:
+          kind: arguments
+          inside:
+            kind: call_expression
+            has:
+              field: function
+              regex: "^(\\w+\\.)?commands$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: tsx-fc-no-replay-leftover
+language: tsx
+severity: warning
+message: "A fast-check replay was left in: with `path` or `endOnFailure` the property starts at one old counterexample and sees a few inputs, not the whole run. Remove `seed`, `path` and `endOnFailure` (and `replayPath`) now the bug is fixed; keep the failing input in `examples`."
+note: |
+  fast-check prints `{ seed, path, endOnFailure: true }` so a failure can be
+  replayed, and `replayPath` for `fc.commands`. Measured on fast-check 4.10.2:
+  100 inputs without them, 26 with `path: "96:5"`, 4 with `path: "0:0"`.
+  `examples: [[...]]` keeps a case for good: it runs first, every time.
+  A `seed` alone only makes the run repeat and is left alone. Reported on
+  `fc.assert` and `fc.check`, and under any other import name when the
+  first argument is a `property(...)` or `asyncProperty(...)` call.
+rule:
+  any:
+    - kind: object
+      has:
+        kind: pair
+        has:
+          field: key
+          regex: "^[\"']?(path|endOnFailure)[\"']?$"
+      inside:
+        kind: arguments
+        any:
+          - inside:
+              kind: call_expression
+              has:
+                field: function
+                regex: "^fc\\.(assert|check)$"
+          - all:
+              - has:
+                  kind: call_expression
+                  has:
+                    field: function
+                    regex: "^(\\w+\\.)?(asyncProperty|property)\\b"
+              - inside:
+                  kind: call_expression
+                  has:
+                    field: function
+                    regex: "^(\\w+\\.)?(assert|check)$"
+    - kind: pair
+      has:
+        field: key
+        regex: "^[\"']?replayPath[\"']?$"
+      inside:
+        kind: object
+        inside:
+          kind: arguments
+          inside:
+            kind: call_expression
+            has:
+              field: function
+              regex: "^(\\w+\\.)?commands$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+
+id: js-fc-no-replay-leftover
+language: javascript
+severity: warning
+message: "A fast-check replay was left in: with `path` or `endOnFailure` the property starts at one old counterexample and sees a few inputs, not the whole run. Remove `seed`, `path` and `endOnFailure` (and `replayPath`) now the bug is fixed; keep the failing input in `examples`."
+note: |
+  fast-check prints `{ seed, path, endOnFailure: true }` so a failure can be
+  replayed, and `replayPath` for `fc.commands`. Measured on fast-check 4.10.2:
+  100 inputs without them, 26 with `path: "96:5"`, 4 with `path: "0:0"`.
+  `examples: [[...]]` keeps a case for good: it runs first, every time.
+  A `seed` alone only makes the run repeat and is left alone. Reported on
+  `fc.assert` and `fc.check`, and under any other import name when the
+  first argument is a `property(...)` or `asyncProperty(...)` call.
+rule:
+  any:
+    - kind: object
+      has:
+        kind: pair
+        has:
+          field: key
+          regex: "^[\"']?(path|endOnFailure)[\"']?$"
+      inside:
+        kind: arguments
+        any:
+          - inside:
+              kind: call_expression
+              has:
+                field: function
+                regex: "^fc\\.(assert|check)$"
+          - all:
+              - has:
+                  kind: call_expression
+                  has:
+                    field: function
+                    regex: "^(\\w+\\.)?(asyncProperty|property)\\b"
+              - inside:
+                  kind: call_expression
+                  has:
+                    field: function
+                    regex: "^(\\w+\\.)?(assert|check)$"
+    - kind: pair
+      has:
+        field: key
+        regex: "^[\"']?replayPath[\"']?$"
+      inside:
+        kind: object
+        inside:
+          kind: arguments
+          inside:
+            kind: call_expression
+            has:
+              field: function
+              regex: "^(\\w+\\.)?commands$"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

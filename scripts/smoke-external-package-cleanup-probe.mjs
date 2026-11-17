@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnNodeCommandSync } from "./node-command.mjs";
 
 const tempPrefix = "validate-kit-external-smoke-";
 
 const before = listExternalSmokeTempRoots();
-const result = spawnSync("pnpm", ["run", "smoke:external-package"], {
+const result = spawnNodeCommandSync("pnpm", ["run", "smoke:external-package"], {
   cwd: process.cwd(),
   env: { ...process.env, CI: "1" },
   encoding: "utf8",

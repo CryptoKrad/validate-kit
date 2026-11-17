@@ -1,0 +1,27 @@
+id: js-fc-no-replay-leftover
+valid:
+  - |
+    fc.assert(fc.property(fc.integer(), (n) => n === n));
+  - |
+    fc.assert(fc.property(fc.integer(), check), { seed: 42, numRuns: 500 });
+  - |
+    fc.assert(fc.property(fc.nat(), check), { examples: [[0], [2147483647]] });
+  - |
+    walk(tree, { path: "a/b" });
+  - |
+    assert.deepEqual(read(file, { path: "a" }), expected);
+  - |
+    permissions.check({ path: req.path, user: 1 });
+  - |
+    assert(req.ok, { path: "x" });
+invalid:
+  - |
+    fc.assert(fc.property(fc.array(fc.integer()), sorted), { seed: -1819918769, path: "0:1:3", endOnFailure: true });
+  - |
+    fc.check(fc.property(fc.string(), check), { endOnFailure: true });
+  - |
+    fc.assert(fc.property(fc.commands(all, { replayPath: "AAAAABAAE:VF" }), run), { seed: 670108017 });
+  - |
+    assert(property(fc.integer(), check), { seed: 7, path: "3:1" });
+  - |
+    fc.assert(prop, { "path": "0:0" });

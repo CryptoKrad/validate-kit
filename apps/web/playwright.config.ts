@@ -14,6 +14,9 @@ export default defineConfig({
   ],
   use: {
     baseURL: "http://localhost:3000",
+    // What a failing run leaves to read (apps/web/test-results/): the page as
+    // it was, and in CI, where a failure is retried, the steps that led there.
+    screenshot: "only-on-failure",
     trace: "on-first-retry",
     // Determinism for visual regression. The baseline is generated and gated
     // inside the same pinned Playwright container CI runs in (see e2e.yml

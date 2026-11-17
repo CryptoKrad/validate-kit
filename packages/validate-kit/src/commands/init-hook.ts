@@ -7,7 +7,14 @@ import {
   realpathSync,
   renameSync,
 } from "node:fs";
-import { isAbsolute, join, normalize, relative, resolve } from "node:path";
+import {
+  dirname,
+  isAbsolute,
+  join,
+  normalize,
+  relative,
+  resolve,
+} from "node:path";
 import pc from "picocolors";
 import { parse as parseToml } from "smol-toml";
 import { parse as parseYaml } from "yaml";
@@ -60,6 +67,13 @@ const CONFIG_NAMES = [".yml", ".yaml", ".json", ".jsonc", ".toml"].flatMap(
 const HOOKS_DIR = "$(git rev-parse --path-format=absolute --git-path hooks)";
 const PUSH_SCRIPT = "validate-kit-preflight.sh";
 const OLD_PUSH_SCRIPT = "validate-kit-existing.sh";
+const OLD_COMMIT_SCRIPT = "validate-kit-existing.sh";
+const OLD_COMMIT_BODY = `#!/bin/sh
+# Written by validate-kit init.
+old="${HOOKS_DIR}/pre-commit.old"
+[ -x "$old" ] || exit 0
+exec "$old"
+`;
 const PUSH_RC = ".lefthook/validate-kit-rc.sh";
 const PUSH_RC_BODY = `#!/bin/sh
 # Written by validate-kit init. Sourced by Git's hook before lefthook starts.
@@ -116,14 +130,15 @@ output:
  * Git's hook captures the arguments through lefthook's rc before the job
  * shell starts: raw `{N}` substitution loses quoting, especially on Windows.
  */
-function oldJob(hook: Hook, scripts = true): string {
+function oldJob(hook: Hook, scripts = true, commitScripts = scripts): string {
   const old = `${HOOKS_DIR}/${hook}.old`;
   const push = hook === "pre-push";
+  const scripted = push ? scripts : commitScripts;
   return `    - name: existing ${hook} hook
       # The ${hook} hook this clone had before validate-kit init, kept as
       # ${hook}.old in the git hooks folder. Clones without it skip this job.
-${push && scripts ? `      script: ${OLD_PUSH_SCRIPT}\n      runner: sh\n      args: --` : `      run: '"${old}"${push ? ' "{1}" "{2}"' : ""}'`}
-${push ? "      use_stdin: true\n" : ""}${push && scripts ? "" : `      only:\n        - run: 'test -x "${old}"'\n`}`;
+${scripted ? `      script: ${push ? OLD_PUSH_SCRIPT : OLD_COMMIT_SCRIPT}\n      runner: sh${push ? "\n      args: --" : ""}` : `      run: '"${old}"${push ? ' "{1}" "{2}"' : ""}'`}
+${push ? "      use_stdin: true\n" : ""}${scripted ? "" : `      only:\n        - run: 'test -x "${old}"'\n`}`;
 }
 
 const kitJob = (
@@ -141,21 +156,23 @@ const section = (
   kit: string,
   keepOld: boolean,
   scripts = true,
+  commitScripts = scripts,
 ): string =>
-  `\n${hook}:\n  parallel: false\n  jobs:\n${keepOld ? oldJob(hook, scripts) : ""}${kitJob(hook, kit, undefined, scripts)}`;
+  `\n${hook}:\n  parallel: false\n  jobs:\n${keepOld ? oldJob(hook, scripts, commitScripts) : ""}${kitJob(hook, kit, undefined, scripts)}`;
 
 /** `kept`: the hooks whose moved-aside hook the config runs first. */
 const initConfig = (
   kit: string,
   kept: readonly Hook[] = [],
   scripts = true,
+  commitScripts = scripts,
 ): string =>
   TOP +
   (scripts && kept.includes("pre-push") ? `rc: ${PUSH_RC}\n` : "") +
   OUTPUT +
-  HOOKS.map((hook) => section(hook, kit, kept.includes(hook), scripts)).join(
-    "",
-  );
+  HOOKS.map((hook) =>
+    section(hook, kit, kept.includes(hook), scripts, commitScripts),
+  ).join("");
 
 /** What init wrote before 0.2.2. */
 const legacyConfig = (kit: string): string => `pre-commit:
@@ -181,7 +198,11 @@ const loud = (text: string): string =>
 function isInitConfig(text: string): boolean {
   const kit = "validate-kit";
   const current = ([[], ["pre-commit"], ["pre-push"], HOOKS] as const).flatMap(
-    (kept) => [initConfig(kit, kept), initConfig(kit, kept, false)],
+    (kept) => [
+      initConfig(kit, kept),
+      initConfig(kit, kept, true, false),
+      initConfig(kit, kept, false),
+    ],
   );
   return [
     ...current,
@@ -190,8 +211,8 @@ function isInitConfig(text: string): boolean {
     // The pre-push hook, before --quiet (unreleased).
     ...current.map(loud),
     // 0.2.2: the pre-commit hook alone.
-    loud(TOP + section("pre-commit", kit, false)),
-    loud(TOP + section("pre-commit", kit, true)),
+    loud(TOP + section("pre-commit", kit, false, false)),
+    loud(TOP + section("pre-commit", kit, true, false)),
     legacyConfig(kit),
   ].includes(canonical(text));
 }
@@ -220,6 +241,10 @@ function hookRuns(
     return hook === "pre-push" ? [] : [text];
   }
   const runs: string[] = [];
+  const scripts =
+    hook === "pre-push"
+      ? PUSH_SCRIPTS
+      : { [OLD_COMMIT_SCRIPT]: OLD_COMMIT_BODY };
   const walk = (node: unknown): void => {
     if (Array.isArray(node)) for (const item of node) walk(item);
     else if (node && typeof node === "object")
@@ -228,17 +253,16 @@ function hookRuns(
           runs.push(value);
         else if (
           key === "script" &&
-          hook === "pre-push" &&
           typeof value === "string" &&
-          Object.hasOwn(PUSH_SCRIPTS, value)
+          Object.hasOwn(scripts, value)
         ) {
-          const script = join(root, ".lefthook", "pre-push", value);
+          const script = join(root, ".lefthook", hook, value);
           const stat = lstatSync(script, { throwIfNoEntry: false });
           if (
             stat?.isFile() &&
-            readFileSync(script, "utf8") === PUSH_SCRIPTS[value]
+            readFileSync(script, "utf8") === scripts[value]
           ) {
-            if (value === OLD_PUSH_SCRIPT) runs.push(PUSH_SCRIPTS[value] ?? "");
+            if (value === OLD_PUSH_SCRIPT) runs.push(scripts[value] ?? "");
             else {
               const args = (node as { args?: unknown }).args;
               if (typeof args === "string") runs.push(args);
@@ -298,6 +322,14 @@ function printJobs(
       )
       .join(""),
   );
+  if (hooks.includes("pre-commit") && kept.includes("pre-commit")) {
+    refuse(
+      "Preserved pre-commit hooks must use a script job: Windows lefthook cannot quote their dynamic hooks path as a run command. Keep custom jobs and merge this script explicitly:",
+    );
+    process.stderr.write(
+      `.lefthook/pre-commit/${OLD_COMMIT_SCRIPT}:\n${OLD_COMMIT_BODY}`,
+    );
+  }
   if (hooks.includes("pre-push")) {
     refuse(
       "Pre-push checks must use script jobs: lefthook can skip run jobs when its inferred push-file list is empty. Keep custom jobs and merge these scripts explicitly:",
@@ -319,17 +351,31 @@ function printJobs(
 }
 
 /** Own only the exact scripts init writes; reject collisions before any writes. */
-function writePushScripts(
+function writeHookScripts(
   root: string,
   kept: readonly Hook[],
   out: Writer,
 ): boolean {
-  const dirs = [join(root, ".lefthook"), join(root, ".lefthook", "pre-push")];
+  const dirs = [
+    join(root, ".lefthook"),
+    join(root, ".lefthook", "pre-push"),
+    ...(kept.includes("pre-commit")
+      ? [join(root, ".lefthook", "pre-commit")]
+      : []),
+  ];
   const scripts = [
     [
       join(root, ".lefthook", "pre-push", PUSH_SCRIPT),
       PUSH_SCRIPTS[PUSH_SCRIPT],
     ],
+    ...(kept.includes("pre-commit")
+      ? [
+          [
+            join(root, ".lefthook", "pre-commit", OLD_COMMIT_SCRIPT),
+            OLD_COMMIT_BODY,
+          ],
+        ]
+      : []),
     ...(kept.includes("pre-push")
       ? [
           [
@@ -360,13 +406,8 @@ function writePushScripts(
   }
   for (const [path, body] of scripts) {
     if (existsSync(path)) continue;
-    if (!out.dryRun)
-      mkdirSync(join(root, ".lefthook", "pre-push"), { recursive: true });
-    out.write(
-      path,
-      body,
-      "pre-push script; commit this file with lefthook.yml",
-    );
+    if (!out.dryRun) mkdirSync(dirname(path), { recursive: true });
+    out.write(path, body, "hook script; commit this file with lefthook.yml");
     if (!out.dryRun) chmodSync(path, 0o755);
   }
   return true;
@@ -432,7 +473,7 @@ export async function scaffoldHook(
   const ours = configText === undefined || isInitConfig(configText);
   const target = config ?? join(root, "lefthook.yml");
   const writeConfig = (kept: readonly Hook[] = []): boolean => {
-    if (!writePushScripts(root, kept, out)) return false;
+    if (!writeHookScripts(root, kept, out)) return false;
     const text = initConfig(kit, kept);
     if (configText !== text)
       out.write(

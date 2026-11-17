@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname } from "node:path";
 import { z } from "zod";
 import { ConfigError } from "../config/schema.js";
 import type {
@@ -183,7 +183,7 @@ function importedSpecs(texts: ReadonlyMap<string, string>): Set<string> {
   const imported = new Set<string>();
   for (const [spec, text] of texts) {
     for (const m of text.matchAll(/\bfrom\s+"([^"]+)"/g)) {
-      const target = resolve(dirname(spec), m[1] ?? "");
+      const target = absPosix(dirname(spec), m[1] ?? "");
       imported.add(target.endsWith(".qnt") ? target : `${target}.qnt`);
     }
   }
@@ -212,7 +212,7 @@ function stepFindings(
         `invariant '${summary.invariant}': ${e.explanation ?? "quint could not run it"}`,
       );
     return error(
-      at?.source ?? task.spec,
+      absPosix(dirname(task.spec), at?.source ?? task.spec),
       (at?.start?.line ?? 0) + 1,
       (at?.start?.col ?? 0) + 1,
       "error",

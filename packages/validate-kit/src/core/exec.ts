@@ -59,40 +59,111 @@ function killGroup(pid: number): void {
 // Groups still running. One pair of signal listeners serves them all: one
 // pair per group passes Node's limit of 10 listeners once more groups run at
 // once (concurrency defaults to the CPU count).
-const liveGroups = new Set<number>();
+const liveGroups = new Map<number, () => void>();
 
 // `once`: by the time the signal is re-raised this listener is gone, so the
 // default action (terminate) applies.
 function onSignal(signal: NodeJS.Signals): void {
-  for (const pid of liveGroups) killGroup(pid);
+  for (const stop of liveGroups.values()) stop();
   process.kill(process.pid, signal);
 }
 
-/** Arm the timeout and interrupt handling for a group; returns the disarm. */
-function watchGroup(
-  pid: number,
-  timeoutMs: number,
-  onTimeout: () => void,
-): () => void {
-  const timer = setTimeout(() => {
-    onTimeout();
-    killGroup(pid);
-  }, timeoutMs);
+/** Register one owned group in the existing cooperative signal cleanup path. */
+function registerGroup(pid: number, stop: () => void): () => void {
   // Armed whenever it is not attached: a host that survives a signal (its
   // own listener kept it alive) has used up the `once`.
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     if (!process.listeners(signal).includes(onSignal))
       process.once(signal, onSignal);
   }
-  liveGroups.add(pid);
+  liveGroups.set(pid, stop);
   return () => {
-    clearTimeout(timer);
     liveGroups.delete(pid);
     if (liveGroups.size === 0) {
       process.off("SIGINT", onSignal);
       process.off("SIGTERM", onSignal);
     }
   };
+}
+
+/** Arm the timeout and interrupt handling for a POSIX group. */
+function watchGroup(
+  pid: number,
+  timeoutMs: number,
+  onTimeout: () => void,
+): () => void {
+  const unregister = registerGroup(pid, () => {
+    killGroup(pid);
+  });
+  const timer = setTimeout(() => {
+    onTimeout();
+    killGroup(pid);
+  }, timeoutMs);
+  return () => {
+    clearTimeout(timer);
+    unregister();
+  };
+}
+
+/** Signal only the MSYS group led by this still-live native wrapper. */
+function killMsysGroup(
+  pid: number,
+  shellDir: string,
+  env: NodeJS.ProcessEnv,
+  alive: () => boolean,
+): void {
+  if (!alive()) return;
+  try {
+    const table = execFileSync(join(shellDir, "ps.exe"), ["-W", "-l"], {
+      env,
+      encoding: "utf8",
+      timeout: 1000,
+      windowsHide: true,
+    });
+    const lines = table.trim().split(/\r?\n/);
+    const header = lines.shift()?.trim().split(/\s+/) ?? [];
+    const pidIndex = header.indexOf("PID");
+    const groupIndex = header.indexOf("PGID");
+    const nativeIndex = header.indexOf("WINPID");
+    const commandIndex = header.indexOf("COMMAND");
+    if ([pidIndex, groupIndex, nativeIndex, commandIndex].includes(-1))
+      throw new Error("MSYS process table has no ownership columns");
+    const rows = lines
+      .map((line) => line.trim().split(/\s+/))
+      .filter((row) => row[nativeIndex] === String(pid));
+    const row = rows[0];
+    const leader = row?.[pidIndex];
+    const groupId = Number(leader);
+    const command = row?.slice(commandIndex).join(" ") ?? "";
+    const live = alive();
+    if (
+      rows.length !== 1 ||
+      leader === undefined ||
+      !/^[1-9]\d*$/.test(leader) ||
+      !Number.isSafeInteger(groupId) ||
+      groupId <= 1 ||
+      row?.[groupIndex] !== leader ||
+      !/(?:^|[\\/])timeout(?:\.exe)?$/i.test(command) ||
+      !live
+    )
+      throw new Error(
+        `MSYS group is not led by the live owned wrapper (native=${pid}; rows=${rows.length}; leader=${Number.isSafeInteger(groupId) ? groupId : "invalid"}; groupLeader=${row?.[groupIndex] === leader}; timeout=${/(?:^|[\\/])timeout(?:\.exe)?$/i.test(command)}; live=${live})`,
+      );
+    execFileSync(join(shellDir, "kill.exe"), ["-KILL", "--", `-${leader}`], {
+      env,
+      timeout: 1000,
+      windowsHide: true,
+    });
+  } catch (error) {
+    const failure = error as Partial<NodeJS.ErrnoException>;
+    const reason = [failure.code, failure.message?.split(/\r?\n/)[0]]
+      .filter(Boolean)
+      .join(": ")
+      .slice(0, 200);
+    process.stderr.write(
+      `validate-kit: owned MSYS group cleanup could not be verified during interruption; cleanup may be incomplete (${reason || "unknown failure"}).\n`,
+    );
+  }
 }
 
 /**
@@ -576,46 +647,113 @@ export async function run(
         ? withPathPrefix(env, dirname(resolved))
         : env;
     const timeoutMs = opts.timeoutMs ?? 180_000;
-    // Negative-pid group kills are POSIX; elsewhere fall back to execa's own
-    // timeout on the direct child.
+    // Negative-pid group kills are POSIX. Windows uses execa's native tree
+    // cleanup before the shell exits, while its descendants can still be found.
     const group = opts.ownProcessGroup === true && process.platform !== "win32";
-    const subprocess = execa(resolved, args, {
-      cwd: opts.cwd,
-      // The whole environment, so execa adds back nothing it leaves out.
-      env: toolEnv,
-      extendEnv: false,
-      // No input is an empty stdin, never a pipe left open: a tool that
-      // asks a question (Mix's "Shall I install Hex? [Yn]") reads the end of
-      // it and goes on, instead of waiting out the timeout.
-      ...(opts.input !== undefined
-        ? { input: opts.input }
-        : { stdin: "ignore" as const }),
-      ...(group ? { detached: true } : { timeout: timeoutMs }),
-      reject: false,
-      all: false,
-      stripFinalNewline: false,
-      windowsHide: true,
-    });
+    // MSYS forks can lose their native parent before taskkill enumerates them.
+    // Its own GNU timeout owns the logical process group, including those forks.
+    const msysGroup =
+      WINDOWS &&
+      opts.ownProcessGroup === true &&
+      /^sh(\.exe)?$/i.test(basename(resolved));
+    const timeoutBin = join(dirname(resolved), "timeout.exe");
+    if (msysGroup) {
+      let version: string;
+      try {
+        version = execFileSync(timeoutBin, ["--version"], {
+          env: toolEnv,
+          encoding: "utf8",
+          timeout: 1000,
+          windowsHide: true,
+        });
+      } catch {
+        throw new Error(
+          "Owned Windows shell groups require GNU timeout.exe beside sh.exe",
+        );
+      }
+      if (!version.startsWith("timeout (GNU coreutils)"))
+        throw new Error(
+          "Owned Windows shell groups require GNU timeout.exe beside sh.exe",
+        );
+    }
+    const subprocess = execa(
+      msysGroup ? timeoutBin : resolved,
+      msysGroup
+        ? ["--signal=KILL", `${timeoutMs / 1000}s`, resolved, ...args]
+        : args,
+      {
+        cwd: opts.cwd,
+        // The whole environment, so execa adds back nothing it leaves out.
+        env: toolEnv,
+        extendEnv: false,
+        // No input is an empty stdin, never a pipe left open: a tool that
+        // asks a question (Mix's "Shall I install Hex? [Yn]") reads the end of
+        // it and goes on, instead of waiting out the timeout.
+        ...(opts.input !== undefined
+          ? { input: opts.input }
+          : { stdin: "ignore" as const }),
+        ...(group
+          ? { detached: true }
+          : {
+              timeout:
+                msysGroup && timeoutMs > 0 ? timeoutMs + 1000 : timeoutMs,
+            }),
+        killDescendants: WINDOWS && opts.ownProcessGroup === true,
+        // Isolate the hidden wrapper from its parent's Windows console group.
+        // Execa preserves detached children on parent exit, so an unproved
+        // early interruption leaves this wrapper's original deadline alive.
+        ...(msysGroup ? { detached: true } : {}),
+        reject: false,
+        all: false,
+        stripFinalNewline: false,
+        windowsHide: true,
+      },
+    );
     // Set by the group watcher, which TypeScript's narrowing does not follow.
     let groupTimedOut = false as boolean;
+    let msysTimedOut = false as boolean;
+    // The runtime owns deadline classification. A child's own 124/137 or a
+    // Windows-encoded signal status must never be mistaken for a timeout.
+    const msysTimer =
+      msysGroup && timeoutMs > 0
+        ? setTimeout(() => {
+            msysTimedOut = true;
+          }, timeoutMs)
+        : undefined;
     const disarm =
       group && subprocess.pid !== undefined
         ? watchGroup(subprocess.pid, timeoutMs, () => {
             groupTimedOut = true;
           })
-        : undefined;
+        : msysGroup && subprocess.pid !== undefined
+          ? registerGroup(subprocess.pid, () => {
+              const pid = subprocess.pid;
+              if (pid !== undefined)
+                killMsysGroup(
+                  pid,
+                  dirname(resolved),
+                  toolEnv,
+                  () =>
+                    subprocess.nodeChildProcess.exitCode === null &&
+                    subprocess.nodeChildProcess.signalCode === null,
+                );
+            })
+          : undefined;
     let result;
     try {
       result = await subprocess;
     } finally {
       disarm?.();
+      clearTimeout(msysTimer);
     }
 
     // With reject:false, execa resolves (does not throw) even on a spawn failure.
     // A missing/inaccessible binary surfaces as an undefined exitCode + an error code.
     const code = (result as { code?: string }).code;
     const timedOut =
-      groupTimedOut || (result as { timedOut?: boolean }).timedOut === true;
+      groupTimedOut ||
+      msysTimedOut ||
+      (result as { timedOut?: boolean }).timedOut === true;
     const exitNum =
       typeof result.exitCode === "number" ? result.exitCode : undefined;
     // A spawn failure leaves the streams unset, whatever execa's types say.

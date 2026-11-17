@@ -8,8 +8,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { delimiter, dirname, join, resolve } from "node:path";
+import { performance } from "node:perf_hooks";
+import { runInNewContext } from "node:vm";
+import { describe, expect, it, vi } from "vitest";
 import { astgrep } from "../src/adapters/astgrep.js";
 import { clippy } from "../src/adapters/clippy.js";
 import { eslint } from "../src/adapters/eslint.js";
@@ -24,6 +26,7 @@ import { semgrep } from "../src/adapters/semgrep.js";
 import { tsc } from "../src/adapters/tsc.js";
 import { hookIndex, resolveBin, run } from "../src/core/exec.js";
 import { toPosix } from "../src/detect/languages.js";
+import { commandGate } from "../src/gates/command-gate.js";
 import { renderPretty } from "../src/report/pretty.js";
 import { execute } from "../src/core/runner.js";
 import { EXIT } from "../src/core/exit-codes.js";
@@ -191,6 +194,325 @@ function fakeTool(binDir: string, name: string, script: string): void {
 }
 
 describe("runner", () => {
+  it.each([
+    {
+      label: "group one",
+      row: "1 0 1 4567 ? 1 00:00 /usr/bin/timeout",
+      repeated: false,
+      guard: "groupId <= 1",
+      target: "-1",
+    },
+    {
+      label: "ambiguous native rows",
+      row: "2 0 2 4567 ? 1 00:00 /usr/bin/timeout",
+      repeated: true,
+      guard: "rows.length !== 1",
+      target: "-2",
+    },
+  ])(
+    "refuses unsafe MSYS ownership: $label, with a removed-guard control",
+    ({ row, repeated, guard, target }) => {
+      const source = readFileSync(
+        new URL("../dist/index.js", import.meta.url),
+        "utf8",
+      );
+      const declaration = source.match(
+        /function killMsysGroup\([^]*?\n\}/,
+      )?.[0];
+      if (!declaration) throw new Error("Built MSYS cleanup helper is missing");
+      const joinName = declaration.match(/execFileSync\((join\d*)\(/)?.[1];
+      if (!joinName) throw new Error("Native path call is missing");
+      const table = `PID PPID PGID WINPID TTY UID STIME COMMAND\n${row}\n${repeated ? `${row}\n` : ""}`;
+      const calls: string[][] = [];
+      const warnings: string[] = [];
+      const globals = {
+        [joinName]: join,
+        execFileSync: (file: string, args: string[]): string => {
+          if (file.endsWith("ps.exe")) return table;
+          if (file.endsWith("kill.exe")) {
+            calls.push(args);
+            return "";
+          }
+          throw new Error("Unexpected native command");
+        },
+        process: {
+          stderr: {
+            write: (message: string): void => {
+              warnings.push(message);
+            },
+          },
+        },
+      };
+      runInNewContext(
+        `${declaration}; killMsysGroup(4567, "owned-bin", {}, () => true)`,
+        globals,
+      );
+      expect(calls).toEqual([]);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("cleanup may be incomplete");
+      const removed = declaration.replace(guard, "false");
+      expect(removed).not.toBe(declaration);
+      calls.length = 0;
+      warnings.length = 0;
+      runInNewContext(
+        `${removed}; killMsysGroup(4567, "owned-bin", {}, () => true)`,
+        globals,
+      );
+      expect(calls).toEqual([["-KILL", "--", target]]);
+      expect(warnings).toEqual([]);
+    },
+  );
+
+  it.each([
+    { signal: "SIGINT", unproved: false, ready: true },
+    { signal: "SIGTERM", unproved: false, ready: true },
+    // Only Windows has the native-PID to MSYS-group ownership lookup.
+    ...(process.platform === "win32"
+      ? [
+          { signal: "SIGINT", unproved: true, ready: false },
+          { signal: "SIGINT", unproved: true, ready: true },
+        ]
+      : []),
+  ])(
+    "bounds cooperative $signal cleanup with unproved ownership=$unproved and active work=$ready",
+    async ({ signal, unproved, ready }) => {
+      const root = mkdtempSync(resolve(tmpdir(), "vk-gate-interrupt-"));
+      const marker = resolve(root, "interrupt-emitted");
+      const script = resolve(root, "interrupt.mjs");
+      const msysKill = resolve(root, "msys-kill");
+      const nativeKill = resolve(root, "wrapper-taskkill");
+      const api = new URL("../dist/index.js", import.meta.url).href;
+      const work = "printf ready > work-ready; sleep 6.939; echo late";
+      writeFileSync(
+        script,
+        [
+          `import {commandGate, execute} from ${JSON.stringify(api)};`,
+          'import cp from "node:child_process";',
+          'import {syncBuiltinESMExports} from "node:module";',
+          'import {writeFileSync,existsSync} from "node:fs";',
+          'import {basename} from "node:path";',
+          `const unproved=${JSON.stringify(unproved)};const ready=${JSON.stringify(ready)};let wrapper;`,
+          "const original=cp.spawn;",
+          "cp.spawn=function(file,args,opts){",
+          " const child=Reflect.apply(original,this,arguments);",
+          ` if(args?.includes(${JSON.stringify(work)})){wrapper=child.pid;writeFileSync("wrapper.pid",String(wrapper));const emit=()=>{`,
+          `  writeFileSync(${JSON.stringify(marker)}, "emitted");`,
+          `  process.emit(${JSON.stringify(signal)}, ${JSON.stringify(signal)});`,
+          ' };if(!ready)setImmediate(emit);else{const timer=setInterval(()=>{if(existsSync("work-ready")){clearInterval(timer);emit()}},20)}}',
+          " return child;",
+          "};",
+          "const originalSync=cp.execFileSync;cp.execFileSync=function(file,args,opts){",
+          ' if(unproved&&basename(file).toLowerCase()==="ps.exe")return "PID PPID PGID WINPID TTY UID STIME COMMAND\\n";',
+          ` if(basename(file).toLowerCase()==="kill.exe")writeFileSync(${JSON.stringify(msysKill)},"called");`,
+          " return Reflect.apply(originalSync,this,arguments);};",
+          "const originalExec=cp.execFile;cp.execFile=function(file,args,...rest){",
+          ` if(basename(file).toLowerCase()==="taskkill.exe"&&args?.includes(String(wrapper)))writeFileSync(${JSON.stringify(nativeKill)},"called");`,
+          " return Reflect.apply(originalExec,this,arguments);};",
+          "syncBuiltinESMExports();",
+          `const gate=commandGate({id:"interrupt-shell",run:${JSON.stringify(work)},timeoutMs:${unproved ? 1500 : 10000}});`,
+          `await execute({projectRoot:${JSON.stringify(root)},config:${JSON.stringify(config())},tasks:[{adapter:gate,cwd:${JSON.stringify(root)},toolConfig:{}}],fix:false,scope:{profile:"test",mode:"full",files:null}});`,
+        ].join("\n"),
+      );
+      const pending = run(process.execPath, [script], {
+        cwd: root,
+        timeoutMs: 12000,
+        ownProcessGroup: true,
+      });
+      await vi.waitFor(
+        () => {
+          if (!existsSync(marker))
+            throw new Error("Owned work has not emitted its interruption");
+        },
+        { timeout: 12000, interval: 20 },
+      );
+      const started = performance.now();
+      const result = await pending;
+      const elapsed = performance.now() - started;
+      // Early unproved interruption must preserve the original 1.5s GNU
+      // deadline, with the existing 1s cleanup bound, rather than taskkill it.
+      if (unproved) {
+        const wrapper = Number(
+          readFileSync(resolve(root, "wrapper.pid"), "utf8"),
+        );
+        await vi.waitFor(
+          () => {
+            try {
+              process.kill(wrapper, 0);
+            } catch {
+              return;
+            }
+            throw new Error(
+              "The original GNU deadline wrapper is still running",
+            );
+          },
+          { timeout: 2500, interval: 20 },
+        );
+      }
+      const probe =
+        process.platform === "win32"
+          ? await run(
+              "powershell.exe",
+              [
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                `Get-CimInstance Win32_Process -ErrorAction Stop -Filter "Name = 'sleep.exe'" | Where-Object { $_.CommandLine -match '(?:^|\\s)"?6\\.939"?(?:\\s|$)' } | ForEach-Object { $_.ProcessId }`,
+              ],
+              { cwd: root, timeoutMs: 5000 },
+            )
+          : await run("ps", ["-axo", "command"], {
+              cwd: root,
+              timeoutMs: 5000,
+            });
+      const survivors =
+        process.platform === "win32"
+          ? probe.stdout.split(/\r?\n/).filter((line) => line.trim() !== "")
+          : probe.stdout
+              .split("\n")
+              .filter((line) => line.trim() === "sleep 6.939");
+      expect(readFileSync(marker, "utf8")).toBe("emitted");
+      expect(result.exitCode).not.toBe(0);
+      expect(result.timedOut).toBe(false);
+      expect(elapsed).toBeLessThan(4000);
+      expect(
+        result.stderr.includes("cleanup may be incomplete"),
+        result.stderr,
+      ).toBe(unproved);
+      expect(probe.exitCode).toBe(0);
+      expect(survivors).toEqual([]);
+      expect(existsSync(nativeKill)).toBe(false);
+      expect(existsSync(msysKill)).toBe(
+        process.platform === "win32" && !unproved,
+      );
+    },
+  );
+
+  it("ends the exact forked shell timeout and leaves no matching sleep running", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "vk-gate-shell-tree-"));
+    const gate = commandGate({
+      id: "shell-timeout-tree",
+      run: "sleep 6.713; echo late",
+      timeoutMs: 1000,
+    });
+    const started = performance.now();
+    const summary = await execute({
+      projectRoot: root,
+      config: config(),
+      tasks: [task(gate, root)],
+      fix: false,
+      scope: { profile: "test", mode: "full", files: null },
+    });
+    const elapsed = performance.now() - started;
+    const probe =
+      process.platform === "win32"
+        ? await run(
+            "powershell.exe",
+            [
+              "-NoLogo",
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              `Get-CimInstance Win32_Process -ErrorAction Stop -Filter "Name = 'sleep.exe'" | Where-Object { $_.CommandLine -match '(?:^|\\s)"?6\\.713"?(?:\\s|$)' } | ForEach-Object { $_.ProcessId }`,
+            ],
+            { cwd: root, timeoutMs: 5000 },
+          )
+        : await run("ps", ["-axo", "command"], { cwd: root, timeoutMs: 5000 });
+    const survivors =
+      process.platform === "win32"
+        ? probe.stdout.split(/\r?\n/).filter((line) => line.trim() !== "")
+        : probe.stdout
+            .split("\n")
+            .filter((line) => line.trim() === "sleep 6.713");
+    expect(summary.exitCode).toBe(EXIT.INTERNAL);
+    expect(summary.crashed).toHaveLength(1);
+    expect(summary.crashed[0]?.stderr).toContain("timed out");
+    expect(
+      elapsed,
+      JSON.stringify({
+        elapsed,
+        crashed: summary.crashed,
+        probeExit: probe.exitCode,
+        survivors,
+      }),
+    ).toBeLessThan(4000);
+    expect(probe.exitCode).toBe(0);
+    expect(survivors).toEqual([]);
+  });
+
+  it.each([7, 124, 137])(
+    "preserves early shell exit %s without calling it a deadline",
+    async (code) => {
+      const root = mkdtempSync(resolve(tmpdir(), "vk-gate-early-exit-"));
+      const gate = commandGate({
+        id: "early-shell-exit",
+        run: `exit ${code}`,
+        timeoutMs: 3000,
+      });
+      const summary = await execute({
+        projectRoot: root,
+        config: config(),
+        tasks: [task(gate, root)],
+        fix: false,
+        scope: { profile: "test", mode: "full", files: null },
+      });
+      expect(summary.exitCode).toBe(EXIT.FINDINGS);
+      expect(summary.crashed).toEqual([]);
+      expect(summary.findings).toHaveLength(1);
+      expect(summary.findings[0]?.message).toContain(`exited ${code}`);
+    },
+  );
+
+  it("ends a timed-out command gate and its native descendant before the child can finish", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "vk-gate-tree-"));
+    writeFileSync(
+      resolve(root, "parent.cjs"),
+      [
+        'const { spawn } = require("node:child_process");',
+        'const { writeFileSync } = require("node:fs");',
+        'const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 6000)"], { stdio: "inherit" });',
+        'writeFileSync("child.pid", String(child.pid));',
+        "setTimeout(() => {}, 6000);",
+      ].join("\n"),
+    );
+    const gate = commandGate({
+      id: "native-timeout-tree",
+      run: `"${toPosix(process.execPath)}" parent.cjs`,
+      timeoutMs: 1000,
+    });
+    const started = performance.now();
+    const summary = await execute({
+      projectRoot: root,
+      config: config(),
+      tasks: [task(gate, root)],
+      fix: false,
+      scope: { profile: "test", mode: "full", files: null },
+    });
+    const elapsed = performance.now() - started;
+    const pid = Number(readFileSync(resolve(root, "child.pid"), "utf8"));
+    let alive = false;
+    try {
+      process.kill(pid, 0);
+      alive = true;
+    } catch {
+      // The native process no longer exists.
+    }
+    if (process.platform !== "win32" && alive) {
+      const state = await run("ps", ["-p", String(pid), "-o", "stat="], {
+        cwd: root,
+        timeoutMs: 3000,
+      });
+      // A reaped descendant can briefly remain as a POSIX zombie.
+      alive = !/^(?:Z\S*)?$/.test(state.stdout.trim());
+    }
+    expect(summary.exitCode).toBe(EXIT.INTERNAL);
+    expect(summary.crashed).toHaveLength(1);
+    expect(summary.crashed[0]?.id).toBe(gate.id);
+    expect(summary.crashed[0]?.stderr).toContain("timed out");
+    expect(elapsed).toBeLessThan(4000);
+    expect(alive).toBe(false);
+  });
+
   it("runs a tool without the git hook's repository variables, and git itself with them", async () => {
     // A worktree's pre-push exports GIT_DIR, every pre-commit GIT_INDEX_FILE.
     // A tool's `git init` in a sub-folder (lake does) then set core.bare=true

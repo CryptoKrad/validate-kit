@@ -183,7 +183,7 @@ export const checkJsonschema: ToolAdapter = {
   parseVersion: (out) => /version (\d+\.\d+\.\d+)/.exec(out)?.[1],
   minVersion: "0.28.0",
   installHint:
-    "uv tool install check-jsonschema  (or: pip install check-jsonschema)",
+    "brew install check-jsonschema  (or: uv tool install check-jsonschema)",
   supportsFix: false,
   fixWriteBack: false,
   optional: true,

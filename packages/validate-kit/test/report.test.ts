@@ -4,11 +4,32 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { runCheck } from "../src/index.js";
 import type { RunSummary } from "../src/core/runner.js";
 import { toJson } from "../src/report/json.js";
-import { renderPretty } from "../src/report/pretty.js";
+import { quietLine, renderPretty } from "../src/report/pretty.js";
 import { toSarif } from "../src/report/sarif.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const samples = resolve(here, "../samples");
+
+it("quiet lines use portable paths and preserve message backslashes", () => {
+  const root = resolve("quiet-line-fixture");
+  const result = quietLine(
+    {
+      tool: "fixture",
+      ruleId: "owned",
+      file: resolve(root, "src", "turn.ts"),
+      line: 1,
+      col: 2,
+      severity: "warning",
+      message: "Keep the \\literal token",
+      layer: "lint",
+      fixable: false,
+    },
+    root,
+  );
+  expect(result).toBe(
+    "src/turn.ts:1:2 warning fixture/owned Keep the \\literal token",
+  );
+});
 
 describe("report formats on a real findings run", () => {
   let summary: RunSummary;

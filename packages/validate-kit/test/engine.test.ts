@@ -1,14 +1,111 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { detectLanguages, runCheck } from "../src/index.js";
+import { detectLanguages, planCheck, runCheck } from "../src/index.js";
+import { quint } from "../src/adapters/quint.js";
+import { resolveConfig } from "../src/config/resolve.js";
+import { execute } from "../src/core/runner.js";
+import type { ToolAdapter } from "../src/core/types.js";
+import { toPosix } from "../src/detect/languages.js";
+import { toJson } from "../src/report/json.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const samples = resolve(here, "../samples");
 
 describe("engine — behavioral (runs real tools against samples/)", () => {
+  it("the Quint runner normalizes native and relative diagnostic paths before JSON output", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "vk-quint-diagnostic-"));
+    try {
+      const spec = resolve(root, "model.qnt");
+      writeFileSync(spec, "module model {\n  val broken = true + 1\n}\n");
+      const planned = await planCheck({ cwd: root, onlyTools: ["quint"] });
+      const { config } = await resolveConfig(root);
+      expect(planned.tasks).toHaveLength(1);
+      const results = await Promise.all(
+        [spec, "model.qnt"].map(async (source) => {
+          // Shape captured from native Quint 0.33.1 typecheck --out JSON.
+          const output = JSON.stringify({
+            step: "typecheck",
+            exit: 1,
+            errors: [
+              {
+                explanation: "Expected an int, found a bool",
+                locs: [{ source, start: { line: 1, col: 15 } }],
+              },
+            ],
+          });
+          const adapter: ToolAdapter = {
+            ...quint,
+            bin: process.execPath,
+            versionArgs: ["-e", 'process.stdout.write("0.33.1")'],
+            buildArgs: () => ({
+              bin: process.execPath,
+              args: ["-e", `process.stdout.write(${JSON.stringify(output)})`],
+            }),
+          };
+          const summary = await execute({
+            projectRoot: root,
+            config,
+            tasks: planned.tasks.map((task) => ({ ...task, adapter })),
+            fix: false,
+            scope: planned.scope,
+          });
+          const json = JSON.parse(toJson(summary)) as {
+            findings: { file: string; line: number; col: number }[];
+          };
+          return { summary, json };
+        }),
+      );
+      for (const { summary, json } of results) {
+        expect(summary.ranTools).toEqual(["quint"]);
+        expect(summary.exitCode).toBe(1);
+        expect(summary.crashed).toEqual([]);
+        expect(summary.incomplete).toEqual([]);
+        expect(json.findings).toEqual([
+          expect.objectContaining({
+            file: toPosix(spec),
+            line: 2,
+            col: 16,
+            ruleId: "quint/error",
+            message: "Expected an int, found a bool",
+          }),
+        ]);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("the public Quint plan recognizes relative imported helpers on the current platform", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "validate-kit-quint-imports-"));
+    mkdirSync(resolve(root, "good"));
+    writeFileSync(
+      resolve(root, "good/counter.qnt"),
+      'module counter {\n import helpers.* from "./helpers"\n import plain.* from "plain"\n}\n',
+    );
+    writeFileSync(resolve(root, "good/helpers.qnt"), "module helpers {}\n");
+    writeFileSync(resolve(root, "good/plain.qnt"), "module plain {}\n");
+    writeFileSync(resolve(root, "lonely.qnt"), "module lonely {}\n");
+    const planned = await planCheck({ cwd: root, onlyTools: ["quint"] });
+    const imports = Object.fromEntries(
+      planned.tasks.map((task) => {
+        const options = task.options as { spec: string; imported: boolean };
+        return [
+          options.spec.slice(options.spec.lastIndexOf("/") + 1),
+          options.imported,
+        ];
+      }),
+    );
+    expect(imports).toEqual({
+      "counter.qnt": false,
+      "helpers.qnt": true,
+      "plain.qnt": true,
+      "lonely.qnt": false,
+    });
+  });
+
   it("detects every seeded language", async () => {
     const detection = await detectLanguages(samples);
     for (const lang of ["ts", "js"] as const) {
@@ -98,4 +195,32 @@ describe("engine — behavioral (runs real tools against samples/)", () => {
       "ts-no-explicit-any",
     );
   }, 60_000);
+
+  it.each([
+    ["exec('pass')  # noqa: S102\n", 0],
+    ["exec('pass')  # noqa: S307\n", 1],
+    ["exec('pass')\n# noqa: S102\n", 1],
+    ["exec('pass')  # noqa: S102\nexec('pass')\n", 1],
+  ])(
+    "keeps Python suppression and scanner results distinct: %s",
+    async (source, expected) => {
+      const root = mkdtempSync(resolve(tmpdir(), "validate-kit-suppression-"));
+      writeFileSync(resolve(root, "harness.py"), source);
+      writeFileSync(
+        resolve(root, "validate.config.json"),
+        JSON.stringify({ extends: "recommended" }),
+      );
+      const { summary } = await runCheck({
+        cwd: root,
+        profile: "ci",
+        onlyTools: ["ast-grep"],
+      });
+      expect(summary.crashed).toEqual([]);
+      expect(summary.incomplete).toEqual([]);
+      expect(summary.exitCode).toBe(expected);
+      expect(summary.findings.map((finding) => finding.ruleId)).toEqual(
+        expected ? ["py-no-eval-exec"] : [],
+      );
+    },
+  );
 });

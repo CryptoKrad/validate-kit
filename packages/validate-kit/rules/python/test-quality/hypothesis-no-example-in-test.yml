@@ -1,0 +1,36 @@
+id: py-hypothesis-no-example-in-test
+language: python
+severity: warning
+message: "`.example()` is for a REPL: in a test it draws one value Hypothesis neither shrinks nor replays, and it warns (NonInteractiveExampleWarning). Take the value from `@given`, or from `data.draw(...)`."
+note: |
+  Hypothesis's docs: ".example() is intended for interactive use only (i.e.,
+  in a REPL). It is not intended to be used inside tests." Only a call with
+  no arguments on a strategy built from `st.` or `strategies.`, in a `test`
+  function, is reported: another object's `example()` method is not
+  Hypothesis's.
+files:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+rule:
+  kind: call
+  all:
+    - has:
+        field: function
+        kind: attribute
+        regex: "^(st|strategies|hypothesis\\.strategies)\\..*\\.example$"
+    - has:
+        field: arguments
+        regex: "^\\(\\s*\\)$"
+    - inside:
+        kind: function_definition
+        stopBy: end
+        has:
+          field: name
+          regex: "^test"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

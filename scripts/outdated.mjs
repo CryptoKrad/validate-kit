@@ -28,11 +28,12 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DAY_MS = 24 * 60 * 60_000;
@@ -670,4 +671,13 @@ function main() {
 }
 
 // Run, not imported: the functions above are also the inventory's to call.
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main();
+// Real paths: a checkout reached through a link must not make this do nothing.
+let asScript = false;
+try {
+  asScript =
+    realpathSync(process.argv[1] ?? "") ===
+    realpathSync(fileURLToPath(import.meta.url));
+} catch {
+  // Not a file on disk: imported.
+}
+if (asScript) main();
