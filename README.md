@@ -67,23 +67,21 @@ pnpm run smoke:external-package  # packs the kit and runs it in temporary reposi
 scripts/verify-clean.sh --ci     # what CI's push jobs run, on a clean worktree of HEAD
 ```
 
-On Windows, in PowerShell (5.1 or 7). Once per machine:
+On Windows, in PowerShell (5.1 or 7):
 
 ```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser   # a Windows client's default runs no script and no profile
-winget install Git.Git jdx.mise
-if (-not (Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force | Out-Null }
-Add-Content $PROFILE '(&mise activate pwsh) | Out-String | Invoke-Expression'
-```
-
-Then, in a new terminal:
-
-```powershell
+winget install Git.Git jdx.mise   # once per machine; then open a new terminal
 git clone https://github.com/CryptoKrad/validate-kit.git; cd validate-kit
-mise install                  # node, pnpm, go, rust, python, uv
-.\scripts\setup-windows.ps1   # the gate's tools, install, build, doctor
-pnpm run check                # in a new terminal
+mise install                                                                      # node, pnpm, go, rust, python, uv
+mise exec -- powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1   # the gate's tools, install, build, doctor
+mise exec -- pnpm run check                                                       # in a new terminal
 ```
+
+`mise exec --` runs one command with the runtimes of `mise.toml` on PATH and needs no profile.
+`-ExecutionPolicy Bypass` holds for that one process: a Windows client's default policy runs no
+script file. To drop the prefix, activate mise in your PowerShell profile (mise's "Getting
+started"); a profile loads only after `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope
+CurrentUser`.
 
 `scripts/setup-windows.ps1` installs the gate's tools at the versions CI pins, into the folder
 `uv tool dir --bin`: four with `uv tool install`, shfmt with `go install`, and shellcheck and
@@ -134,7 +132,7 @@ On macOS: `git`, `brew` and `mise`, with mise activated in your shell so that th
 on PATH. Nothing else by hand: the three install lines above put every tool of this
 repository's gate in a folder mise adds, in Homebrew's folder or in `node_modules/.bin`.
 `pnpm exec check doctor --profile ci` prints one line per tool with its version, or the install
-line when it is missing. On Windows: Git for Windows and `mise`, activated; the setup script puts
+line when it is missing. On Windows: Git for Windows and `mise`; the setup script puts
 the rest in one folder and `uv tool update-shell` adds that folder to PATH.
 
 The smoke that the preflight (`scripts/verify-clean.sh --ci`) and the plain

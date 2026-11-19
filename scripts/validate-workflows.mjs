@@ -1164,8 +1164,15 @@ function validateWindowsSetup() {
     if (pin === undefined)
       fail(`${script}: \`${line}\` installs no pinned version`);
     // shellcheck is the one tool the Linux job takes from its runner, so
-    // only the script pins it.
-    else if (!pin.includes("koalaman/shellcheck/") && !ci.includes(pin))
+    // only the script pins it. A pin that ends in its version (shfmt's) must
+    // end there in the workflow too: v3.14.1 is not v3.14.10.
+    else if (
+      !pin.includes("koalaman/shellcheck/") &&
+      !ci
+        .split(pin)
+        .slice(1)
+        .some((after) => /["/]$/.test(pin) || !/^[\w.]/.test(after))
+    )
       fail(
         `${script}: ${workflowDir}/validate.yml has no \`${pin}\`: the two install different versions; move both (node scripts/outdated.mjs --apply does)`,
       );

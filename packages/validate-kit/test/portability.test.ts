@@ -288,6 +288,10 @@ it("holds the Windows setup to the versions CI pins, and CI to running it", () =
     expect(said(script, from, to)).toContain(
       `validate.yml has no \`${missing}\``,
     );
+  // The same start is not the same version.
+  expect(said(ci, /shfmt@v[\d.]+/, "$&0")).toContain(
+    "validate.yml has no `go install mvdan.cc/sh/v3/cmd/shfmt@v",
+  );
   // A tool with no version, and a script whose lines this check no longer
   // reads, are not a script that agrees.
   expect(

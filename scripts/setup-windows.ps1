@@ -1,12 +1,12 @@
 # The Windows twin of `just install-tools`: what a Windows machine needs to run
 # this repository's gate (`pnpm run check`) and the kit's tests.
 #
-#   .\scripts\setup-windows.ps1
+#   mise exec -- powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
 #
 # It runs under Windows PowerShell 5.1 and PowerShell 7. First, once per
 # machine: Git for Windows and mise (`winget install Git.Git jdx.mise`), then
-# `mise install` here, in a terminal where mise is activated. That puts node,
-# pnpm, go and uv on PATH (mise.toml). README, "The machine, on Windows".
+# `mise install` here. `mise exec` puts node, pnpm, go and uv on PATH for the
+# script (mise.toml). README, "The machine, on Windows".
 #
 # The tools are the versions CI installs (.github/workflows/validate.yml);
 # `pnpm run workflow:check` fails when one differs. CI's `windows` job runs
@@ -23,7 +23,7 @@ function Run($exe) {
 
 $missing = @("git", "node", "pnpm", "go", "uv") | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) }
 if ($missing) {
-  throw "Not on PATH: $($missing -join ', '). Install Git for Windows and mise, run 'mise install' in this folder, and start this script from a terminal where mise is activated."
+  throw "Not on PATH: $($missing -join ', '). Install Git for Windows and mise, run 'mise install' in this folder, and start this script as: mise exec -- powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1"
 }
 
 # One folder for every tool: where uv puts the tools it installs.
@@ -60,4 +60,4 @@ Run pnpm run build
 
 # The verdict: one line per tool of the gate, and exit 3 when one is missing.
 Run node packages/validate-kit/dist/cli.js doctor --profile ci
-Write-Host "Ready. In a new terminal: pnpm run check"
+Write-Host "Ready. In a new terminal: mise exec -- pnpm run check"
