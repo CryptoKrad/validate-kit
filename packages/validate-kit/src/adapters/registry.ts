@@ -142,6 +142,7 @@ import { yamllint } from "./yamllint.js";
 import { zigAstCheck, zigFmt } from "./zig.js";
 import { zizmor } from "./zizmor.js";
 import { zshSyntax } from "./zsh-syntax.js";
+import { installLine } from "../core/windows-install.js";
 
 /**
  * Every tool integration the engine knows about. Drives detection→activation,
@@ -319,6 +320,12 @@ export const TOOL_REGISTRY: ToolAdapter[] = [
   mutmut,
   gremlins,
 ];
+
+// Every reader of an adapter's install line (doctor, the run's "not
+// installed" message, the API) gets the line this machine can run: the
+// adapters write Homebrew's, and on Windows it becomes Scoop's or the tool's own.
+for (const adapter of TOOL_REGISTRY)
+  Object.assign(adapter, { installHint: installLine(adapter.installHint) });
 
 export function adapterById(id: string): ToolAdapter | undefined {
   return TOOL_REGISTRY.find((a) => a.id === id);

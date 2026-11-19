@@ -20,6 +20,7 @@ import { parse as parseToml } from "smol-toml";
 import { parse as parseYaml } from "yaml";
 import { run } from "../core/exec.js";
 import { EXIT } from "../core/exit-codes.js";
+import { installLine } from "../core/windows-install.js";
 import { toPosix } from "../detect/languages.js";
 
 /**
@@ -736,7 +737,7 @@ export async function scaffoldHook(
   if (probe.spawnError) {
     say(
       pc.dim(
-        "lefthook is not installed: hooks not changed. Install it (`brew install lefthook`, or `CI=1 npm i -D lefthook` so its postinstall installs no hook), then run init again",
+        `lefthook is not installed: hooks not changed. Install it (\`${installLine("brew install lefthook")}\`${process.platform === "win32" ? "" : ", or `CI=1 npm i -D lefthook` so its postinstall installs no hook"}), then run init again`,
       ),
     );
     return undefined;

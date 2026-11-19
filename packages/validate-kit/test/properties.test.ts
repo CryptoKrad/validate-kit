@@ -1,3 +1,4 @@
+import { test as property } from "@fast-check/vitest";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { fileLinks, includeLines } from "../src/adapters/review-md.js";
@@ -18,6 +19,28 @@ function reversed(value: unknown): unknown {
       .map(([key, inner]) => [key, reversed(inner)]),
   );
 }
+
+describe("the number of cases", () => {
+  it("is fast-check's 100, or what FC_NUM_RUNS asks of every property", () => {
+    let cases = 0;
+    fc.assert(
+      fc.property(fc.integer(), () => {
+        cases++;
+      }),
+    );
+    expect(cases).toBe(Number(process.env["FC_NUM_RUNS"] ?? 100));
+  });
+
+  // The form fast-check's docs recommend with Vitest: the connector reads the
+  // same shared settings, so one number holds for both forms.
+  let connectorCases = 0;
+  property.prop([fc.integer()])("counts the connector's cases", () => {
+    connectorCases++;
+  });
+  it("is the same for a property written with @fast-check/vitest", () => {
+    expect(connectorCases).toBe(Number(process.env["FC_NUM_RUNS"] ?? 100));
+  });
+});
 
 describe("stableJson: the text the config digest is taken from", () => {
   it("does not depend on the order keys were written in", () => {

@@ -235,6 +235,10 @@ if [ "$ci" -eq 1 ]; then
 	fi
 	# poly.yml
 	run "pnpm --fail-if-no-match --filter validate-kit run test:polyglot"
+	# No workflow's: the longer search of the kit's own properties, twenty
+	# times fast-check's 100 cases (test/fast-check.setup.ts reads the number),
+	# in the two test files that hold them.
+	run "cd packages/validate-kit && FC_NUM_RUNS=2000 ./node_modules/.bin/vitest run test/properties.test.ts test/preflight-stamps.test.ts"
 
 	left "validate.yml#windows" "Windows runner"
 	left "e2e.yml#playwright" "baselines rendered in CI's Linux container"

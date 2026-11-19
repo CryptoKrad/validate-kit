@@ -1,0 +1,48 @@
+id: py-hypothesis-no-early-return
+language: python
+severity: warning
+message: "An early `return` in a `@given` test counts the input as a pass, though nothing was checked. Use `assume(...)`, or `.filter(...)` on the strategy: Hypothesis then knows the input was left out and draws another."
+note: |
+  Hypothesis's docs, "assume() vs early-returning": "early-returns are counted
+  as a passing test, even though the assertions didn't run!" A test that
+  returns early for most inputs checks far fewer than `max_examples` says.
+  Reported: an `if`, `elif` or `else` branch whose whole body is a bare
+  `return`, in a function with a `@given` decorator. A return after other statements is left alone (they may
+  hold the assertions for that case), and so is a return in a function
+  defined inside the test.
+files:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests.py"
+  - "**/tests/**/*.py"
+rule:
+  kind: return_statement
+  regex: "^return$"
+  all:
+    - inside:
+        kind: block
+        inside:
+          any:
+            - kind: if_statement
+            - kind: elif_clause
+            - kind: else_clause
+              inside:
+                kind: if_statement
+    - not:
+        follows:
+          stopBy: end
+          not:
+            kind: comment
+    - inside:
+        stopBy:
+          kind: function_definition
+        kind: function_definition
+        inside:
+          kind: decorated_definition
+          has:
+            kind: decorator
+            regex: "^@(hypothesis\\.)?given\\b"
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

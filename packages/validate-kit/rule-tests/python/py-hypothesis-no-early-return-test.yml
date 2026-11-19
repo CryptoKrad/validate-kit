@@ -1,0 +1,80 @@
+id: py-hypothesis-no-early-return
+valid:
+  - |
+    @given(st.integers(), st.integers())
+    def test_remainder(a, b):
+        assume(b != 0)
+        assert abs(a % b) < abs(b)
+  - |
+    @given(st.integers(), st.integers().filter(lambda n: n != 0))
+    def test_remainder(a, b):
+        assert abs(a % b) < abs(b)
+  - |
+    @given(st.integers())
+    def test_zero_is_special(n):
+        if n == 0:
+            assert f(n) == 0
+            return
+        assert f(n) != 0
+  - |
+    @given(st.lists(st.integers()))
+    def test_with_helper(xs):
+        def first(items):
+            if not items:
+                return
+            return items[0]
+        assert first(xs) is None or first(xs) == xs[0]
+  - |
+    def test_plain(b):
+        if b == 0:
+            return
+        assert 1 % b < b
+  - |
+    @given(st.integers())
+    def test_value(n):
+        if n == 0:
+            return None
+        assert n != 0
+  - |
+    @given(st.lists(st.integers()))
+    def test_loop_else(xs):
+        for x in xs:
+            assert x == x
+        else:
+            return
+invalid:
+  - |
+    @given(st.integers(), st.integers())
+    def test_remainder(a, b):
+        if b == 0:
+            # bad plan - test "passes" without checking anything!
+            return
+        assert abs(a % b) < abs(b)
+  - |
+    @hypothesis.given(st.text())
+    @settings(max_examples=500)
+    def test_parse(text):
+        for part in text.split(","):
+            if not part:
+                return
+            assert parse(part) is not None
+  - |
+    class TestMoney:
+        @given(st.decimals())
+        def test_round(self, amount):
+            if amount.is_nan(): return
+            assert round_down(amount) <= amount
+  - |
+    @given(st.integers())
+    def test_elif(n):
+        if n > 0:
+            assert f(n) > 0
+        elif n == 0:
+            return
+  - |
+    @given(st.integers())
+    def test_else(n):
+        if n > 0:
+            assert f(n) > 0
+        else:
+            return

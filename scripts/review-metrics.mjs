@@ -11,8 +11,10 @@
 //                       clean ones can be compared with the ones of like size
 //   stamps              how each commit says it was verified (`Verified:`)
 //   sent back           what was refused before it landed: Important findings
-//                       and gradings in tasks/review-rounds.md, and the
-//                       commit gate's log
+//                       in tasks/review-rounds.md, how many a second agent
+//                       confirmed or refuted (the refuted share is the
+//                       reviewer's noise), the rounds each change took, the
+//                       gradings, and the commit gate's log
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -68,6 +70,33 @@ export function summarize(commits) {
   };
 }
 
+/**
+ * What the review record holds: the Important findings, how many a second
+ * agent confirmed or refuted (the refuted share is the reviewer's noise), and
+ * the rounds each change took. A findings table has its tag in the first
+ * column or, when the rows are numbered, in the second.
+ */
+export function reviewRecord(text) {
+  const record = { important: 0, confirmed: 0, refuted: 0, rounds: [] };
+  for (const line of text.split("\n")) {
+    if (line.startsWith("## ")) record.rounds.push(0);
+    else if (line.startsWith("### Round") && record.rounds.length > 0)
+      record.rounds[record.rounds.length - 1]++;
+    if (!line.startsWith("|")) continue;
+    const cells = line.split("|").map((cell) => cell.trim());
+    const tag = /^\d+$/.test(cells[1]) ? 2 : 1;
+    if (cells[tag] !== "Important") continue;
+    record.important++;
+    const verdict = cells
+      .slice(tag + 1)
+      .find((cell) => /^[A-Z]{5,}\b/.test(cell));
+    if (verdict?.startsWith("CONFIRMED")) record.confirmed++;
+    else if (verdict?.startsWith("REFUTED")) record.refuted++;
+  }
+  record.rounds = record.rounds.filter((rounds) => rounds > 0);
+  return record;
+}
+
 function read(range) {
   const out = git([
     "log",
@@ -116,8 +145,34 @@ function selfTest() {
       ["no trailer", 1],
     ],
   };
-  if (JSON.stringify(got) === JSON.stringify(want)) return 0;
-  process.stderr.write(`review-metrics self-test: ${JSON.stringify(got)}\n`);
+  const record = reviewRecord(
+    [
+      "## One change",
+      "### Round 1",
+      "| #   | Tag       | Where  | Finding | Verdict   | Fix |",
+      "| 1   | Important | `a.ts` | a       | CONFIRMED | b   |",
+      "| 2   | Nit       | `a.ts` | c       |           | d   |",
+      "### Round 2",
+      "| Tag       | Finding | Verifier                | What was done |",
+      "| Important | e       | REFUTED: it cannot occur | nothing       |",
+      "| Important | f       | CONFIRMED, both cases    | g             |",
+      "## Notes, with no round",
+      "| Candidate | Evidence |",
+      "## Another change",
+      "### Round 1",
+      "| Tag | Finding |",
+      "| Nit | h       |",
+    ].join("\n"),
+  );
+  const wantRecord = { important: 3, confirmed: 2, refuted: 1, rounds: [2, 1] };
+  if (
+    JSON.stringify(got) === JSON.stringify(want) &&
+    JSON.stringify(record) === JSON.stringify(wantRecord)
+  )
+    return 0;
+  process.stderr.write(
+    `review-metrics self-test: ${JSON.stringify(got)} ${JSON.stringify(record)}\n`,
+  );
   return 1;
 }
 
@@ -132,6 +187,7 @@ function main(argv) {
   const rounds = existsSync("tasks/review-rounds.md")
     ? readFileSync("tasks/review-rounds.md", "utf8")
     : "";
+  const record = reviewRecord(rounds);
   const common = git(["rev-parse", "--git-common-dir"])?.trim();
   const log =
     common && join(resolve(common), "validate-kit", "commit-gate.log");
@@ -143,7 +199,7 @@ function main(argv) {
       `followed by a fix: ${result.refixed} (median ${result.refixedSize} files)`,
       `stayed clean: ${result.clean} (median ${result.cleanSize} files)`,
       `stamps: ${result.stamps.map(([stamp, n]) => `${n} ${stamp}`).join("; ")}`,
-      `sent back before landing: ${count(rounds, /^\| \d+ +\| Important/gm)} Important findings in ${count(rounds, /^### Round/gm)} review rounds; ${count(rounds, /`needs revision/g)} gradings; ${count(gate, /would block/g)} commits the gate would have blocked`,
+      `sent back before landing: ${record.important} Important findings (a second agent confirmed ${record.confirmed} and refuted ${record.refuted}) in ${record.rounds.reduce((all, n) => all + n, 0)} review rounds over ${record.rounds.length} changes (median ${median(record.rounds)} rounds, most ${Math.max(0, ...record.rounds)}); ${count(rounds, /`needs revision/g)} gradings; ${count(gate, /would block/g)} commits the gate would have blocked`,
       "",
     ].join("\n"),
   );

@@ -2,139 +2,285 @@ id: ts-fc-no-replay-leftover
 snapshots:
   "assert(property(fc.integer(), check), { seed: 7, path: \"3:1\" });\n":
     labels:
-    - source: "{ seed: 7, path: \"3:1\" }"
-      style: primary
-      start: 38
-      end: 62
-    - source: property
-      style: secondary
-      start: 7
-      end: 15
-    - source: property(fc.integer(), check)
-      style: secondary
-      start: 7
-      end: 36
-    - source: assert
-      style: secondary
-      start: 0
-      end: 6
-    - source: "assert(property(fc.integer(), check), { seed: 7, path: \"3:1\" })"
-      style: secondary
-      start: 0
-      end: 63
-    - source: "(property(fc.integer(), check), { seed: 7, path: \"3:1\" })"
-      style: secondary
-      start: 6
-      end: 63
-    - source: path
-      style: secondary
-      start: 49
-      end: 53
-    - source: "path: \"3:1\""
-      style: secondary
-      start: 49
-      end: 60
+      - source: '{ seed: 7, path: "3:1" }'
+        style: primary
+        start: 38
+        end: 62
+      - source: property
+        style: secondary
+        start: 7
+        end: 15
+      - source: property(fc.integer(), check)
+        style: secondary
+        start: 7
+        end: 36
+      - source: assert
+        style: secondary
+        start: 0
+        end: 6
+      - source: 'assert(property(fc.integer(), check), { seed: 7, path: "3:1" })'
+        style: secondary
+        start: 0
+        end: 63
+      - source: '(property(fc.integer(), check), { seed: 7, path: "3:1" })'
+        style: secondary
+        start: 6
+        end: 63
+      - source: path
+        style: secondary
+        start: 49
+        end: 53
+      - source: 'path: "3:1"'
+        style: secondary
+        start: 49
+        end: 60
   "fc.assert(fc.property(fc.array(fc.integer()), sorted), { seed: -1819918769, path: \"0:1:3\", endOnFailure: true });\n":
     labels:
-    - source: "{ seed: -1819918769, path: \"0:1:3\", endOnFailure: true }"
-      style: primary
-      start: 55
-      end: 111
-    - source: fc.assert
-      style: secondary
-      start: 0
-      end: 9
-    - source: "fc.assert(fc.property(fc.array(fc.integer()), sorted), { seed: -1819918769, path: \"0:1:3\", endOnFailure: true })"
-      style: secondary
-      start: 0
-      end: 112
-    - source: "(fc.property(fc.array(fc.integer()), sorted), { seed: -1819918769, path: \"0:1:3\", endOnFailure: true })"
-      style: secondary
-      start: 9
-      end: 112
-    - source: path
-      style: secondary
-      start: 76
-      end: 80
-    - source: "path: \"0:1:3\""
-      style: secondary
-      start: 76
-      end: 89
+      - source: '{ seed: -1819918769, path: "0:1:3", endOnFailure: true }'
+        style: primary
+        start: 55
+        end: 111
+      - source: fc.assert
+        style: secondary
+        start: 0
+        end: 9
+      - source: 'fc.assert(fc.property(fc.array(fc.integer()), sorted), { seed: -1819918769, path: "0:1:3", endOnFailure: true })'
+        style: secondary
+        start: 0
+        end: 112
+      - source: '(fc.property(fc.array(fc.integer()), sorted), { seed: -1819918769, path: "0:1:3", endOnFailure: true })'
+        style: secondary
+        start: 9
+        end: 112
+      - source: path
+        style: secondary
+        start: 76
+        end: 80
+      - source: 'path: "0:1:3"'
+        style: secondary
+        start: 76
+        end: 89
   "fc.assert(fc.property(fc.commands(all, { replayPath: \"AAAAABAAE:VF\" }), run), { seed: 670108017 });\n":
     labels:
-    - source: "replayPath: \"AAAAABAAE:VF\""
-      style: primary
-      start: 41
-      end: 67
-    - source: fc.commands
-      style: secondary
-      start: 22
-      end: 33
-    - source: "fc.commands(all, { replayPath: \"AAAAABAAE:VF\" })"
-      style: secondary
-      start: 22
-      end: 70
-    - source: "(all, { replayPath: \"AAAAABAAE:VF\" })"
-      style: secondary
-      start: 33
-      end: 70
-    - source: "{ replayPath: \"AAAAABAAE:VF\" }"
-      style: secondary
-      start: 39
-      end: 69
-    - source: replayPath
-      style: secondary
-      start: 41
-      end: 51
+      - source: 'replayPath: "AAAAABAAE:VF"'
+        style: primary
+        start: 41
+        end: 67
+      - source: fc.commands
+        style: secondary
+        start: 22
+        end: 33
+      - source: 'fc.commands(all, { replayPath: "AAAAABAAE:VF" })'
+        style: secondary
+        start: 22
+        end: 70
+      - source: '(all, { replayPath: "AAAAABAAE:VF" })'
+        style: secondary
+        start: 33
+        end: 70
+      - source: '{ replayPath: "AAAAABAAE:VF" }'
+        style: secondary
+        start: 39
+        end: 69
+      - source: replayPath
+        style: secondary
+        start: 41
+        end: 51
   "fc.assert(prop, { \"path\": \"0:0\" });\n":
     labels:
-    - source: "{ \"path\": \"0:0\" }"
-      style: primary
-      start: 16
-      end: 33
-    - source: fc.assert
-      style: secondary
-      start: 0
-      end: 9
-    - source: "fc.assert(prop, { \"path\": \"0:0\" })"
-      style: secondary
-      start: 0
-      end: 34
-    - source: "(prop, { \"path\": \"0:0\" })"
-      style: secondary
-      start: 9
-      end: 34
-    - source: "\"path\""
-      style: secondary
-      start: 18
-      end: 24
-    - source: "\"path\": \"0:0\""
-      style: secondary
-      start: 18
-      end: 31
+      - source: '{ "path": "0:0" }'
+        style: primary
+        start: 16
+        end: 33
+      - source: fc.assert
+        style: secondary
+        start: 0
+        end: 9
+      - source: 'fc.assert(prop, { "path": "0:0" })'
+        style: secondary
+        start: 0
+        end: 34
+      - source: '(prop, { "path": "0:0" })'
+        style: secondary
+        start: 9
+        end: 34
+      - source: '"path"'
+        style: secondary
+        start: 18
+        end: 24
+      - source: '"path": "0:0"'
+        style: secondary
+        start: 18
+        end: 31
   "fc.check(fc.property(fc.string(), check), { endOnFailure: true });\n":
     labels:
-    - source: "{ endOnFailure: true }"
-      style: primary
-      start: 42
-      end: 64
-    - source: fc.check
-      style: secondary
-      start: 0
-      end: 8
-    - source: "fc.check(fc.property(fc.string(), check), { endOnFailure: true })"
-      style: secondary
-      start: 0
-      end: 65
-    - source: "(fc.property(fc.string(), check), { endOnFailure: true })"
-      style: secondary
-      start: 8
-      end: 65
-    - source: endOnFailure
-      style: secondary
-      start: 44
-      end: 56
-    - source: "endOnFailure: true"
-      style: secondary
-      start: 44
-      end: 62
+      - source: "{ endOnFailure: true }"
+        style: primary
+        start: 42
+        end: 64
+      - source: fc.check
+        style: secondary
+        start: 0
+        end: 8
+      - source: "fc.check(fc.property(fc.string(), check), { endOnFailure: true })"
+        style: secondary
+        start: 0
+        end: 65
+      - source: "(fc.property(fc.string(), check), { endOnFailure: true })"
+        style: secondary
+        start: 8
+        end: 65
+      - source: endOnFailure
+        style: secondary
+        start: 44
+        end: 56
+      - source: "endOnFailure: true"
+        style: secondary
+        start: 44
+        end: 62
+  "import { test as property } from \"@fast-check/vitest\";\nproperty.prop([fc.nat()], { seed: 1, path: \"0:0\" })(\"starts at one old case\", (n) => {\n  expect(n).toBeGreaterThanOrEqual(0);\n});\n":
+    labels:
+      - source: '{ seed: 1, path: "0:0" }'
+        style: primary
+        start: 81
+        end: 105
+      - source: |-
+          property.prop([fc.nat()], { seed: 1, path: "0:0" })("starts at one old case", (n) => {
+            expect(n).toBeGreaterThanOrEqual(0);
+          })
+        style: secondary
+        start: 55
+        end: 183
+      - source: property.prop
+        style: secondary
+        start: 55
+        end: 68
+      - source: 'property.prop([fc.nat()], { seed: 1, path: "0:0" })'
+        style: secondary
+        start: 55
+        end: 106
+      - source: '([fc.nat()], { seed: 1, path: "0:0" })'
+        style: secondary
+        start: 68
+        end: 106
+      - source: path
+        style: secondary
+        start: 92
+        end: 96
+      - source: 'path: "0:0"'
+        style: secondary
+        start: 92
+        end: 103
+  "it.concurrent.prop({ a: fc.string() }, { endOnFailure: true })(\"does not shrink\", ({ a }) => {\n  expect(a).toBe(a);\n});\n":
+    labels:
+      - source: "{ endOnFailure: true }"
+        style: primary
+        start: 39
+        end: 61
+      - source: |-
+          it.concurrent.prop({ a: fc.string() }, { endOnFailure: true })("does not shrink", ({ a }) => {
+            expect(a).toBe(a);
+          })
+        style: secondary
+        start: 0
+        end: 118
+      - source: it.concurrent.prop
+        style: secondary
+        start: 0
+        end: 18
+      - source: "it.concurrent.prop({ a: fc.string() }, { endOnFailure: true })"
+        style: secondary
+        start: 0
+        end: 62
+      - source: "({ a: fc.string() }, { endOnFailure: true })"
+        style: secondary
+        start: 18
+        end: 62
+      - source: endOnFailure
+        style: secondary
+        start: 41
+        end: 53
+      - source: "endOnFailure: true"
+        style: secondary
+        start: 41
+        end: 59
+  "test.prop(\n  // the arbitraries\n  [fc.nat()],\n  /* replay */ { seed: 1, path: \"0:0\" },\n)(\"starts at one old case\", (n) => {\n  expect(n).toBeGreaterThanOrEqual(0);\n});\n":
+    labels:
+      - source: '{ seed: 1, path: "0:0" }'
+        style: primary
+        start: 61
+        end: 85
+      - source: |-
+          test.prop(
+            // the arbitraries
+            [fc.nat()],
+            /* replay */ { seed: 1, path: "0:0" },
+          )("starts at one old case", (n) => {
+            expect(n).toBeGreaterThanOrEqual(0);
+          })
+        style: secondary
+        start: 0
+        end: 165
+      - source: test.prop
+        style: secondary
+        start: 0
+        end: 9
+      - source: |-
+          test.prop(
+            // the arbitraries
+            [fc.nat()],
+            /* replay */ { seed: 1, path: "0:0" },
+          )
+        style: secondary
+        start: 0
+        end: 88
+      - source: |-
+          (
+            // the arbitraries
+            [fc.nat()],
+            /* replay */ { seed: 1, path: "0:0" },
+          )
+        style: secondary
+        start: 9
+        end: 88
+      - source: path
+        style: secondary
+        start: 72
+        end: 76
+      - source: 'path: "0:0"'
+        style: secondary
+        start: 72
+        end: 83
+  "test.prop([fc.nat()], { seed: 4242, path: \"0:0\" })(\"starts at one old case\", (a) => {\n  expect(a).toBe(a);\n});\n":
+    labels:
+      - source: '{ seed: 4242, path: "0:0" }'
+        style: primary
+        start: 22
+        end: 49
+      - source: |-
+          test.prop([fc.nat()], { seed: 4242, path: "0:0" })("starts at one old case", (a) => {
+            expect(a).toBe(a);
+          })
+        style: secondary
+        start: 0
+        end: 109
+      - source: test.prop
+        style: secondary
+        start: 0
+        end: 9
+      - source: 'test.prop([fc.nat()], { seed: 4242, path: "0:0" })'
+        style: secondary
+        start: 0
+        end: 50
+      - source: '([fc.nat()], { seed: 4242, path: "0:0" })'
+        style: secondary
+        start: 9
+        end: 50
+      - source: path
+        style: secondary
+        start: 36
+        end: 40
+      - source: 'path: "0:0"'
+        style: secondary
+        start: 36
+        end: 47

@@ -104,6 +104,7 @@ js-fc-unawaited-async-property
 py-hypothesis-no-reproduce-failure
 py-hypothesis-no-blanket-health-check
 py-hypothesis-no-example-in-test
+py-hypothesis-no-early-return
 # A flaky test rerun until it passes, or turned off (in TS and JS a skipped
 # test is the runner's own lint rule: vitest/no-disabled-tests). Strict only
 # until they have met more code.

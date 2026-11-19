@@ -1,19 +1,24 @@
 #!/usr/bin/env node
-// Windows end-to-end check for R18 (docs/architecture/engine-generalisation.md):
-// the engine runs the system git, found through PATHEXT, and never a git the
-// project puts in its own folder, which Windows would otherwise run first.
-// Runs the built kit (packages/validate-kit/dist) against a temp repository.
+// Windows end-to-end checks, on the built kit (packages/validate-kit/dist):
+// - R18 (docs/architecture/engine-generalisation.md): the engine runs the
+//   system git, found through PATHEXT, and never a git the project puts in
+//   its own folder, which Windows would otherwise run first;
+// - doctor prints install lines a Windows machine can run;
+// - a project installs the packed kit and runs `init`, and what init wrote
+//   works: the MCP entry starts and the pre-commit hook stops a finding.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 if (process.platform !== "win32") {
   console.error("smoke-windows: runs on Windows only");
@@ -133,8 +138,171 @@ try {
     shadowed.status === 1 && !existsSync(marker),
     `exit ${shadowed.status}; marker ${existsSync(marker)}; stderr ${shadowed.stderr.trim().slice(0, 300)}`,
   );
+
+  // The install line doctor prints is one a Windows machine can run: the
+  // adapters write Homebrew's, and the registry turns each into Scoop's or
+  // the tool's own way (packages/validate-kit/src/core/windows-install.ts).
+  const doctor = run(process.execPath, [kitEntry, "doctor", "--json"]);
+  let tools = [];
+  try {
+    tools = JSON.parse(doctor.stdout).tools ?? [];
+  } catch {
+    /* reported below */
+  }
+  const notWindows = tools
+    .filter((tool) =>
+      /\bbrew\b|Homebrew|\bapt install\b/.test(tool.installHint),
+    )
+    .map((tool) => `${tool.id}: ${tool.installHint}`);
+  check(
+    "doctor names no Homebrew or apt line on Windows",
+    tools.length > 100 && notWindows.length === 0,
+    `${tools.length} tools; ${notWindows.slice(0, 5).join(" | ")}; stderr ${doctor.stderr.trim().slice(0, 300)}`,
+  );
+  const shellcheck = tools.find((tool) => tool.id === "shellcheck");
+  check(
+    "doctor's line for shellcheck is Scoop's",
+    shellcheck?.installHint === "scoop install shellcheck",
+    String(shellcheck?.installHint),
+  );
+
+  await projectSetup(join(root, "project"));
 } finally {
   rmSync(root, { recursive: true, force: true });
+}
+
+/** What a command ended with, for a failed check. */
+function said(result) {
+  return `exit ${result.status}; stdout ${result.stdout.trim().slice(-500)}; stderr ${result.stderr.trim().slice(-500)}`;
+}
+
+/**
+ * A project sets itself up as the README says: the packed kit as a dev
+ * dependency, `init`, `doctor`. Then what init wrote is used: the MCP entry
+ * is started by the MCP SDK's own client, and a commit goes through the hook.
+ */
+async function projectSetup(project) {
+  mkdirSync(project, { recursive: true });
+  const at = (command, args, options = {}) => {
+    const result = spawnSync(command, args, {
+      cwd: project,
+      env: { ...process.env, CI: "1" },
+      encoding: "utf8",
+      ...options,
+    });
+    if (result.error) throw result.error;
+    return result;
+  };
+  // pnpm is pnpm.cmd here, which Node starts only through a shell.
+  const pnpm = (args, cwd = project) => at("pnpm", args, { cwd, shell: true });
+
+  const packed = pnpm(
+    ["--filter", "validate-kit", "pack", "--pack-destination", root],
+    repoRoot,
+  );
+  const tarball = readdirSync(root).find((name) => name.endsWith(".tgz"));
+  check("the kit packs", tarball !== undefined, said(packed));
+  if (tarball === undefined) return;
+
+  for (const args of [
+    ["init", "-q"],
+    ["config", "user.email", "smoke@example.invalid"],
+    ["config", "user.name", "smoke"],
+  ])
+    at("git", args);
+  writeFileSync(
+    join(project, "package.json"),
+    `${JSON.stringify({ name: "project", private: true, type: "module" })}\n`,
+  );
+  writeFileSync(join(project, ".gitignore"), "node_modules\n");
+  const added = pnpm([
+    "add",
+    "-D",
+    "--allow-build=@ast-grep/cli",
+    join(root, tarball),
+    "lefthook",
+  ]);
+  check("the project installs the packed kit", added.status === 0, said(added));
+
+  const init = pnpm(["exec", "validate-kit", "init"]);
+  const written = [
+    "lefthook.yml",
+    ".mcp.json",
+    ".claude/settings.json",
+    ".git/hooks/pre-commit",
+    ".git/hooks/pre-push",
+  ].filter((file) => !existsSync(join(project, file)));
+  check(
+    "init writes the config, the MCP entry, the Claude Code hooks and the git hooks",
+    init.status === 0 &&
+      written.length === 0 &&
+      readdirSync(project).some((name) => name.startsWith("validate.config.")),
+    `missing ${written.join(", ")}; ${said(init)}`,
+  );
+  check(
+    "init finds the project's own kit (no 'not on PATH' warning)",
+    !/is not on PATH/.test(init.stderr),
+    init.stderr.trim().slice(0, 300),
+  );
+
+  const projectDoctor = pnpm(["exec", "validate-kit", "doctor"]);
+  check(
+    "doctor in the project: every tool it needs is here",
+    projectDoctor.status === 0,
+    said(projectDoctor),
+  );
+
+  // The MCP entry as init wrote it, started as an MCP client starts it.
+  let toolNames = [];
+  let mcpError = "";
+  try {
+    const entry = JSON.parse(readFileSync(join(project, ".mcp.json"), "utf8"))
+      .mcpServers["Tester.MCP"];
+    const sdk = join(
+      repoRoot,
+      "packages/validate-kit/node_modules/@modelcontextprotocol/sdk/dist/esm/client",
+    );
+    const { Client } = await import(pathToFileURL(join(sdk, "index.js")).href);
+    const { StdioClientTransport } = await import(
+      pathToFileURL(join(sdk, "stdio.js")).href
+    );
+    const client = new Client({ name: "smoke-windows", version: "0" });
+    await client.connect(
+      new StdioClientTransport({
+        command: entry.command,
+        args: entry.args,
+        cwd: project,
+      }),
+    );
+    toolNames = (await client.listTools()).tools.map((tool) => tool.name);
+    await client.close();
+  } catch (err) {
+    mcpError = String(err);
+  }
+  check(
+    "the MCP entry init wrote starts, and lists its tools",
+    toolNames.length > 0,
+    mcpError,
+  );
+
+  // The pre-commit hook: a staged finding stops the commit, a clean file
+  // does not.
+  writeFileSync(join(project, "bad.js"), "export const a = 1;\ndebugger;\n");
+  at("git", ["add", "bad.js"]);
+  const refused = at("git", ["commit", "-q", "-m", "a finding"]);
+  check(
+    "the pre-commit hook stops a commit with a finding",
+    refused.status !== 0 && /bad\.js/.test(refused.stdout + refused.stderr),
+    said(refused),
+  );
+  writeFileSync(join(project, "bad.js"), "export const a = 1;\n");
+  at("git", ["add", "bad.js"]);
+  const passed = at("git", ["commit", "-q", "-m", "clean"]);
+  check(
+    "the pre-commit hook passes a clean commit",
+    passed.status === 0,
+    said(passed),
+  );
 }
 
 const failed = results.filter((r) => !r.ok);

@@ -45,7 +45,15 @@ the project already had (an `esbuild: true`) is gone afterwards (recorded on 11.
 push, both with `--quiet`. A passing hook prints nothing; a failing one prints one line per finding
 and the exit code.
 
+On Windows the commands are the same, in PowerShell. The project needs Git for Windows: the hooks
+and the command gates run through its `sh`, which the kit finds by itself. `doctor` prints the
+install line a Windows machine can run: Scoop's where Scoop holds the tool (`scoop install
+shellcheck`), else the tool's own way, and for a tool with no Windows build it says so. The files
+`init` writes are the same on both systems.
+
 ## Work on this repository
+
+On macOS or Linux:
 
 ```bash
 git clone https://github.com/CryptoKrad/validate-kit.git && cd validate-kit
@@ -58,6 +66,29 @@ pnpm --filter validate-kit run test
 pnpm run smoke:external-package  # packs the kit and runs it in temporary repositories
 scripts/verify-clean.sh --ci     # what CI's push jobs run, on a clean worktree of HEAD
 ```
+
+On Windows, in PowerShell (5.1 or 7):
+
+```powershell
+winget install Git.Git jdx.mise   # once per machine; then open a new terminal
+git clone https://github.com/CryptoKrad/validate-kit.git; cd validate-kit
+mise install                                                                      # node, pnpm, go, rust, python, uv
+mise exec -- powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1   # the gate's tools, install, build, doctor
+mise exec -- pnpm run check                                                       # in a new terminal
+```
+
+`mise exec --` runs one command with the runtimes of `mise.toml` on PATH and needs no profile.
+`-ExecutionPolicy Bypass` holds for that one process: a Windows client's default policy runs no
+script file. To drop the prefix, activate mise in your PowerShell profile (mise's "Getting
+started"); a profile loads only after `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope
+CurrentUser`.
+
+`scripts/setup-windows.ps1` installs the gate's tools at the versions CI pins, into the folder
+`uv tool dir --bin`: four with `uv tool install`, shfmt with `go install`, and shellcheck and
+agnix from their releases, each checked against its SHA-256. It needs no admin rights. CI's
+Windows leg runs this script on each change, under Windows PowerShell 5.1, then the gate, and `pnpm run workflow:check` fails
+when a version in it differs from CI's. The preflight (`scripts/verify-clean.sh`) and this
+repository's own git hooks need macOS or Linux: CI checks a push from Windows.
 
 ## Work with an agent
 
@@ -72,7 +103,8 @@ verification or its article on verification loops with skills.
   it and what a pass shows. `apps/web/.claude/skills/verify/SKILL.md` and
   `apps/api/.claude/skills/verify/SKILL.md` are two examples; a project writes its own.
 - **When the agent commits.** `scripts/commit-gate.mjs` stamps each commit of a Claude Code
-  session with what verified it, for the tree it ran on: `Verified: review, verify`, or `none`.
+  session with what verified it, for the tree it ran on: `Verified: review, security, verify`,
+  some of them, or `none`. A security review (`/security-review`) is a step of its own.
   Nothing starts it in this copy. Its header names the four hook events to put in a
   `.claude/settings.json`, and `pnpm run smoke:commit-gate` runs every case.
 
@@ -82,17 +114,26 @@ risk tier and the checklist items it fires; this copy has no `REVIEW.md`.
 `scripts/review-metrics.mjs` counts, from git, the changes that were reverted or that a later
 fix had to touch again.
 
+The `review-md` check holds a `REVIEW.md` to what Claude Code's Code Review reads: the size of
+each file, the 150,000 bytes that the files of one folder chain share, the folders it never
+reads one from, and what an included file or skill may be.
+
 Property tests are the project's own: the kit's rules catch one that tests less than it looks,
 and its `saved-failures` check keeps a failing case a library saved in the commit. The package
-README names both.
+README names both. Six rules now: the newest reports an early `return` in a Hypothesis
+`@given` test (`py-hypothesis-no-early-return`, strict preset). The replay rule also reads the
+settings of `test.prop(...)`, the form of fast-check's Vitest and Jest connectors. The kit's own properties run
+fast-check's 100 cases in the tests and 2,000 in the preflight: `FC_NUM_RUNS` sets the number
+for every property through `packages/validate-kit/test/fast-check.setup.ts`.
 
 ## What must be on PATH
 
-`git`, `brew` and `mise`, with mise activated in your shell so that the runtimes it installs are
+On macOS: `git`, `brew` and `mise`, with mise activated in your shell so that the runtimes it installs are
 on PATH. Nothing else by hand: the three install lines above put every tool of this
 repository's gate in a folder mise adds, in Homebrew's folder or in `node_modules/.bin`.
 `pnpm exec check doctor --profile ci` prints one line per tool with its version, or the install
-line when it is missing.
+line when it is missing. On Windows: Git for Windows and `mise`; the setup script puts
+the rest in one folder and `uv tool update-shell` adds that folder to PATH.
 
 The smoke that the preflight (`scripts/verify-clean.sh --ci`) and the plain
 `scripts/verify-clean.sh` run also runs the formal tools, and requires three things: Lean (`brew bundle` installs elan), TLC (as the step "Install TLC"
@@ -108,7 +149,7 @@ PATH (`uv tool update-shell` does it for uv).
 ## CI
 
 `.github/workflows/`: **validate** (build, kit tests, the smoke, the gate, workflow checks, and a
-Windows leg), **poly** (Rust, Go and Python), **test-ts** (the app's tests on Node 22, 24 and 26),
+Windows leg: the machine setup script, the gate, and a project's setup from the packed kit), **poly** (Rust, Go and Python), **test-ts** (the app's tests on Node 22, 24 and 26),
 **e2e** (Playwright), **perf** (k6, informational) and **security** (Semgrep and `pnpm audit`).
 
 `pnpm run ci:metrics` prints what those workflows cost and what a pull request waits for: the
@@ -123,3 +164,28 @@ smoke's time goes. `poly` keeps its two Go tools in a cache whose key hashes the
 that pins them, and `pnpm run workflow:check` fails another key. In CI, a browser test that
 passes only on a retry fails the run (`failOnFlakyTests`); the retry stays, because it leaves
 the trace.
+
+### An advisory with no fix
+
+`pnpm audit --audit-level=high` is a hard gate. No advisory is left out of it now, and no
+package is switched off. (From 2026-11-17 it failed on GHSA-fc5q-39xc-vjpf, picomatch, with no
+fixed release; GitHub withdrew that advisory on 2026-11-18.) The audit prints two moderate
+advisories (glob, minimatch) in this repository's test and lint dependencies; each fix is a major
+version past what its parent asks for. What a project installs with the kit has none: `pnpm
+audit --prod` prints `No known vulnerabilities found` (2026-11-19).
+
+To accept an advisory that has no fixed release, for a short time:
+
+1. Check that no fix exists (`pnpm view <package> version`, and the advisory's page), and
+   that the advisory still stands (`withdrawn_at` in `https://api.github.com/advisories/<id>`).
+2. Find out who can reach the flaw in your project, and write it down.
+3. Add `auditConfig.ignoreGhsas` with the id to `pnpm-workspace.yaml` and a record to
+   `scripts/audit-exceptions.json`: `id`, `package`, `through` (the last affected version),
+   `accepted`, `expires` (at most 30 days later) and `reason`.
+
+`pnpm run workflow:check` fails on an ignored id without a record, on a record without a
+reason or longer than 30 days, from the day after `expires` (UTC), and when the package is no
+longer installed at an affected version. It does not watch pnpm's other settings: the files
+that hold an exception are owner files in `.github/CODEOWNERS`, and the owner approves each
+one. Do not use `--ignore-unfixable`: it drops every advisory without a fix, the next one too,
+unread.

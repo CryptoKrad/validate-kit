@@ -134,10 +134,25 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Build validate-kit
-        run: pnpm run build
-      - name: Windows smoke (system git lookup)
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
+      # The machine setup a person runs on Windows (README, "The machine, on
+      # Windows"): the gate's tools at the versions pinned above, the install,
+      # the build, and doctor, which fails on a missing tool.
+      # Under Windows PowerShell 5.1, the one every Windows has.
+      - name: Set up the machine (scripts/setup-windows.ps1)
+        shell: powershell
+        run: |
+          ./scripts/setup-windows.ps1
+      - name: Put the tools' folder on PATH for the next steps
+        run: uv tool dir --bin >> $env:GITHUB_PATH
+      - name: The gate on Windows
+        run: pnpm run check
+      - name: Windows smoke (system git, doctor's install lines, init in a project)
         run: node scripts/smoke-windows.mjs
       - name: validate-kit core behavioral tests
         run: pnpm --fail-if-no-match --filter validate-kit run test:core

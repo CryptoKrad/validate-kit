@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { parse as parseYamlDocument } from "yaml";
 import { join, posix } from "node:path";
 
@@ -1041,6 +1041,150 @@ function validatePreflightMirror() {
       fail(`${preflightPath}: left "${key}" names no job a push to main runs`);
 }
 validatePreflightMirror();
+
+// The audit is a hard gate, and an advisory with no fixed release would stop
+// every push. The one way round is a single advisory by id, with a written
+// reason and an end date. On the end date this check fails, so the exception
+// is looked at again.
+const AUDIT_EXCEPTION_DAYS = 30;
+const DAY_MS = 86_400_000;
+const AUDIT_RECORDS = "scripts/audit-exceptions.json";
+function atOrBelow(version, limit) {
+  const [a, b] = [version, limit].map((v) => v.split(".").map(Number));
+  for (const i of [0, 1, 2]) if (a[i] !== b[i]) return a[i] < b[i];
+  return true;
+}
+function isDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value ?? "")) return false;
+  const time = Date.parse(value);
+  // 2026-02-31 parses, as a day in March.
+  return !Number.isNaN(time) && new Date(time).toISOString().startsWith(value);
+}
+// An advisory with no fixed release is accepted by its id, for a time, with a
+// written reason (README, "An advisory with no fix"). This holds the record
+// to the list. It does not watch pnpm's other settings: the owner files in
+// .github/CODEOWNERS and the review do.
+function validateAuditExceptions() {
+  const auditConfig =
+    parseYamlDocument(readFileSync("pnpm-workspace.yaml", "utf8"), {
+      merge: true,
+    })?.auditConfig ?? {};
+  for (const key of Object.keys(auditConfig))
+    if (key !== "ignoreGhsas")
+      fail(
+        `pnpm-workspace.yaml: auditConfig.${key}: the audit leaves out an advisory by its id only, in auditConfig.ignoreGhsas, with a record in ${AUDIT_RECORDS}`,
+      );
+  const ignored = [auditConfig.ignoreGhsas ?? []].flat();
+  const lock = readFileSync("pnpm-lock.yaml", "utf8");
+  const records = existsSync(AUDIT_RECORDS)
+    ? JSON.parse(readFileSync(AUDIT_RECORDS, "utf8"))
+    : [];
+  if (!Array.isArray(records)) {
+    fail(`${AUDIT_RECORDS}: must be a list of records`);
+    return;
+  }
+  // The day in UTC, for `accepted` and `expires` alike.
+  const today = new Date().toISOString().slice(0, 10);
+  for (const id of ignored)
+    if (records.filter((record) => record.id === id).length !== 1)
+      fail(
+        `pnpm-workspace.yaml: the audit ignores ${id}, and ${AUDIT_RECORDS} must hold one record of it (id, package, through, accepted, expires, reason)`,
+      );
+  for (const record of records) {
+    const { id, package: name, through, accepted, expires, reason } = record;
+    if (!ignored.includes(id)) {
+      fail(
+        `${AUDIT_RECORDS}: ${id} is not in auditConfig.ignoreGhsas of pnpm-workspace.yaml: delete the record`,
+      );
+      continue;
+    }
+    if (
+      typeof name !== "string" ||
+      !/^\d+\.\d+\.\d+$/.test(through ?? "") ||
+      !isDate(accepted) ||
+      !isDate(expires) ||
+      String(reason ?? "").trim().length < 80
+    ) {
+      fail(
+        `${AUDIT_RECORDS}: ${id} must have a package, a last affected version \`through\` (1.2.3), the dates \`accepted\` and \`expires\` (2026-01-31), and a reason of a sentence or more`,
+      );
+      continue;
+    }
+    // East of UTC the local day is one ahead.
+    if (Date.parse(accepted) - Date.parse(today) > DAY_MS)
+      fail(`${AUDIT_RECORDS}: ${id} is accepted on ${accepted}, a day to come`);
+    if (
+      Date.parse(expires) - Date.parse(accepted) >
+      AUDIT_EXCEPTION_DAYS * DAY_MS
+    )
+      fail(
+        `${AUDIT_RECORDS}: ${id} runs from ${accepted} to ${expires}: an exception ends at most ${AUDIT_EXCEPTION_DAYS} days after it is accepted`,
+      );
+    if (expires < today)
+      fail(
+        `${AUDIT_RECORDS}: the exception for ${id} (${name}) ended on ${expires}. Look for a fixed release (\`pnpm view ${name} version\`, https://github.com/advisories/${id}): upgrade and delete the record and its line in pnpm-workspace.yaml, or accept it again with today's date and a reason that still holds`,
+      );
+    const escaped = name.replaceAll(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+    const installed = [
+      ...lock.matchAll(
+        new RegExp(`^  '?${escaped}@(\\d+\\.\\d+\\.\\d+)'?:`, "gm"),
+      ),
+    ].map((match) => match[1]);
+    if (!installed.some((version) => atOrBelow(version, through)))
+      fail(
+        `${AUDIT_RECORDS}: no ${name} at or below ${through} is installed, so ${id} no longer applies: delete the record and its line in pnpm-workspace.yaml`,
+      );
+  }
+}
+validateAuditExceptions();
+
+// The Windows machine setup installs the gate's tools at the versions the
+// validate job pins, and that job's Windows leg runs it: a setup nothing runs
+// is a setup nobody knows to be broken.
+function validateWindowsSetup() {
+  const script = "scripts/setup-windows.ps1";
+  const ci = readFileSync(`${workflowDir}/validate.yml`, "utf8");
+  const ciLines = ci.split("\n");
+  const installs = readFileSync(script, "utf8")
+    .split("\n")
+    .filter((line) => /^(?:Run (?:uv tool|go) install|Fetch) /.test(line));
+  if (installs.length < 7)
+    fail(
+      `${script}: ${installs.length} install lines found where seven are due (four Python tools, shfmt, shellcheck, agnix): the script's lines or this check changed`,
+    );
+  for (const line of installs) {
+    const python = /"([\w-]+)==([\d.]+)"/.exec(line);
+    const pin = python
+      ? python[1] === "semgrep"
+        ? `SEMGREP_VERSION: "${python[2]}"`
+        : python[0]
+      : (/go install \S+@v[\w.]+/.exec(line) ??
+          /github\.com\/[\w.-]+\/[\w.-]+\/releases\/download\/v[\w.]+\//.exec(
+            line,
+          ))?.[0];
+    if (pin === undefined)
+      fail(`${script}: \`${line}\` installs no pinned version`);
+    // shellcheck is the one tool the Linux job takes from its runner, so
+    // only the script pins it. A pin that ends in its version (shfmt's) must
+    // end its line in the workflow too: v3.14.1 is not v3.14.10.
+    else if (
+      !pin.includes("koalaman/shellcheck/") &&
+      !ciLines.some((ciLine) =>
+        /["/]$/.test(pin) ? ciLine.includes(pin) : ciLine.endsWith(pin),
+      )
+    )
+      fail(
+        `${script}: ${workflowDir}/validate.yml has no \`${pin}\`: the two install different versions; move both (node scripts/outdated.mjs --apply does)`,
+      );
+  }
+  const windowsJob =
+    /\n {2}windows:\n([\s\S]*?)(?=\n {2}\S|$)/.exec(ci)?.[1] ?? "";
+  if (!/^ {10}\.\/scripts\/setup-windows\.ps1$/m.test(windowsJob))
+    fail(
+      `${workflowDir}/validate.yml: the windows job must run ./scripts/setup-windows.ps1, the setup a person runs`,
+    );
+}
+validateWindowsSetup();
 
 const workflowCheck = packageJson.scripts?.["workflow:check"];
 if (

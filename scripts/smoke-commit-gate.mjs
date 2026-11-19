@@ -143,6 +143,16 @@ expect(
   "C6 typing /ship or /go verifies nothing",
   commit("c6").command?.includes("Verified: none"),
 );
+// C7: the security review is a step of its own in the stamp, not a review.
+hook("c7", {
+  hook_event_name: "UserPromptExpansion",
+  command_name: "security-review",
+});
+expect(
+  "C7 /security-review is stamped as security",
+  commit("c7").command?.includes('"Verified: security"'),
+  commit("c7").command,
+);
 // D: enforce: sent back twice, the third goes through.
 mode("enforce");
 const first = commit("d");

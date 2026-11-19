@@ -23,6 +23,7 @@
 // version can change the output the kit parses.
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -33,7 +34,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DAY_MS = 24 * 60 * 60_000;
@@ -43,6 +44,9 @@ const FOUND = join(repoRoot, "node_modules", ".cache", "outdated.txt");
 // Where a pin is written, besides the workflows: the guards that expect it.
 const APPLY_SKIP =
   /^(docs\/(research|evidence)\/|tasks\/learning\.md$|pnpm-lock\.yaml$)/;
+
+// The Windows machine setup installs CI's versions, and pins shellcheck itself.
+const WINDOWS_SETUP = "scripts/setup-windows.ps1";
 
 // Pins that stay behind on purpose. Delete a line when its reason is gone.
 const HOLDS = {
@@ -239,10 +243,12 @@ export function movesOf(pin, latest) {
   // ("Install agnix 0.60.3").
   if (pin.source === "github") {
     const tool = pin.name.split("/")[1];
-    moves.push([
-      `${tool} ${bare(pin.version)}`,
-      `${tool} ${bare(latest.version)}`,
-    ]);
+    moves.push(
+      [`${tool} ${bare(pin.version)}`, `${tool} ${bare(latest.version)}`],
+      // A release's file can carry the version in its name too
+      // (shellcheck-v0.11.0.zip).
+      [`${tool}-${pin.version}`, `${tool}-${latest.version}`],
+    );
   }
   // A package is also pinned where it is not installed: package.json's
   // packageManager, corepack, mise.toml.
@@ -267,6 +273,7 @@ function workflowPins() {
   const files = [
     ...readdirSync(dir).map((name) => join(dir, name)),
     join(repoRoot, "scripts", "update-visual-baseline.sh"),
+    join(repoRoot, WINDOWS_SETUP),
   ];
   const seen = new Map();
   for (const file of files)
@@ -310,28 +317,51 @@ function brewBehind() {
 }
 
 /**
- * A release download pinned by checksum (`curl … <url>`, then `echo "<sha256>
- * …" | sha256sum -c`): for each such pair whose checksum is not the one
- * GitHub records for that asset, [written, recorded].
+ * The SHA-256 of what a URL serves, or nothing when the download fails. Not a
+ * pipe into shasum: that hashes the empty output of a failed curl.
+ */
+function sha256Of(url) {
+  const out = spawnSync(
+    "sh",
+    [
+      "-c",
+      'f=$(mktemp) && curl -fsSL --max-time 300 -o "$f" "$1" && shasum -a 256 "$f"; rm -f "$f"',
+      "sh",
+      url,
+    ],
+    { encoding: "utf8" },
+  ).stdout;
+  return /^[0-9a-f]{64}/.exec(out)?.[0];
+}
+
+/** Each release URL in `text` that has a SHA-256 beside it, in either form. */
+function checksumPairs(text) {
+  return [
+    ...text.matchAll(
+      /(https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/releases\/download\/([^/\s]+)\/([^\s"]+))(?:\n\s*echo "|" ")([0-9a-f]{64})[ "]/g,
+    ),
+  ].map(([, url, repo, tag, asset, written]) => ({
+    url,
+    repo,
+    tag,
+    asset,
+    written,
+  }));
+}
+
+/**
+ * A release download pinned by checksum: a workflow's `curl … <url>`, then
+ * `echo "<sha256> …" | sha256sum -c`, or the Windows setup's `"<url>"
+ * "<sha256>"`. For each such pair whose checksum is not the one GitHub
+ * records for that asset, [written, recorded].
  */
 function checksumMoves(text) {
-  const pairs = text.matchAll(
-    /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/releases\/download\/([^/\s]+)\/(\S+)\n\s*echo "([0-9a-f]{64}) /g,
-  );
-  return [...pairs].flatMap(([found, repo, tag, asset, written]) => {
-    const url = found.split("\n")[0];
+  return checksumPairs(text).flatMap(({ url, repo, tag, asset, written }) => {
     const release = github(`repos/${repo}/releases/tags/${tag}`);
     const digest = release.assets.find((a) => a.name === asset)?.digest;
     // A release older than GitHub's digests has none: hash the download.
     const recorded =
-      /^sha256:([0-9a-f]{64})$/.exec(digest ?? "")?.[1] ??
-      /^[0-9a-f]{64}/.exec(
-        spawnSync(
-          "sh",
-          ["-c", 'curl -fsSL --max-time 300 "$1" | shasum -a 256', "sh", url],
-          { encoding: "utf8" },
-        ).stdout,
-      )?.[0];
+      /^sha256:([0-9a-f]{64})$/.exec(digest ?? "")?.[1] ?? sha256Of(url);
     if (!recorded) throw new Error(`no sha256 for ${url}`);
     return recorded === written ? [] : [[written, recorded]];
   });
@@ -433,7 +463,7 @@ function apply(moves) {
     let next = text;
     for (const [from, to] of moves) next = next.replaceAll(from, to);
     // Every run, not only after a move: a URL moved by hand heals too.
-    if (file.startsWith(".github/workflows/"))
+    if (file.startsWith(".github/workflows/") || file === WINDOWS_SETUP)
       for (const [from, to] of checksumMoves(next))
         next = next.replaceAll(from, to);
     if (next !== text) {
@@ -541,6 +571,42 @@ function selfTest() {
     moved(named("pnpm"), { version: "10.34.9" }),
     "version: 10.34.9",
   );
+  // The Windows setup's pins are read: shellcheck is pinned nowhere else.
+  assert.ok(
+    workflowPins().some((found) => found.name === "koalaman/shellcheck"),
+    `${WINDOWS_SETUP}: its shellcheck release is not among the pins`,
+  );
+  assert.deepEqual(
+    movesOf(named("agent-sh/agnix"), { version: "v0.61.0" })[2],
+    ["agnix-v0.60.3", "agnix-v0.61.0"],
+  );
+  // A download that fails has no checksum, not the checksum of nothing.
+  assert.equal(
+    sha256Of("file:///no-such-file-for-outdated-self-test"),
+    undefined,
+  );
+  assert.equal(
+    sha256Of(pathToFileURL(join(repoRoot, "LICENSE")).href),
+    createHash("sha256")
+      .update(readFileSync(join(repoRoot, "LICENSE")))
+      .digest("hex"),
+  );
+  // A release's checksum, in a workflow's form and in the Windows setup's.
+  const sha = "ab".repeat(32);
+  const release = "https://github.com/o/r/releases/download/v1.2.3/tool.zip";
+  for (const written of [
+    `curl -o x ${release}\n  echo "${sha}  x" | sha256sum -c -`,
+    `Fetch "${release}" "${sha}" "tool.exe"`,
+  ])
+    assert.deepEqual(checksumPairs(written), [
+      {
+        url: release,
+        repo: "o/r",
+        tag: "v1.2.3",
+        asset: "tool.zip",
+        written: sha,
+      },
+    ]);
   assert.equal(
     moved(named("semgrep"), { version: "1.190.0" }),
     'SEMGREP_VERSION: "1.190.0"',

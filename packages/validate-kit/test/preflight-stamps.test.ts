@@ -168,7 +168,7 @@ describe("verify-clean.sh --stamps: how each commit was verified", () => {
       );
       for (const name of ["pnpm", "node", "semgrep", "tlc", "lean", "java"])
         stub(join(bin, name));
-      for (const name of ["tsup", "ast-grep"])
+      for (const name of ["tsup", "ast-grep", "vitest"])
         stub(join(root, "packages/validate-kit/node_modules/.bin", name));
       git("add", "-f", ".");
       git("commit", "-q", "-m", "stand-ins");
@@ -280,6 +280,53 @@ describe("the review workflow's scripts", () => {
       const list = run("review-eval.mjs", "--", "--list");
       expect(list.stdout).not.toMatch(/^BAD/m);
       expect(list.status).toBe(0);
+    },
+  );
+
+  // "Rescore the reviewer whenever its prompts, tools or model change."
+  it.runIf(publishes)(
+    "the eval's list fails when the reviewer's instructions are newer than its score",
+    () => {
+      const { root, commit } = repository("vk-eval-score-");
+      const copy = join(root, "scripts/review-eval.mjs");
+      for (const folder of ["scripts", ".claude/agents", "docs/evals/review"])
+        mkdirSync(join(root, folder), { recursive: true });
+      writeFileSync(copy, readFileSync(join(scripts, "review-eval.mjs")));
+      const list = () =>
+        spawnSync(process.execPath, [copy, "--list"], {
+          cwd: root,
+          encoding: "utf8",
+        });
+      const cases = '{ "cases": [], "controls": [] }\n';
+      commit(
+        {
+          "REVIEW.md": "Rules.\n",
+          ".claude/agents/reviewer.md": "Review.\n",
+          "docs/evals/review/cases.json": cases,
+          "docs/evals/review/results-2026-01-01.json": "{}\n",
+        },
+        "the reviewer, scored",
+      );
+      expect(list().stdout).toMatch(/^ok {3}score: results-2026-01-01\.json/m);
+      expect(list().status).toBe(0);
+      // An edit in the work tree, then the same edit committed.
+      writeFileSync(join(root, ".claude/agents/reviewer.md"), "Review more.\n");
+      expect(list().stdout).toMatch(
+        /^STALE score: \.claude\/agents\/reviewer\.md changed after results-2026-01-01\.json/m,
+      );
+      commit({ "REVIEW.md": "More rules.\n" }, "the reviewer, changed");
+      expect(list().stdout).toMatch(
+        /^STALE score: \.claude\/agents\/reviewer\.md, REVIEW\.md changed/m,
+      );
+      expect(list().status).toBe(1);
+      // A new results file, before its commit and after it.
+      writeFileSync(
+        join(root, "docs/evals/review/results-2026-01-02.json"),
+        "{}\n",
+      );
+      expect(list().status).toBe(0);
+      commit({ "notes.md": "scored again\n" }, "the new score");
+      expect(list().stdout).toMatch(/^ok {3}score: results-2026-01-02\.json/m);
     },
   );
 

@@ -172,6 +172,40 @@ describe("review-md: what Code Review would drop from a REVIEW.md", () => {
     ]);
   });
 
+  it("adds up the subfolder files one change reads: a folder's file and the files above it", async () => {
+    const half = "x".repeat(80_000);
+    const root = repo({
+      "REVIEW.md": half,
+      "packages/REVIEW.md": half,
+      "packages/api/REVIEW.md": half,
+      "packages/web/REVIEW.md": "short\n",
+      "packages/tests/REVIEW.md": half,
+      "apps/REVIEW.md": half,
+    });
+    expect(await found(root, "review-md")).toEqual([
+      "packages/api/REVIEW.md:1 too-large",
+      "packages/tests/REVIEW.md:1 skipped-folder",
+    ]);
+  });
+
+  it("adds the files the check itself does not list: above a project below the repository's top, and under the config's `ignore`", async () => {
+    const root = repo({
+      "REVIEW.md": "Root rules.\n",
+      "packages/REVIEW.md": "x".repeat(100_000),
+      "packages/kit/REVIEW.md": "x".repeat(60_000),
+      "legacy/REVIEW.md": "x".repeat(100_000),
+      "legacy/api/REVIEW.md": "x".repeat(60_000),
+      "validate.config.json": '{ "ignore": ["legacy/REVIEW.md"] }',
+    });
+    expect(await found(join(root, "packages/kit"), "review-md")).toEqual([
+      "REVIEW.md:1 too-large",
+    ]);
+    expect(await found(root, "review-md")).toEqual([
+      "legacy/api/REVIEW.md:1 too-large",
+      "packages/kit/REVIEW.md:1 too-large",
+    ]);
+  });
+
   it("reports a REVIEW.md under a folder Code Review never reads one from, in any case", async () => {
     const root = repo({
       "REVIEW.md": "Root rules.\n",

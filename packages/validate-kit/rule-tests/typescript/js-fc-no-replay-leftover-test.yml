@@ -14,6 +14,20 @@ valid:
     permissions.check({ path: req.path, user: 1 });
   - |
     assert(req.ok, { path: "x" });
+  - |
+    test.prop([fc.nat(), fc.nat()], { seed: 4242 })("replays the seed", (a, b) => {
+      expect(a + b).toBe(b + a);
+    });
+  - |
+    test.prop({ path: fc.string() })("reads a path", ({ path }) => {
+      expect(normalize(path)).toBe(normalize(normalize(path)));
+    });
+  - |
+    it.prop([fc.nat()], { examples: [[0], [2147483647]] })("keeps two cases", (n) => {
+      expect(half(n) * 2).toBeLessThanOrEqual(n);
+    });
+  - |
+    element.prop("checked", { path: "0:0" });
 invalid:
   - |
     fc.assert(fc.property(fc.array(fc.integer()), sorted), { seed: -1819918769, path: "0:1:3", endOnFailure: true });
@@ -25,3 +39,24 @@ invalid:
     assert(property(fc.integer(), check), { seed: 7, path: "3:1" });
   - |
     fc.assert(prop, { "path": "0:0" });
+  - |
+    test.prop([fc.nat()], { seed: 4242, path: "0:0" })("starts at one old case", (a) => {
+      expect(a).toBe(a);
+    });
+  - |
+    it.concurrent.prop({ a: fc.string() }, { endOnFailure: true })("does not shrink", ({ a }) => {
+      expect(a).toBe(a);
+    });
+  - |
+    import { test as property } from "@fast-check/vitest";
+    property.prop([fc.nat()], { seed: 1, path: "0:0" })("starts at one old case", (n) => {
+      expect(n).toBeGreaterThanOrEqual(0);
+    });
+  - |
+    test.prop(
+      // the arbitraries
+      [fc.nat()],
+      /* replay */ { seed: 1, path: "0:0" },
+    )("starts at one old case", (n) => {
+      expect(n).toBeGreaterThanOrEqual(0);
+    });
