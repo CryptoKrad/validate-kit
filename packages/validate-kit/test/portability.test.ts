@@ -288,13 +288,30 @@ it("holds the Windows setup to the versions CI pins, and CI to running it", () =
     expect(said(script, from, to)).toContain(
       `validate.yml has no \`${missing}\``,
     );
-  // A script whose lines this check no longer reads is not a script that agrees.
+  // A tool with no version, and a script whose lines this check no longer
+  // reads, are not a script that agrees.
   expect(
     said(script, /"check-jsonschema==[\d.]+"/, '"check-jsonschema"'),
-  ).toContain("5 pinned versions found where six are due");
-  expect(
-    said(ci, /^ +\.\/scripts\/setup-windows\.ps1$/m, "          pnpm install"),
-  ).toContain("the windows job must run ./scripts/setup-windows.ps1");
+  ).toContain(
+    '`Run uv tool install --force "check-jsonschema"` installs no pinned version',
+  );
+  expect(said(script, /^Run go install .*\n/m, "")).toContain(
+    "6 install lines found where seven are due",
+  );
+  // The script's step in another job is not the windows job running it.
+  const step = /^ +\.\/scripts\/setup-windows\.ps1$/m;
+  expect(said(ci, step, "          pnpm install")).toContain(
+    "the windows job must run ./scripts/setup-windows.ps1",
+  );
+  const workflow = readFileSync(ci, "utf8");
+  writeFileSync(
+    ci,
+    `${workflow.replace(step, "          pnpm install")}  other:\n    runs-on: windows-latest\n    steps:\n      - run: |\n          ./scripts/setup-windows.ps1\n`,
+  );
+  expect(check().stderr).toContain(
+    "the windows job must run ./scripts/setup-windows.ps1",
+  );
+  writeFileSync(ci, workflow);
   expect(check().status, "the files as they are pass").toBe(0);
 });
 

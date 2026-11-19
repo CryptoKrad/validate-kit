@@ -1,12 +1,12 @@
 # The Windows twin of `just install-tools`: what a Windows machine needs to run
 # this repository's gate (`pnpm run check`) and the kit's tests.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
+#   .\scripts\setup-windows.ps1
 #
-# First, once per machine: Git for Windows and mise (`winget install Git.Git
-# jdx.mise`), then `mise install` here, in a terminal where mise is activated.
-# That puts node, pnpm, go and uv on PATH (mise.toml). README, "The machine, on
-# Windows".
+# It runs under Windows PowerShell 5.1 and PowerShell 7. First, once per
+# machine: Git for Windows and mise (`winget install Git.Git jdx.mise`), then
+# `mise install` here, in a terminal where mise is activated. That puts node,
+# pnpm, go and uv on PATH (mise.toml). README, "The machine, on Windows".
 #
 # The tools are the versions CI installs (.github/workflows/validate.yml);
 # `pnpm run workflow:check` fails when one differs. CI's `windows` job runs

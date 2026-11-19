@@ -317,12 +317,6 @@ function brewBehind() {
 }
 
 /**
- * A release download pinned by checksum: a workflow's `curl … <url>`, then
- * `echo "<sha256> …" | sha256sum -c`, or the Windows setup's `"<url>"
- * "<sha256>"`. For each such pair whose checksum is not the one GitHub
- * records for that asset, [written, recorded].
- */
-/**
  * The SHA-256 of what a URL serves, or nothing when the download fails. Not a
  * pipe into shasum: that hashes the empty output of a failed curl.
  */
@@ -340,6 +334,7 @@ function sha256Of(url) {
   return /^[0-9a-f]{64}/.exec(out)?.[0];
 }
 
+/** Each release URL in `text` that has a SHA-256 beside it, in either form. */
 function checksumPairs(text) {
   return [
     ...text.matchAll(
@@ -354,6 +349,12 @@ function checksumPairs(text) {
   }));
 }
 
+/**
+ * A release download pinned by checksum: a workflow's `curl … <url>`, then
+ * `echo "<sha256> …" | sha256sum -c`, or the Windows setup's `"<url>"
+ * "<sha256>"`. For each such pair whose checksum is not the one GitHub
+ * records for that asset, [written, recorded].
+ */
 function checksumMoves(text) {
   return checksumPairs(text).flatMap(({ url, repo, tag, asset, written }) => {
     const release = github(`repos/${repo}/releases/tags/${tag}`);

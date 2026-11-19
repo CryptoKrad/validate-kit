@@ -67,21 +67,28 @@ pnpm run smoke:external-package  # packs the kit and runs it in temporary reposi
 scripts/verify-clean.sh --ci     # what CI's push jobs run, on a clean worktree of HEAD
 ```
 
-On Windows, in PowerShell. Once per machine: `winget install Git.Git jdx.mise`, then mise's line
-in your profile (`Add-Content $PROFILE '(&mise activate pwsh) | Out-String | Invoke-Expression'`)
-and a new terminal.
+On Windows, in PowerShell (5.1 or 7). Once per machine:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser   # a Windows client's default runs no script and no profile
+winget install Git.Git jdx.mise
+if (-not (Test-Path $PROFILE)) { New-Item -ItemType File -Path $PROFILE -Force | Out-Null }
+Add-Content $PROFILE '(&mise activate pwsh) | Out-String | Invoke-Expression'
+```
+
+Then, in a new terminal:
 
 ```powershell
 git clone https://github.com/CryptoKrad/validate-kit.git; cd validate-kit
-mise install                                                        # node, pnpm, go, rust, python, uv
-powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1  # the gate's tools, install, build, doctor
-pnpm run check                                                      # in a new terminal
+mise install                  # node, pnpm, go, rust, python, uv
+.\scripts\setup-windows.ps1   # the gate's tools, install, build, doctor
+pnpm run check                # in a new terminal
 ```
 
 `scripts/setup-windows.ps1` installs the gate's tools at the versions CI pins, into the folder
 `uv tool dir --bin`: four with `uv tool install`, shfmt with `go install`, and shellcheck and
 agnix from their releases, each checked against its SHA-256. It needs no admin rights. CI's
-Windows leg runs this script on each change, then the gate, and `pnpm run workflow:check` fails
+Windows leg runs this script on each change, under Windows PowerShell 5.1, then the gate, and `pnpm run workflow:check` fails
 when a version in it differs from CI's. The preflight (`scripts/verify-clean.sh`) and this
 repository's own git hooks need macOS or Linux: CI checks a push from Windows.
 

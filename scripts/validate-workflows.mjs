@@ -1140,35 +1140,39 @@ validateAuditExceptions();
 
 // The Windows machine setup installs the gate's tools at the versions the
 // validate job pins, and that job's Windows leg runs it: a setup nothing runs
-// is a setup nobody knows to be broken. shellcheck is the one tool the Linux
-// job takes from its runner, so only the script pins it.
+// is a setup nobody knows to be broken.
 function validateWindowsSetup() {
   const script = "scripts/setup-windows.ps1";
-  const text = readFileSync(script, "utf8");
   const ci = readFileSync(`${workflowDir}/validate.yml`, "utf8");
-  const pins = [
-    ...[...text.matchAll(/"([\w-]+)==([\d.]+)"/g)].map(([, name, version]) =>
-      name === "semgrep"
-        ? `SEMGREP_VERSION: "${version}"`
-        : `"${name}==${version}"`,
-    ),
-    ...[...text.matchAll(/go install \S+@v[\w.]+/g)].map(([pin]) => pin),
-    ...[
-      ...text.matchAll(
-        /github\.com\/(?!koalaman\/shellcheck\/)[\w.-]+\/[\w.-]+\/releases\/download\/v[\w.]+\//g,
-      ),
-    ].map(([pin]) => pin),
-  ];
-  if (pins.length < 6)
+  const installs = readFileSync(script, "utf8")
+    .split("\n")
+    .filter((line) => /^(?:Run (?:uv tool|go) install|Fetch) /.test(line));
+  if (installs.length < 7)
     fail(
-      `${script}: ${pins.length} pinned versions found where six are due (four Python tools, shfmt, agnix): the script's lines or this check changed`,
+      `${script}: ${installs.length} install lines found where seven are due (four Python tools, shfmt, shellcheck, agnix): the script's lines or this check changed`,
     );
-  for (const pin of pins)
-    if (!ci.includes(pin))
+  for (const line of installs) {
+    const python = /"([\w-]+)==([\d.]+)"/.exec(line);
+    const pin = python
+      ? python[1] === "semgrep"
+        ? `SEMGREP_VERSION: "${python[2]}"`
+        : python[0]
+      : (/go install \S+@v[\w.]+/.exec(line) ??
+          /github\.com\/[\w.-]+\/[\w.-]+\/releases\/download\/v[\w.]+\//.exec(
+            line,
+          ))?.[0];
+    if (pin === undefined)
+      fail(`${script}: \`${line}\` installs no pinned version`);
+    // shellcheck is the one tool the Linux job takes from its runner, so
+    // only the script pins it.
+    else if (!pin.includes("koalaman/shellcheck/") && !ci.includes(pin))
       fail(
         `${script}: ${workflowDir}/validate.yml has no \`${pin}\`: the two install different versions; move both (node scripts/outdated.mjs --apply does)`,
       );
-  if (!/^ {10}\.\/scripts\/setup-windows\.ps1$/m.test(ci))
+  }
+  const windowsJob =
+    /\n {2}windows:\n([\s\S]*?)(?=\n {2}\S|$)/.exec(ci)?.[1] ?? "";
+  if (!/^ {10}\.\/scripts\/setup-windows\.ps1$/m.test(windowsJob))
     fail(
       `${workflowDir}/validate.yml: the windows job must run ./scripts/setup-windows.ps1, the setup a person runs`,
     );
