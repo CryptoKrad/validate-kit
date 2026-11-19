@@ -164,7 +164,10 @@ the trace.
 
 `pnpm audit --audit-level=high` is a hard gate. No advisory is left out of it now, and no
 package is switched off. (From 2026-11-17 it failed on GHSA-fc5q-39xc-vjpf, picomatch, with no
-fixed release; GitHub withdrew that advisory on 2026-11-18.)
+fixed release; GitHub withdrew that advisory on 2026-11-18.) The audit prints two moderate
+advisories (glob, minimatch) in this repository's test and lint dependencies; each fix is a major
+version past what its parent asks for. What a project installs with the kit has none: `pnpm
+audit --prod` prints `No known vulnerabilities found` (2026-11-19).
 
 To accept an advisory that has no fixed release, for a short time:
 
