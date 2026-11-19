@@ -8,8 +8,11 @@ note: |
   100 inputs without them, 26 with `path: "96:5"`, 4 with `path: "0:0"`.
   `examples: [[...]]` keeps a case for good: it runs first, every time.
   A `seed` alone only makes the run repeat and is left alone. Reported on
-  `fc.assert` and `fc.check`, and under any other import name when the
-  first argument is a `property(...)` or `asyncProperty(...)` call.
+  `fc.assert` and `fc.check`, under any other import name when the
+  first argument is a `property(...)` or `asyncProperty(...)` call, and on
+  `test.prop(...)` and `it.prop(...)` of `@fast-check/vitest` and
+  `@fast-check/jest` under any import name: the second argument of a
+  `.prop(...)` call that is called again is the same settings object.
 rule:
   any:
     - kind: object
@@ -17,7 +20,7 @@ rule:
         kind: pair
         has:
           field: key
-          regex: "^[\"']?(path|endOnFailure)[\"']?$"
+          regex: '^["'']?(path|endOnFailure)["'']?$'
       inside:
         kind: arguments
         any:
@@ -37,10 +40,34 @@ rule:
                   has:
                     field: function
                     regex: "^(\\w+\\.)?(assert|check)$"
+    # The connectors: `test.prop(arbitraries, settings)("name", fn)`, under
+    # any import name. The settings are the second argument; the first may be
+    # a record of arbitraries with a key of any name.
+    - kind: object
+      nthChild:
+        position: 2
+        ofRule:
+          not:
+            kind: comment
+      has:
+        kind: pair
+        has:
+          field: key
+          regex: '^["'']?(path|endOnFailure)["'']?$'
+      inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            regex: "\\.prop$"
+          inside:
+            kind: call_expression
+            field: function
     - kind: pair
       has:
         field: key
-        regex: "^[\"']?replayPath[\"']?$"
+        regex: '^["'']?replayPath["'']?$'
       inside:
         kind: object
         inside:
@@ -56,7 +83,6 @@ metadata:
   since: "0.2.5"
 
 ---
-
 id: tsx-fc-no-replay-leftover
 language: tsx
 severity: warning
@@ -67,8 +93,11 @@ note: |
   100 inputs without them, 26 with `path: "96:5"`, 4 with `path: "0:0"`.
   `examples: [[...]]` keeps a case for good: it runs first, every time.
   A `seed` alone only makes the run repeat and is left alone. Reported on
-  `fc.assert` and `fc.check`, and under any other import name when the
-  first argument is a `property(...)` or `asyncProperty(...)` call.
+  `fc.assert` and `fc.check`, under any other import name when the
+  first argument is a `property(...)` or `asyncProperty(...)` call, and on
+  `test.prop(...)` and `it.prop(...)` of `@fast-check/vitest` and
+  `@fast-check/jest` under any import name: the second argument of a
+  `.prop(...)` call that is called again is the same settings object.
 rule:
   any:
     - kind: object
@@ -76,7 +105,7 @@ rule:
         kind: pair
         has:
           field: key
-          regex: "^[\"']?(path|endOnFailure)[\"']?$"
+          regex: '^["'']?(path|endOnFailure)["'']?$'
       inside:
         kind: arguments
         any:
@@ -96,10 +125,34 @@ rule:
                   has:
                     field: function
                     regex: "^(\\w+\\.)?(assert|check)$"
+    # The connectors: `test.prop(arbitraries, settings)("name", fn)`, under
+    # any import name. The settings are the second argument; the first may be
+    # a record of arbitraries with a key of any name.
+    - kind: object
+      nthChild:
+        position: 2
+        ofRule:
+          not:
+            kind: comment
+      has:
+        kind: pair
+        has:
+          field: key
+          regex: '^["'']?(path|endOnFailure)["'']?$'
+      inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            regex: "\\.prop$"
+          inside:
+            kind: call_expression
+            field: function
     - kind: pair
       has:
         field: key
-        regex: "^[\"']?replayPath[\"']?$"
+        regex: '^["'']?replayPath["'']?$'
       inside:
         kind: object
         inside:
@@ -115,7 +168,6 @@ metadata:
   since: "0.2.5"
 
 ---
-
 id: js-fc-no-replay-leftover
 language: javascript
 severity: warning
@@ -126,8 +178,11 @@ note: |
   100 inputs without them, 26 with `path: "96:5"`, 4 with `path: "0:0"`.
   `examples: [[...]]` keeps a case for good: it runs first, every time.
   A `seed` alone only makes the run repeat and is left alone. Reported on
-  `fc.assert` and `fc.check`, and under any other import name when the
-  first argument is a `property(...)` or `asyncProperty(...)` call.
+  `fc.assert` and `fc.check`, under any other import name when the
+  first argument is a `property(...)` or `asyncProperty(...)` call, and on
+  `test.prop(...)` and `it.prop(...)` of `@fast-check/vitest` and
+  `@fast-check/jest` under any import name: the second argument of a
+  `.prop(...)` call that is called again is the same settings object.
 rule:
   any:
     - kind: object
@@ -135,7 +190,7 @@ rule:
         kind: pair
         has:
           field: key
-          regex: "^[\"']?(path|endOnFailure)[\"']?$"
+          regex: '^["'']?(path|endOnFailure)["'']?$'
       inside:
         kind: arguments
         any:
@@ -155,10 +210,34 @@ rule:
                   has:
                     field: function
                     regex: "^(\\w+\\.)?(assert|check)$"
+    # The connectors: `test.prop(arbitraries, settings)("name", fn)`, under
+    # any import name. The settings are the second argument; the first may be
+    # a record of arbitraries with a key of any name.
+    - kind: object
+      nthChild:
+        position: 2
+        ofRule:
+          not:
+            kind: comment
+      has:
+        kind: pair
+        has:
+          field: key
+          regex: '^["'']?(path|endOnFailure)["'']?$'
+      inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            regex: "\\.prop$"
+          inside:
+            kind: call_expression
+            field: function
     - kind: pair
       has:
         field: key
-        regex: "^[\"']?replayPath[\"']?$"
+        regex: '^["'']?replayPath["'']?$'
       inside:
         kind: object
         inside:

@@ -8,6 +8,11 @@
 /REVIEW.md @CryptoKrad
 /scripts/verify-clean.sh @CryptoKrad
 /scripts/stop-check.mjs @CryptoKrad
+# What the dependency audit leaves out, and the check that holds it: the
+# owner approves each exception and each time one is accepted again.
+/pnpm-workspace.yaml @CryptoKrad
+/scripts/audit-exceptions.json @CryptoKrad
+/scripts/validate-workflows.mjs @CryptoKrad
 /scripts/export-public/ @CryptoKrad
 /packages/validate-kit/src/core/runner.ts @CryptoKrad
 /packages/validate-kit/src/core/exit-codes.ts @CryptoKrad

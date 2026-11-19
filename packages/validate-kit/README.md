@@ -92,10 +92,11 @@ On by default, `cooldown` checks that each package manager a lockfile shows in
 use waits before installing a new release. It also reports a lockfile that
 gained a package published inside that wait, looking the date up in the
 registry. The bundled `test-no-assertion` rules report a test that checks
-nothing (a same-file helper that asserts counts). Five rules report a
+nothing (a same-file helper that asserts counts). Six rules report a
 property test that tests less than it looks: a fast-check replay left in, an
 async property nobody awaits, Hypothesis's `@reproduce_failure`, a blanket
-health-check suppression and `.example()` in a test. `saved-failures` reports
+health-check suppression, `.example()` in a test and (strict preset) an early
+`return` in a `@given` test. `saved-failures` reports
 a failing case proptest, rapid or `go test -fuzz` saved that git does not
 track, and `review-md` what Claude Code's Code Review would drop from a
 REVIEW.md. Where a project configured them, the kit also runs dependency-cruiser
@@ -139,6 +140,11 @@ only where the project chose them: its config file, a dependency that names
 the tool, a task or CI step that runs it, or `tools.<id>.enabled`. `check
 list` shows which would run in a project, and from which folder; `check
 doctor` which this machine can run. `tools.<id>.enabled: false` turns one off.
+For a missing tool `check doctor` prints the install line this machine can
+run: Homebrew's on macOS and Linux; on Windows Scoop's (`scoop install
+shellcheck`) or the tool's own, and for a tool with no Windows build it says
+so. On Windows the project needs Git for Windows, for the hooks and the
+command gates.
 
 | Area                   | Tools                                                                                                                                                                                  |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

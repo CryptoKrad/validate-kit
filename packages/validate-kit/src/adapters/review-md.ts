@@ -159,9 +159,10 @@ export const reviewMd = nativeCheck({
     // Every file git lists: an include of a file the config's `ignore` covers
     // is still one Code Review reads.
     const names = new Set(gitFiles(root, task.staged) ?? []);
-    const reviews = [...names].filter(
-      (path) => posix.basename(path) === "REVIEW.md" && !ignored(path),
+    const listed = [...names].filter(
+      (path) => posix.basename(path) === "REVIEW.md",
     );
+    const reviews = listed.filter((path) => !ignored(path));
     if (reviews.length === 0) return [];
     const findings: Finding[] = [];
     const at = (
@@ -183,12 +184,50 @@ export const reviewMd = nativeCheck({
     // only subfolder files.
     const prefix = (gitSync(root, ["rev-parse", "--show-prefix"]) ?? "").trim();
 
+    const skippedFolder = (path: string) =>
+      `${prefix}${path}`
+        .split("/")
+        .slice(0, -1)
+        .find((name) => SKIPPED_FOLDERS.has(name.toLowerCase()));
+    // The subfolder files a review applies, with their sizes: a change to a
+    // file in a folder reads the REVIEW.md of that folder and of each folder
+    // above it, and those share the limit.
+    // The sum takes every file a review reads, also the ones this check does
+    // not report on: a file the config's `ignore` covers, and, for a project
+    // below the repository's top, the file of each folder between the two.
+    const levels = prefix.split("/").filter(Boolean).length;
+    const outer = Array.from(
+      { length: Math.max(levels - 1, 0) },
+      (_, up) => `${"../".repeat(up + 1)}REVIEW.md`,
+    );
+    const tracked =
+      outer.length === 0
+        ? []
+        : (gitSync(root, ["ls-files", "-z", "--", ...outer]) ?? "")
+            .split("\0")
+            .filter(Boolean);
+    const applied = new Map<string, number>();
+    for (const path of [...listed, ...tracked])
+      if (
+        !(path === "REVIEW.md" && prefix === "") &&
+        skippedFolder(path) === undefined
+      )
+        applied.set(path, bytes(read(root, path) ?? ""));
+    const above = (path: string) => {
+      const folder = posix.dirname(path);
+      return [...applied.keys()].filter((other) => {
+        const parent = posix.dirname(other);
+        return (
+          other !== path &&
+          (parent === "." ||
+            other.startsWith("../") ||
+            folder.startsWith(`${parent}/`))
+        );
+      });
+    };
     for (const path of reviews) {
       if (path === "REVIEW.md" && prefix === "") continue;
-      const folders = `${prefix}${path}`.split("/").slice(0, -1);
-      const skipped = folders.find((name) =>
-        SKIPPED_FOLDERS.has(name.toLowerCase()),
-      );
+      const skipped = skippedFolder(path);
       const text = read(root, path) ?? "";
       if (skipped !== undefined)
         at(
@@ -202,6 +241,22 @@ export const reviewMd = nativeCheck({
           "too-large",
           `${bytes(text)} bytes: the subfolder REVIEW.md files a pull request touches share ${TOTAL_BYTES} bytes, so this one never fits`,
         );
+      else if (skipped === undefined) {
+        const parents = above(path);
+        const sum = [path, ...parents].reduce(
+          (all, name) => all + (applied.get(name) ?? 0),
+          0,
+        );
+        if (
+          sum > TOTAL_BYTES &&
+          parents.every((name) => (applied.get(name) ?? 0) <= TOTAL_BYTES)
+        )
+          at(
+            path,
+            "too-large",
+            `${sum} bytes with ${parents.map((name) => `\`${name}\``).join(" and ")}: a change in this folder reads them together, and subfolder REVIEW.md files share ${TOTAL_BYTES} bytes`,
+          );
+      }
       for (const include of includeLines(text).includes)
         if (!include.fenced && fileLike(include.target))
           at(

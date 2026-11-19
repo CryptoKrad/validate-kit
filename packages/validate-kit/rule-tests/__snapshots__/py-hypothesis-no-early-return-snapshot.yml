@@ -1,0 +1,244 @@
+id: py-hypothesis-no-early-return
+snapshots:
+  "@given(st.integers())\ndef test_branches(n):\n    if n > 0:\n        assert f(n) > 0\n    elif n == 0:\n        return\n    else:\n        return\n":
+    labels:
+      - source: return
+        style: primary
+        start: 107
+        end: 113
+      - source: |-
+          elif n == 0:
+                  return
+        style: secondary
+        start: 86
+        end: 113
+      - source: return
+        style: secondary
+        start: 107
+        end: 113
+      - source: "@given(st.integers())"
+        style: secondary
+        start: 0
+        end: 21
+      - source: |-
+          @given(st.integers())
+          def test_branches(n):
+              if n > 0:
+                  assert f(n) > 0
+              elif n == 0:
+                  return
+              else:
+                  return
+        style: secondary
+        start: 0
+        end: 138
+      - source: |-
+          def test_branches(n):
+              if n > 0:
+                  assert f(n) > 0
+              elif n == 0:
+                  return
+              else:
+                  return
+        style: secondary
+        start: 22
+        end: 138
+  "@given(st.integers())\ndef test_elif(n):\n    if n > 0:\n        assert f(n) > 0\n    elif n == 0:\n        return\n":
+    labels:
+      - source: return
+        style: primary
+        start: 103
+        end: 109
+      - source: |-
+          elif n == 0:
+                  return
+        style: secondary
+        start: 82
+        end: 109
+      - source: return
+        style: secondary
+        start: 103
+        end: 109
+      - source: "@given(st.integers())"
+        style: secondary
+        start: 0
+        end: 21
+      - source: |-
+          @given(st.integers())
+          def test_elif(n):
+              if n > 0:
+                  assert f(n) > 0
+              elif n == 0:
+                  return
+        style: secondary
+        start: 0
+        end: 109
+      - source: |-
+          def test_elif(n):
+              if n > 0:
+                  assert f(n) > 0
+              elif n == 0:
+                  return
+        style: secondary
+        start: 22
+        end: 109
+  "@given(st.integers())\ndef test_else(n):\n    if n > 0:\n        assert f(n) > 0\n    else:\n        return\n":
+    labels:
+      - source: return
+        style: primary
+        start: 96
+        end: 102
+      - source: |-
+          if n > 0:
+                  assert f(n) > 0
+              else:
+                  return
+        style: secondary
+        start: 44
+        end: 102
+      - source: |-
+          else:
+                  return
+        style: secondary
+        start: 82
+        end: 102
+      - source: return
+        style: secondary
+        start: 96
+        end: 102
+      - source: "@given(st.integers())"
+        style: secondary
+        start: 0
+        end: 21
+      - source: |-
+          @given(st.integers())
+          def test_else(n):
+              if n > 0:
+                  assert f(n) > 0
+              else:
+                  return
+        style: secondary
+        start: 0
+        end: 102
+      - source: |-
+          def test_else(n):
+              if n > 0:
+                  assert f(n) > 0
+              else:
+                  return
+        style: secondary
+        start: 22
+        end: 102
+  "@given(st.integers(), st.integers())\ndef test_remainder(a, b):\n    if b == 0:\n        # bad plan - test \"passes\" without checking anything!\n        return\n    assert abs(a % b) < abs(b)\n":
+    labels:
+      - source: return
+        style: primary
+        start: 148
+        end: 154
+      - source: |-
+          if b == 0:
+                  # bad plan - test "passes" without checking anything!
+                  return
+        style: secondary
+        start: 67
+        end: 154
+      - source: return
+        style: secondary
+        start: 148
+        end: 154
+      - source: "@given(st.integers(), st.integers())"
+        style: secondary
+        start: 0
+        end: 36
+      - source: |-
+          @given(st.integers(), st.integers())
+          def test_remainder(a, b):
+              if b == 0:
+                  # bad plan - test "passes" without checking anything!
+                  return
+              assert abs(a % b) < abs(b)
+        style: secondary
+        start: 0
+        end: 185
+      - source: |-
+          def test_remainder(a, b):
+              if b == 0:
+                  # bad plan - test "passes" without checking anything!
+                  return
+              assert abs(a % b) < abs(b)
+        style: secondary
+        start: 37
+        end: 185
+  "@hypothesis.given(st.text())\n@settings(max_examples=500)\ndef test_parse(text):\n    for part in text.split(\",\"):\n        if not part:\n            return\n        assert parse(part) is not None\n":
+    labels:
+      - source: return
+        style: primary
+        start: 145
+        end: 151
+      - source: |-
+          if not part:
+                      return
+        style: secondary
+        start: 120
+        end: 151
+      - source: return
+        style: secondary
+        start: 145
+        end: 151
+      - source: "@hypothesis.given(st.text())"
+        style: secondary
+        start: 0
+        end: 28
+      - source: |-
+          @hypothesis.given(st.text())
+          @settings(max_examples=500)
+          def test_parse(text):
+              for part in text.split(","):
+                  if not part:
+                      return
+                  assert parse(part) is not None
+        style: secondary
+        start: 0
+        end: 190
+      - source: |-
+          def test_parse(text):
+              for part in text.split(","):
+                  if not part:
+                      return
+                  assert parse(part) is not None
+        style: secondary
+        start: 57
+        end: 190
+  "class TestMoney:\n    @given(st.decimals())\n    def test_round(self, amount):\n        if amount.is_nan(): return\n        assert round_down(amount) <= amount\n":
+    labels:
+      - source: return
+        style: primary
+        start: 105
+        end: 111
+      - source: "if amount.is_nan(): return"
+        style: secondary
+        start: 85
+        end: 111
+      - source: return
+        style: secondary
+        start: 105
+        end: 111
+      - source: "@given(st.decimals())"
+        style: secondary
+        start: 21
+        end: 42
+      - source: |-
+          @given(st.decimals())
+              def test_round(self, amount):
+                  if amount.is_nan(): return
+                  assert round_down(amount) <= amount
+        style: secondary
+        start: 21
+        end: 155
+      - source: |-
+          def test_round(self, amount):
+                  if amount.is_nan(): return
+                  assert round_down(amount) <= amount
+        style: secondary
+        start: 47
+        end: 155

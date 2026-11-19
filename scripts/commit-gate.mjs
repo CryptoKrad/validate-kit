@@ -44,7 +44,10 @@ import { fileURLToPath } from "node:url";
 
 /** The skills and commands that count, by what they do. */
 const STEPS = {
-  review: ["code-review", "security-review", "review"],
+  review: ["code-review", "review"],
+  // "Security gets its own automated review too" (Anthropic, "How the Claude
+  // Code team does code review"): its own step, so a stamp shows whether it ran.
+  security: ["security-review"],
   verify: ["verify"],
 };
 const MODES = ["off", "observe", "enforce"];
@@ -382,6 +385,7 @@ function main() {
   };
   const steps = [
     ["review", "review"],
+    ["security", "security"],
     ["verify", "verify"],
     ["grade", "graded"],
   ]

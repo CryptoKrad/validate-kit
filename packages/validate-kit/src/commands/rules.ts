@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import pc from "picocolors";
+import { installLine } from "../core/windows-install.js";
 import { run } from "../core/exec.js";
 import { EXIT } from "../core/exit-codes.js";
 import { getKitRoot } from "../core/paths.js";
@@ -29,7 +30,9 @@ export async function rulesTestCommand(flags: {
   const raw = await run("ast-grep", args, { cwd: kitRoot, timeoutMs: 120_000 });
   if (raw.spawnError) {
     process.stderr.write(
-      pc.red("ast-grep not found. Install: brew install ast-grep\n"),
+      pc.red(
+        `ast-grep not found. Install: ${installLine("brew install ast-grep")}\n`,
+      ),
     );
     return EXIT.INCOMPLETE;
   }

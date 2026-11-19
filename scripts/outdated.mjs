@@ -44,6 +44,9 @@ const FOUND = join(repoRoot, "node_modules", ".cache", "outdated.txt");
 const APPLY_SKIP =
   /^(docs\/(research|evidence)\/|tasks\/learning\.md$|pnpm-lock\.yaml$)/;
 
+// The Windows machine setup installs CI's versions, and pins shellcheck itself.
+const WINDOWS_SETUP = "scripts/setup-windows.ps1";
+
 // Pins that stay behind on purpose. Delete a line when its reason is gone.
 const HOLDS = {
   "npm:@types/node":
@@ -267,6 +270,7 @@ function workflowPins() {
   const files = [
     ...readdirSync(dir).map((name) => join(dir, name)),
     join(repoRoot, "scripts", "update-visual-baseline.sh"),
+    join(repoRoot, WINDOWS_SETUP),
   ];
   const seen = new Map();
   for (const file of files)
@@ -310,16 +314,27 @@ function brewBehind() {
 }
 
 /**
- * A release download pinned by checksum (`curl … <url>`, then `echo "<sha256>
- * …" | sha256sum -c`): for each such pair whose checksum is not the one
- * GitHub records for that asset, [written, recorded].
+ * A release download pinned by checksum: a workflow's `curl … <url>`, then
+ * `echo "<sha256> …" | sha256sum -c`, or the Windows setup's `"<url>"
+ * "<sha256>"`. For each such pair whose checksum is not the one GitHub
+ * records for that asset, [written, recorded].
  */
+function checksumPairs(text) {
+  return [
+    ...text.matchAll(
+      /(https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/releases\/download\/([^/\s]+)\/([^\s"]+))(?:\n\s*echo "|" ")([0-9a-f]{64})[ "]/g,
+    ),
+  ].map(([, url, repo, tag, asset, written]) => ({
+    url,
+    repo,
+    tag,
+    asset,
+    written,
+  }));
+}
+
 function checksumMoves(text) {
-  const pairs = text.matchAll(
-    /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/releases\/download\/([^/\s]+)\/(\S+)\n\s*echo "([0-9a-f]{64}) /g,
-  );
-  return [...pairs].flatMap(([found, repo, tag, asset, written]) => {
-    const url = found.split("\n")[0];
+  return checksumPairs(text).flatMap(({ url, repo, tag, asset, written }) => {
     const release = github(`repos/${repo}/releases/tags/${tag}`);
     const digest = release.assets.find((a) => a.name === asset)?.digest;
     // A release older than GitHub's digests has none: hash the download.
@@ -433,7 +448,7 @@ function apply(moves) {
     let next = text;
     for (const [from, to] of moves) next = next.replaceAll(from, to);
     // Every run, not only after a move: a URL moved by hand heals too.
-    if (file.startsWith(".github/workflows/"))
+    if (file.startsWith(".github/workflows/") || file === WINDOWS_SETUP)
       for (const [from, to] of checksumMoves(next))
         next = next.replaceAll(from, to);
     if (next !== text) {
@@ -541,6 +556,27 @@ function selfTest() {
     moved(named("pnpm"), { version: "10.34.9" }),
     "version: 10.34.9",
   );
+  // The Windows setup's pins are read: shellcheck is pinned nowhere else.
+  assert.ok(
+    workflowPins().some((found) => found.name === "koalaman/shellcheck"),
+    `${WINDOWS_SETUP}: its shellcheck release is not among the pins`,
+  );
+  // A release's checksum, in a workflow's form and in the Windows setup's.
+  const sha = "ab".repeat(32);
+  const release = "https://github.com/o/r/releases/download/v1.2.3/tool.zip";
+  for (const written of [
+    `curl -o x ${release}\n  echo "${sha}  x" | sha256sum -c -`,
+    `Fetch "${release}" "${sha}" "tool.exe"`,
+  ])
+    assert.deepEqual(checksumPairs(written), [
+      {
+        url: release,
+        repo: "o/r",
+        tag: "v1.2.3",
+        asset: "tool.zip",
+        written: sha,
+      },
+    ]);
   assert.equal(
     moved(named("semgrep"), { version: "1.190.0" }),
     'SEMGREP_VERSION: "1.190.0"',
