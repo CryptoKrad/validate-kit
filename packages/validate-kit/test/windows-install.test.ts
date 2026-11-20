@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
@@ -84,6 +85,37 @@ describe("an install hint as a Windows machine can run it", () => {
     } finally {
       if (platform) Object.defineProperty(process, "platform", platform);
       vi.resetModules();
+    }
+  });
+
+  it("init names Git for Windows when its shell is missing, on Windows only", async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    const root = mkdtempSync(join(tmpdir(), "vk-init-windows-"));
+    // A PATH with no git and no sh on it.
+    vi.stubEnv("PATH", root);
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const stderr = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
+    const initOn = async (name: NodeJS.Platform) => {
+      Object.defineProperty(process, "platform", { value: name });
+      vi.resetModules();
+      const { initCommand } = await import("../src/commands/init.js");
+      stderr.mockClear();
+      await initCommand({ cwd: root, hook: false, mcp: false, dryRun: true });
+      return stderr.mock.calls.map(([text]) => String(text)).join("");
+    };
+    try {
+      expect(await initOn("win32")).toMatch(
+        /No shell of Git for Windows was found.*winget install Git\.Git/,
+      );
+      expect(await initOn("darwin")).not.toContain("Git for Windows");
+    } finally {
+      if (platform) Object.defineProperty(process, "platform", platform);
+      vi.restoreAllMocks();
+      vi.unstubAllEnvs();
+      vi.resetModules();
+      rmSync(root, { recursive: true, force: true });
     }
   });
 

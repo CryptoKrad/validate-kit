@@ -17,6 +17,7 @@ import {
 import pc from "picocolors";
 import { ConfigError } from "../config/schema.js";
 import { findConfigFile } from "../config/resolve.js";
+import { resolveBin } from "../core/exec.js";
 import { EXIT } from "../core/exit-codes.js";
 import { getKitRoot, KIT_PACKAGE_NAME } from "../core/paths.js";
 import { LANGUAGES, type Language } from "../core/types.js";
@@ -112,6 +113,20 @@ function onPath(bin: string): boolean {
         !dir.includes("node_modules") &&
         existsSync(join(dir, bin)),
     );
+}
+
+/**
+ * The hook files lefthook writes are `sh` scripts, and on Windows Claude Code
+ * runs a hook command in Git Bash: both need the shell of Git for Windows.
+ * Elsewhere `/bin/sh` is always there, so this is true on Windows only.
+ */
+function gitForWindowsMissing(root: string): boolean {
+  try {
+    resolveBin("sh", root);
+    return false;
+  } catch {
+    return true;
+  }
 }
 
 function writer(dryRun: boolean): Writer {
@@ -371,6 +386,17 @@ export async function initCommand(flags: {
     process.stderr.write(
       pc.yellow(
         `\`${BIN}\` is not on PATH: the scaffolded hooks and MCP entry will fail until it is installed on this machine.\n`,
+      ),
+    );
+  }
+
+  if (
+    (flags.hook !== false || flags.claude !== false) &&
+    gitForWindowsMissing(root)
+  ) {
+    process.stderr.write(
+      pc.yellow(
+        "No shell of Git for Windows was found (no `sh` on PATH, or beside a `git` on PATH): the git hooks and Claude Code's hooks run in it. Install it: winget install Git.Git\n",
       ),
     );
   }
