@@ -287,7 +287,12 @@ export async function hookClaudeCommand(opts: {
       return pass();
     }
     record(known ?? {}, rounds + 1);
-    process.stderr.write(`${lead}${open}${tail}`);
+    const reason = `${lead}${open}${tail}`;
+    // Claude Code drops a stop hook's exit 2 when stdout is empty and stderr
+    // reads like a missing file ("No such file or directory"), words a
+    // finding can quote. The decision on stdout keeps the block.
+    process.stdout.write(`${JSON.stringify({ decision: "block", reason })}\n`);
+    process.stderr.write(reason);
     return 2;
   };
 

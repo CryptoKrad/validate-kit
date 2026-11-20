@@ -39,6 +39,11 @@ async function found(root: string, tool: string): Promise<string[]> {
 const SKILL = ".claude/skills/api-review/SKILL.md";
 /** A Markdown link to a file of the repository. */
 const link = (n: number) => `[rule ${n}](docs/rule-${n}.md)`;
+/** That many of them on one line. */
+const row = (count: number) =>
+  Array.from({ length: count }, (_, n) => link(n)).join(" ");
+/** A file with that many of them, and one web link, which does not count. */
+const links = (count: number) => `${row(count)} [web](https://example.com)\n`;
 
 describe("review-md: what Code Review would drop from a REVIEW.md", () => {
   it("passes the documented layout: a root file, two includes, a skill, a subfolder file", async () => {
@@ -91,12 +96,24 @@ describe("review-md: what Code Review would drop from a REVIEW.md", () => {
     expect(await found(big, "review-md")).toEqual(["REVIEW.md:1 too-large"]);
     const linked = (count: number) =>
       repo({
-        "REVIEW.md": `${Array.from({ length: count - 1 }, (_, n) => link(n)).join(" ")}\n@more.md\n[web](https://example.com) [top](#top)\n`,
+        "REVIEW.md": `${row(count - 1)}\n@more.md\n[web](https://example.com) [top](#top)\n`,
         "more.md": `${link(count)}\n`,
       });
     expect(await found(linked(64), "review-md")).toEqual([]);
     expect(await found(linked(65), "review-md")).toEqual([
       "REVIEW.md:1 too-many-links",
+    ]);
+    // A subfolder file has the limit for itself: past it, that file is the
+    // one skipped. Under a folder that is never read, it is said once.
+    const below = repo({
+      "REVIEW.md": "Root rules.\n",
+      "apps/REVIEW.md": links(64),
+      "packages/REVIEW.md": links(65),
+      "vendor/REVIEW.md": links(65),
+    });
+    expect(await found(below, "review-md")).toEqual([
+      "packages/REVIEW.md:1 too-many-links",
+      "vendor/REVIEW.md:1 skipped-folder",
     ]);
   });
 
@@ -160,15 +177,16 @@ describe("review-md: what Code Review would drop from a REVIEW.md", () => {
     ]);
   });
 
-  it("warns about what a review does not get from a skill: a command and an argument", async () => {
+  it("warns about what a review does not get from a skill: a command, an argument and a linked file", async () => {
     const root = repo({
       "REVIEW.md": `@${SKILL}\n`,
       [SKILL]:
-        "Changed files:\n!`git diff --name-only`\nReview $ARGUMENTS only.\n",
+        "Changed files:\n!`git diff --name-only`\nReview $ARGUMENTS only.\nThe rules are in [the checklist](checklist.md).\nSee [the docs](https://example.com) and [the top](#top).\n",
     });
     expect(await found(root, "review-md")).toEqual([
       `${SKILL}:2 skill-command`,
       `${SKILL}:3 skill-substitution`,
+      `${SKILL}:4 skill-link`,
     ]);
   });
 

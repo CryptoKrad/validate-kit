@@ -141,7 +141,7 @@ function folder(from, word) {
  * Where the folder is not certain the commit is left alone: after `pushd`,
  * `popd`, a `cd` with an option or a variable, and with GIT_DIR or
  * GIT_WORK_TREE set on the line.
- * shortcut: a commit behind `sudo`, `env`, `command`, `xargs`, after `)` or in
+ * shortcut: a commit behind `sudo`, `env`, `xargs`, after `)` or in
  * backticks is not seen and so not stamped; read those when a session really
  * commits that way.
  */
@@ -240,7 +240,7 @@ export function commits(command, start) {
     } else if (fresh) {
       // A word that only leads to a command: the command starts after it.
       const before =
-        /^(?:then|else|elif|do|if|while|until|time|!|\{)(?=\s)/.exec(
+        /^(?:then|else|elif|do|if|while|until|time|builtin|command|!|\{)(?=\s)/.exec(
           command.slice(i),
         );
       if (before) {

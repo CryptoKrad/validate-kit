@@ -273,6 +273,54 @@ describe("the review workflow's scripts", () => {
   const publishes = existsSync(join(scripts, "export-public/export.mjs"));
   const evalResults = join(top, "docs/evals/review/results-2026-11-16.json");
 
+  // Claude Code's hooks reference: "Set `args` whenever the hook references a
+  // path placeholder" (with no shell, the path is one argument on every
+  // system).
+  it.runIf(publishes)("this repository's hooks start with no shell", () => {
+    type Hook = { command: string; args?: string[] };
+    type Group = { hooks: Hook[] };
+    const { hooks } = JSON.parse(
+      readFileSync(join(top, ".claude/settings.json"), "utf8"),
+    ) as { hooks: Record<string, Group[]> };
+    const all = Object.values(hooks).flat();
+    expect(all.length).toBeGreaterThan(0);
+    for (const hook of all.flatMap((group) => group.hooks)) {
+      expect(hook.command, "a path belongs in `args`").not.toContain("$");
+      expect(hook.args?.[0]).toMatch(/^\$\{CLAUDE_PROJECT_DIR\}\/scripts\//);
+    }
+  });
+
+  // This repository's wrapper of the stop hook, with no build beside it (a
+  // copy, alone in a folder): a stop is sent back with the decision on stdout
+  // too, as `sendBack` in hook.ts sends it; a prompt goes on.
+  it.runIf(publishes)(
+    "with no build, the stop hook's wrapper sends a stop back",
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "vk-stop-check-"));
+      mkdirSync(join(root, "scripts"));
+      const copy = join(root, "scripts/stop-check.mjs");
+      writeFileSync(copy, readFileSync(join(scripts, "stop-check.mjs")));
+      const event = (hook_event_name: string) =>
+        spawnSync(process.execPath, [copy], {
+          input: JSON.stringify({ hook_event_name }),
+          encoding: "utf8",
+        });
+      const stop = event("Stop");
+      expect(stop.status).toBe(2);
+      expect(stop.stderr).toContain("pnpm run build");
+      expect(JSON.parse(stop.stdout)).toEqual({
+        decision: "block",
+        reason: stop.stderr.trim(),
+      });
+      const prompt = event("UserPromptSubmit");
+      expect([prompt.status, prompt.stdout, prompt.stderr]).toEqual([
+        0,
+        "",
+        "",
+      ]);
+    },
+  );
+
   it.runIf(publishes)(
     "every case and control of the reviewer's eval resolves in git",
     () => {

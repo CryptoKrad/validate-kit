@@ -101,6 +101,12 @@ it("the public hook snapshots more than 1 MiB and returns the owned finding befo
   expect(stop.stderr).toMatch(
     /your changes leave these findings[^]*src\/turn\.ts[^]*leave them[^]*src\/index\.ts/,
   );
+  // Stdout is the one JSON decision and nothing else (`sendBack` in hook.ts
+  // says why).
+  expect(JSON.parse(stop.stdout)).toEqual({
+    decision: "block",
+    reason: stop.stderr,
+  });
   // The main agent has three rounds (MAX_ROUNDS in commands/hook.ts): with the
   // finding still open, the second stop is sent back too, and says which round.
   const retry = event("Stop", true);
