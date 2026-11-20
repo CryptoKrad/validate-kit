@@ -58,8 +58,19 @@ const hook = (input, extra = {}) => {
 };
 const bad = (name) => `export const ${name} = 1;\nconsole.log(${name});\n`;
 const results = [];
+// A send-back is exit 2 with its reason on stderr and, on stdout, the one
+// JSON decision that carries the same reason (`sendBack` in hook.ts says why).
+const blocks = (got) => {
+  try {
+    const decision = JSON.parse(got.out);
+    return decision.decision === "block" && decision.reason.trim() === got.err;
+  } catch {
+    return false;
+  }
+};
 const expect = (name, got, want, test = () => true) => {
-  const ok = got.status === want && test(got.err);
+  const ok =
+    got.status === want && test(got.err) && (want !== 2 || blocks(got));
   results.push(
     `${ok ? "ok  " : "FAIL"} ${name}: exit ${got.status}${ok ? "" : `\n${got.err}`}`,
   );

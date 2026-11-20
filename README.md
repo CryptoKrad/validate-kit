@@ -110,6 +110,9 @@ verification or its article on verification loops with skills.
   (`validate-kit hook claude`). It checks the files the agent changed. It prints nothing when
   they pass and hands the findings back when they do not: up to three times on one prompt for
   the main agent, and once for a subagent. After that the user reads what is still open.
+  Start the Claude Code session in the folder where `init` ran: Claude Code loads hooks from the
+  `.claude/` folder of the folder a session starts in, "with no parent-directory fallback" (its
+  permissions page). The git hooks run from any folder.
 - **When the agent shows its change running.** A `verify` skill beside the code says how to run
   it and what a pass shows. `apps/web/.claude/skills/verify/SKILL.md` and
   `apps/api/.claude/skills/verify/SKILL.md` are two examples; a project writes its own.
@@ -117,7 +120,8 @@ verification or its article on verification loops with skills.
   session with what verified it, for the tree it ran on: `Verified: review, security, verify`,
   some of them, or `none`. A security review (`/security-review`) is a step of its own.
   Nothing starts it in this copy. Its header names the four hook events to put in a
-  `.claude/settings.json`, and `pnpm run smoke:commit-gate` runs every case.
+  `.claude/settings.json`, and `pnpm run smoke:commit-gate` runs every case. It reads a
+  Bash command only: a commit made through the PowerShell tool on Windows gets no stamp.
 
 Two more scripts read a repository's history. `scripts/review-scope.mjs` reads `REVIEW.md` and
 the CODEOWNERS file from the base commit of a repository that has both, and prints the change's
@@ -126,13 +130,15 @@ risk tier and the checklist items it fires; this copy has no `REVIEW.md`.
 fix had to touch again.
 
 The `review-md` check holds a `REVIEW.md` to what Claude Code's Code Review reads: the size of
-each file, the 150,000 bytes that the files of one folder chain share, the folders it never
-reads one from, and what an included file or skill may be.
+each file, the 150,000 bytes that the files of one folder chain share, the 64 links to
+repository files a file may hold, the folders it never reads one from, and what an included
+file or skill may be.
 
 Property tests are the project's own: the kit's rules catch one that tests less than it looks,
 and its `saved-failures` check keeps a failing case a library saved in the commit. The package
-README names both. Six rules now: the newest reports an early `return` in a Hypothesis
-`@given` test (`py-hypothesis-no-early-return`, strict preset). The replay rule also reads the
+README names both. Seven rules now: the newest reports a setting that fast-check 4.10
+deprecates in favour of a plugin, such as `timeout` (`fc-no-deprecated-setting`, strict preset).
+The replay rule also reads the
 settings of `test.prop(...)`, the form of fast-check's Vitest and Jest connectors. The kit's own properties run
 fast-check's 100 cases in the tests and 2,000 in the preflight: `FC_NUM_RUNS` sets the number
 for every property through `packages/validate-kit/test/fast-check.setup.ts`.

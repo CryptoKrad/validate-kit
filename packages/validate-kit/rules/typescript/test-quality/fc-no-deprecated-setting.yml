@@ -1,0 +1,256 @@
+id: ts-fc-no-deprecated-setting
+language: typescript
+severity: warning
+message: "fast-check 4.10 deprecates this setting: give it as a plugin, `plugins: [fc.timeout(ms)]`. The others: `fc.interruptAfterTimeLimit(ms, { failOnInterrupt: true })` (for `markInterruptAsFailure` too), `fc.skipEqualValues()`, `fc.ignoreEqualValues()`, `fc.unbiased()`; a reporter is a plugin with an `onAllRunsComplete` hook."
+note: |
+  fast-check's own type file marks these keys of the settings object
+  `@deprecated` (4.10.2): timeout, interruptAfterTimeLimit,
+  markInterruptAsFailure, skipEqualValues, ignoreEqualValues, unbiased,
+  reporter, asyncReporter. A plugin replaces each, and
+  `fc.installGlobalPlugin(...)` shares one across a suite.
+  `@typescript-eslint/no-deprecated` does not report a key of an object
+  written in the call (measured on typescript-eslint 8.72.1: it reports
+  `.beforeEach(...)` and `settings.timeout = 1`, not
+  `fc.assert(p, { timeout: 1 })`), and JavaScript has no such rule.
+  Reported where the replay rule reads the settings: `fc.assert` and
+  `fc.check`, under another import name when the first argument is a
+  `property(...)` or `asyncProperty(...)` call, the second argument of
+  `test.prop(...)` and `it.prop(...)` of the connectors, and
+  `configureGlobal(...)`. One finding per key, in each way to write one:
+  `timeout: 1`, the short `{ timeout }` and a method `reporter(out) { }`.
+utils:
+  # A name that fast-check's type file marks `@deprecated`, quoted or not.
+  deprecated-key:
+    regex: '^["'']?(timeout|interruptAfterTimeLimit|markInterruptAsFailure|skipEqualValues|ignoreEqualValues|unbiased|reporter|asyncReporter)["'']?$'
+rule:
+  any:
+    - kind: pair
+      has:
+        field: key
+        matches: deprecated-key
+    # The short forms: `{ timeout }` and `{ reporter(out) { ... } }`.
+    - kind: shorthand_property_identifier
+      matches: deprecated-key
+    - kind: method_definition
+      has:
+        field: name
+        matches: deprecated-key
+  inside:
+    kind: object
+    any:
+      - inside:
+          kind: arguments
+          any:
+            - inside:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: "^fc\\.(assert|check|configureGlobal)$"
+            - inside:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: "^configureGlobal$"
+            - all:
+                - has:
+                    kind: call_expression
+                    has:
+                      field: function
+                      regex: "^(\\w+\\.)?(asyncProperty|property)\\b"
+                - inside:
+                    kind: call_expression
+                    has:
+                      field: function
+                      regex: "^(\\w+\\.)?(assert|check)$"
+      # The connectors: `test.prop(arbitraries, settings)("name", fn)`.
+      - nthChild:
+          position: 2
+          ofRule:
+            not:
+              kind: comment
+        inside:
+          kind: arguments
+          inside:
+            kind: call_expression
+            has:
+              field: function
+              regex: "\\.prop$"
+            inside:
+              kind: call_expression
+              field: function
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+id: tsx-fc-no-deprecated-setting
+language: tsx
+severity: warning
+message: "fast-check 4.10 deprecates this setting: give it as a plugin, `plugins: [fc.timeout(ms)]`. The others: `fc.interruptAfterTimeLimit(ms, { failOnInterrupt: true })` (for `markInterruptAsFailure` too), `fc.skipEqualValues()`, `fc.ignoreEqualValues()`, `fc.unbiased()`; a reporter is a plugin with an `onAllRunsComplete` hook."
+note: |
+  fast-check's own type file marks these keys of the settings object
+  `@deprecated` (4.10.2): timeout, interruptAfterTimeLimit,
+  markInterruptAsFailure, skipEqualValues, ignoreEqualValues, unbiased,
+  reporter, asyncReporter. A plugin replaces each, and
+  `fc.installGlobalPlugin(...)` shares one across a suite.
+  `@typescript-eslint/no-deprecated` does not report a key of an object
+  written in the call (measured on typescript-eslint 8.72.1: it reports
+  `.beforeEach(...)` and `settings.timeout = 1`, not
+  `fc.assert(p, { timeout: 1 })`), and JavaScript has no such rule.
+  Reported where the replay rule reads the settings: `fc.assert` and
+  `fc.check`, under another import name when the first argument is a
+  `property(...)` or `asyncProperty(...)` call, the second argument of
+  `test.prop(...)` and `it.prop(...)` of the connectors, and
+  `configureGlobal(...)`. One finding per key, in each way to write one:
+  `timeout: 1`, the short `{ timeout }` and a method `reporter(out) { }`.
+utils:
+  # A name that fast-check's type file marks `@deprecated`, quoted or not.
+  deprecated-key:
+    regex: '^["'']?(timeout|interruptAfterTimeLimit|markInterruptAsFailure|skipEqualValues|ignoreEqualValues|unbiased|reporter|asyncReporter)["'']?$'
+rule:
+  any:
+    - kind: pair
+      has:
+        field: key
+        matches: deprecated-key
+    # The short forms: `{ timeout }` and `{ reporter(out) { ... } }`.
+    - kind: shorthand_property_identifier
+      matches: deprecated-key
+    - kind: method_definition
+      has:
+        field: name
+        matches: deprecated-key
+  inside:
+    kind: object
+    any:
+      - inside:
+          kind: arguments
+          any:
+            - inside:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: "^fc\\.(assert|check|configureGlobal)$"
+            - inside:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: "^configureGlobal$"
+            - all:
+                - has:
+                    kind: call_expression
+                    has:
+                      field: function
+                      regex: "^(\\w+\\.)?(asyncProperty|property)\\b"
+                - inside:
+                    kind: call_expression
+                    has:
+                      field: function
+                      regex: "^(\\w+\\.)?(assert|check)$"
+      # The connectors: `test.prop(arbitraries, settings)("name", fn)`.
+      - nthChild:
+          position: 2
+          ofRule:
+            not:
+              kind: comment
+        inside:
+          kind: arguments
+          inside:
+            kind: call_expression
+            has:
+              field: function
+              regex: "\\.prop$"
+            inside:
+              kind: call_expression
+              field: function
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"
+
+---
+id: js-fc-no-deprecated-setting
+language: javascript
+severity: warning
+message: "fast-check 4.10 deprecates this setting: give it as a plugin, `plugins: [fc.timeout(ms)]`. The others: `fc.interruptAfterTimeLimit(ms, { failOnInterrupt: true })` (for `markInterruptAsFailure` too), `fc.skipEqualValues()`, `fc.ignoreEqualValues()`, `fc.unbiased()`; a reporter is a plugin with an `onAllRunsComplete` hook."
+note: |
+  fast-check's own type file marks these keys of the settings object
+  `@deprecated` (4.10.2): timeout, interruptAfterTimeLimit,
+  markInterruptAsFailure, skipEqualValues, ignoreEqualValues, unbiased,
+  reporter, asyncReporter. A plugin replaces each, and
+  `fc.installGlobalPlugin(...)` shares one across a suite.
+  `@typescript-eslint/no-deprecated` does not report a key of an object
+  written in the call (measured on typescript-eslint 8.72.1: it reports
+  `.beforeEach(...)` and `settings.timeout = 1`, not
+  `fc.assert(p, { timeout: 1 })`), and JavaScript has no such rule.
+  Reported where the replay rule reads the settings: `fc.assert` and
+  `fc.check`, under another import name when the first argument is a
+  `property(...)` or `asyncProperty(...)` call, the second argument of
+  `test.prop(...)` and `it.prop(...)` of the connectors, and
+  `configureGlobal(...)`. One finding per key, in each way to write one:
+  `timeout: 1`, the short `{ timeout }` and a method `reporter(out) { }`.
+utils:
+  # A name that fast-check's type file marks `@deprecated`, quoted or not.
+  deprecated-key:
+    regex: '^["'']?(timeout|interruptAfterTimeLimit|markInterruptAsFailure|skipEqualValues|ignoreEqualValues|unbiased|reporter|asyncReporter)["'']?$'
+rule:
+  any:
+    - kind: pair
+      has:
+        field: key
+        matches: deprecated-key
+    # The short forms: `{ timeout }` and `{ reporter(out) { ... } }`.
+    - kind: shorthand_property_identifier
+      matches: deprecated-key
+    - kind: method_definition
+      has:
+        field: name
+        matches: deprecated-key
+  inside:
+    kind: object
+    any:
+      - inside:
+          kind: arguments
+          any:
+            - inside:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: "^fc\\.(assert|check|configureGlobal)$"
+            - inside:
+                kind: call_expression
+                has:
+                  field: function
+                  regex: "^configureGlobal$"
+            - all:
+                - has:
+                    kind: call_expression
+                    has:
+                      field: function
+                      regex: "^(\\w+\\.)?(asyncProperty|property)\\b"
+                - inside:
+                    kind: call_expression
+                    has:
+                      field: function
+                      regex: "^(\\w+\\.)?(assert|check)$"
+      # The connectors: `test.prop(arbitraries, settings)("name", fn)`.
+      - nthChild:
+          position: 2
+          ofRule:
+            not:
+              kind: comment
+        inside:
+          kind: arguments
+          inside:
+            kind: call_expression
+            has:
+              field: function
+              regex: "\\.prop$"
+            inside:
+              kind: call_expression
+              field: function
+metadata:
+  category: test-quality
+  autofix: none
+  since: "0.2.5"

@@ -52,10 +52,14 @@ const hook = (session, input) => {
   }
   return { status: run.status, err: run.stderr.trim(), command };
 };
-const commit = (session, command = 'git commit -q -m "change"') =>
+const commit = (
+  session,
+  command = 'git commit -q -m "change"',
+  tool_name = "Bash",
+) =>
   hook(session, {
     hook_event_name: "PreToolUse",
-    tool_name: "Bash",
+    tool_name,
     tool_input: { command },
   });
 const log = join(dir, ".git", "validate-kit", "commit-gate.log");
@@ -204,6 +208,8 @@ for (const command of [
   "ls # git commit",
   "git commit --dry-run",
   `cd ${other} && git commit -m x`,
+  `builtin cd ${other}; git commit -m x`,
+  `command cd ${other} && git commit -m x`,
   `git -C "${other}" commit -m x`,
   'cd "$SOMEWHERE" && git commit -m x',
   "cd - && git commit -m x",
@@ -300,6 +306,17 @@ for (const [command, want] of [
     `G2 stamped: ${command.split("\n")[0]}`,
     got.command === want,
     got.command,
+  );
+}
+// G6: only a Bash command is read. Another tool is not, whatever its input
+// holds, and neither is the PowerShell tool of a session on Windows: the gate
+// has no reader of that shell, so a commit made through it gets no stamp.
+for (const tool of ["Edit", "PowerShell"]) {
+  got = commit("f", "git commit -m x", tool);
+  expect(
+    `G6 the ${tool} tool: untouched`,
+    got.status === 0 && got.command === undefined,
+    JSON.stringify(got),
   );
 }
 // G3: enforce without a session id: nothing to count under, so no gate.

@@ -98,6 +98,9 @@ lua-test-no-assertion
 ts-fc-no-replay-leftover
 tsx-fc-no-replay-leftover
 js-fc-no-replay-leftover
+ts-fc-no-deprecated-setting
+tsx-fc-no-deprecated-setting
+js-fc-no-deprecated-setting
 ts-fc-unawaited-async-property
 tsx-fc-unawaited-async-property
 js-fc-unawaited-async-property

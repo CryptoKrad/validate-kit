@@ -1,0 +1,51 @@
+id: js-fc-no-deprecated-setting
+valid:
+  - |
+    fc.assert(fc.property(fc.integer(), check), { plugins: [fc.timeout(1000)] });
+  - |
+    fc.assert(fc.property(fc.integer(), check), { numRuns: 500, seed: 42 });
+  - |
+    fc.assert(prop, { plugins: [fc.interruptAfterTimeLimit(5000, { failOnInterrupt: true })] });
+  - |
+    fc.configureGlobal({ ...fc.readConfigureGlobal(), numRuns: 1000 });
+  - |
+    await fetch(url, { timeout: 1000 });
+  - |
+    assert(response.ok, { timeout: 1000 });
+  - |
+    test("slow", { timeout: 1000 }, () => { run(); });
+  - |
+    element.prop("checked", { timeout: 5 });
+  - |
+    test.prop({ timeout: fc.nat() })("reads a timeout", ({ timeout }) => {
+      expect(wait(timeout)).toBe(true);
+    });
+  - |
+    fc.assert(fc.property(fc.record({ timeout: fc.nat() }), check));
+invalid:
+  - |
+    fc.assert(fc.property(fc.integer(), check), { timeout: 1000 });
+  - |
+    fc.assert(fc.asyncProperty(fc.integer(), check), { interruptAfterTimeLimit: 5000, markInterruptAsFailure: true });
+  - |
+    fc.check(fc.property(fc.string(), check), { skipEqualValues: true });
+  - |
+    assert(property(fc.integer(), check), { numRuns: 10, "unbiased": true });
+  - |
+    fc.configureGlobal({ numRuns: 1000, reporter: (out) => log(out) });
+  - |
+    import { configureGlobal } from "fast-check";
+    configureGlobal({ ignoreEqualValues: true });
+  - |
+    test.prop([fc.nat()], { timeout: 500 })("is cut", async (n) => {
+      expect(await slow(n)).toBe(n);
+    });
+  - |
+    it.prop({ a: fc.string() }, { asyncReporter: report })("reports", ({ a }) => {
+      expect(a).toBe(a);
+    });
+  - |
+    const timeout = 1000;
+    fc.assert(fc.property(fc.integer(), check), { timeout });
+  - |
+    fc.configureGlobal({ numRuns: 100, reporter(out) { log(out); } });

@@ -12,14 +12,23 @@ import {
 
 // Every number and folder name below is from Claude Code's "Customize Code
 // Review" (https://code.claude.com/docs/en/code-review-customize, read
-// 2026-11-16; docs/research/verification-continuum/anthropic-2026-11-16).
+// 2026-11-16 and again 2026-11-19;
+// docs/research/verification-continuum/anthropic-2026-11-16). Its
+// troubleshooting page gives two more causes of a skipped file that are not
+// checked: a link "the review can't parse" (the page does not say what makes
+// one malformed) and a link to a file the pull request changes (it depends on
+// the pull request, and the review often drops those lines only).
 
 /** REVIEW.md and the files it includes, combined; and the subfolder files. */
 const TOTAL_BYTES = 150_000;
 /** Different files the root REVIEW.md may include, and skill lines. */
 const MAX_INCLUDES = 8;
 const SKILL_BYTES = 30_000;
-/** Markdown links to repository files, across REVIEW.md and its includes. */
+/**
+ * Markdown links to repository files: across REVIEW.md and its includes, and
+ * in each subfolder file (the troubleshooting page: past it the review skips
+ * "the root `REVIEW.md`, or the number of subdirectory `REVIEW.md` files").
+ */
 const MAX_LINKS = 64;
 
 /** A REVIEW.md in or below a folder with one of these names is never applied. */
@@ -134,11 +143,11 @@ const bytes = (text: string) => Buffer.byteLength(text, "utf8");
  * names no file beside it, a path into a folder, a ninth file, a skill file
  * over its size, a symbolic link, an `@` line inside a code fence or in an
  * included file (one level only), more than 64 links to repository files
- * (the whole root file is then skipped), 150,000 bytes passed, and a
- * REVIEW.md in or below a folder Code Review never reads one from (`tests`,
- * `fixtures`, `vendor`, ...). Runs where the repository has a REVIEW.md, on
- * every commit, with nothing to install. Whether the branch it is read from
- * is protected is GitHub's to say and is not checked.
+ * (the whole file is then skipped, the root one or a subfolder's), 150,000
+ * bytes passed, and a REVIEW.md in or below a folder Code Review never reads
+ * one from (`tests`, `fixtures`, `vendor`, ...). Runs where the repository
+ * has a REVIEW.md, on every commit, with nothing to install. Whether the
+ * branch it is read from is protected is GitHub's to say and is not checked.
  */
 export const reviewMd = nativeCheck({
   id: "review-md",
@@ -257,6 +266,13 @@ export const reviewMd = nativeCheck({
             `${sum} bytes with ${parents.map((name) => `\`${name}\``).join(" and ")}: a change in this folder reads them together, and subfolder REVIEW.md files share ${TOTAL_BYTES} bytes`,
           );
       }
+      const linkCount = fileLinks(text);
+      if (skipped === undefined && linkCount > MAX_LINKS)
+        at(
+          path,
+          "too-many-links",
+          `${linkCount} links to repository files: past ${MAX_LINKS} the review skips this REVIEW.md whole. Say in words what a link points to (web, mail and \`#\` links do not count)`,
+        );
       for (const include of includeLines(text).includes)
         if (!include.fenced && fileLike(include.target))
           at(
@@ -378,7 +394,8 @@ export const reviewMd = nativeCheck({
             );
         continue;
       }
-      // What a review does not get from a skill: commands and arguments.
+      // What a review does not get from a skill: commands, arguments and
+      // the files it links to.
       text.split(/\r?\n/).forEach((raw, index) => {
         if (/(^|\s)!`/.test(raw))
           at(
@@ -393,6 +410,14 @@ export const reviewMd = nativeCheck({
             target,
             "skill-substitution",
             "a review passes no arguments and leaves this substitution as written: use fixed text, or include a copy beside REVIEW.md",
+            index + 1,
+            "warning",
+          );
+        else if (fileLinks(raw) > 0)
+          at(
+            target,
+            "skill-link",
+            "Code Review does not load a file a skill links to: the review sees the path as plain text or a placeholder. Say in words what the file holds, or copy what a review needs into SKILL.md",
             index + 1,
             "warning",
           );

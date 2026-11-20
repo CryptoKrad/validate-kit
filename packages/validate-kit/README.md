@@ -92,11 +92,13 @@ On by default, `cooldown` checks that each package manager a lockfile shows in
 use waits before installing a new release. It also reports a lockfile that
 gained a package published inside that wait, looking the date up in the
 registry. The bundled `test-no-assertion` rules report a test that checks
-nothing (a same-file helper that asserts counts). Six rules report a
+nothing (a same-file helper that asserts counts). Seven rules report a
 property test that tests less than it looks: a fast-check replay left in, an
 async property nobody awaits, Hypothesis's `@reproduce_failure`, a blanket
 health-check suppression, `.example()` in a test and (strict preset) an early
-`return` in a `@given` test. `saved-failures` reports
+`return` in a `@given` test and a fast-check setting that 4.10 deprecates in
+favour of a plugin (`timeout`, `interruptAfterTimeLimit` and six more).
+`saved-failures` reports
 a failing case proptest, rapid or `go test -fuzz` saved that git does not
 track, and `review-md` what Claude Code's Code Review would drop from a
 REVIEW.md. Where a project configured them, the kit also runs dependency-cruiser
@@ -119,7 +121,11 @@ has one). It is silent when the agent changed nothing since its start (the
 user's prompt, for the main agent) or its changes leave no finding of its
 own. Otherwise it exits 2, which hands the agent every finding: its own
 first, then those in files changed before it started (another agent's or the
-user's), which it is told to leave. A finding in a file nobody changed counts
+user's), which it is told to leave. The same text is on stdout as a `block`
+decision: Claude Code drops an exit 2 with nothing on stdout when stderr reads
+like a missing file ("No such file or directory"), words a finding can quote.
+Start the session in the folder where `init` ran: Claude Code loads the hooks
+of the folder a session starts in, with no parent-directory fallback. A finding in a file nobody changed counts
 as its own (a changed signature breaks the callers), and so does a deletion.
 The main agent is sent back up to three times on one prompt and a subagent
 once; the stop after that passes, and the user reads what is still open.

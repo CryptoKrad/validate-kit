@@ -1,0 +1,280 @@
+id: js-fc-no-deprecated-setting
+snapshots:
+  "assert(property(fc.integer(), check), { numRuns: 10, \"unbiased\": true });\n":
+    labels:
+      - source: '"unbiased": true'
+        style: primary
+        start: 53
+        end: 69
+      - source: '"unbiased"'
+        style: secondary
+        start: 53
+        end: 63
+      - source: property
+        style: secondary
+        start: 7
+        end: 15
+      - source: property(fc.integer(), check)
+        style: secondary
+        start: 7
+        end: 36
+      - source: assert
+        style: secondary
+        start: 0
+        end: 6
+      - source: 'assert(property(fc.integer(), check), { numRuns: 10, "unbiased": true })'
+        style: secondary
+        start: 0
+        end: 72
+      - source: '(property(fc.integer(), check), { numRuns: 10, "unbiased": true })'
+        style: secondary
+        start: 6
+        end: 72
+      - source: '{ numRuns: 10, "unbiased": true }'
+        style: secondary
+        start: 38
+        end: 71
+  "const timeout = 1000;\nfc.assert(fc.property(fc.integer(), check), { timeout });\n":
+    labels:
+      - source: timeout
+        style: primary
+        start: 68
+        end: 75
+      - source: fc.assert
+        style: secondary
+        start: 22
+        end: 31
+      - source: fc.assert(fc.property(fc.integer(), check), { timeout })
+        style: secondary
+        start: 22
+        end: 78
+      - source: (fc.property(fc.integer(), check), { timeout })
+        style: secondary
+        start: 31
+        end: 78
+      - source: "{ timeout }"
+        style: secondary
+        start: 66
+        end: 77
+  "fc.assert(fc.asyncProperty(fc.integer(), check), { interruptAfterTimeLimit: 5000, markInterruptAsFailure: true });\n":
+    labels:
+      - source: "interruptAfterTimeLimit: 5000"
+        style: primary
+        start: 51
+        end: 80
+      - source: interruptAfterTimeLimit
+        style: secondary
+        start: 51
+        end: 74
+      - source: fc.assert
+        style: secondary
+        start: 0
+        end: 9
+      - source: "fc.assert(fc.asyncProperty(fc.integer(), check), { interruptAfterTimeLimit: 5000, markInterruptAsFailure: true })"
+        style: secondary
+        start: 0
+        end: 113
+      - source: "(fc.asyncProperty(fc.integer(), check), { interruptAfterTimeLimit: 5000, markInterruptAsFailure: true })"
+        style: secondary
+        start: 9
+        end: 113
+      - source: "{ interruptAfterTimeLimit: 5000, markInterruptAsFailure: true }"
+        style: secondary
+        start: 49
+        end: 112
+  "fc.assert(fc.property(fc.integer(), check), { timeout: 1000 });\n":
+    labels:
+      - source: "timeout: 1000"
+        style: primary
+        start: 46
+        end: 59
+      - source: timeout
+        style: secondary
+        start: 46
+        end: 53
+      - source: fc.assert
+        style: secondary
+        start: 0
+        end: 9
+      - source: "fc.assert(fc.property(fc.integer(), check), { timeout: 1000 })"
+        style: secondary
+        start: 0
+        end: 62
+      - source: "(fc.property(fc.integer(), check), { timeout: 1000 })"
+        style: secondary
+        start: 9
+        end: 62
+      - source: "{ timeout: 1000 }"
+        style: secondary
+        start: 44
+        end: 61
+  "fc.check(fc.property(fc.string(), check), { skipEqualValues: true });\n":
+    labels:
+      - source: "skipEqualValues: true"
+        style: primary
+        start: 44
+        end: 65
+      - source: skipEqualValues
+        style: secondary
+        start: 44
+        end: 59
+      - source: fc.check
+        style: secondary
+        start: 0
+        end: 8
+      - source: "fc.check(fc.property(fc.string(), check), { skipEqualValues: true })"
+        style: secondary
+        start: 0
+        end: 68
+      - source: "(fc.property(fc.string(), check), { skipEqualValues: true })"
+        style: secondary
+        start: 8
+        end: 68
+      - source: "{ skipEqualValues: true }"
+        style: secondary
+        start: 42
+        end: 67
+  "fc.configureGlobal({ numRuns: 100, reporter(out) { log(out); } });\n":
+    labels:
+      - source: reporter(out) { log(out); }
+        style: primary
+        start: 35
+        end: 62
+      - source: reporter
+        style: secondary
+        start: 35
+        end: 43
+      - source: fc.configureGlobal
+        style: secondary
+        start: 0
+        end: 18
+      - source: "fc.configureGlobal({ numRuns: 100, reporter(out) { log(out); } })"
+        style: secondary
+        start: 0
+        end: 65
+      - source: "({ numRuns: 100, reporter(out) { log(out); } })"
+        style: secondary
+        start: 18
+        end: 65
+      - source: "{ numRuns: 100, reporter(out) { log(out); } }"
+        style: secondary
+        start: 19
+        end: 64
+  "fc.configureGlobal({ numRuns: 1000, reporter: (out) => log(out) });\n":
+    labels:
+      - source: "reporter: (out) => log(out)"
+        style: primary
+        start: 36
+        end: 63
+      - source: reporter
+        style: secondary
+        start: 36
+        end: 44
+      - source: fc.configureGlobal
+        style: secondary
+        start: 0
+        end: 18
+      - source: "fc.configureGlobal({ numRuns: 1000, reporter: (out) => log(out) })"
+        style: secondary
+        start: 0
+        end: 66
+      - source: "({ numRuns: 1000, reporter: (out) => log(out) })"
+        style: secondary
+        start: 18
+        end: 66
+      - source: "{ numRuns: 1000, reporter: (out) => log(out) }"
+        style: secondary
+        start: 19
+        end: 65
+  "import { configureGlobal } from \"fast-check\";\nconfigureGlobal({ ignoreEqualValues: true });\n":
+    labels:
+      - source: "ignoreEqualValues: true"
+        style: primary
+        start: 64
+        end: 87
+      - source: ignoreEqualValues
+        style: secondary
+        start: 64
+        end: 81
+      - source: configureGlobal
+        style: secondary
+        start: 46
+        end: 61
+      - source: "configureGlobal({ ignoreEqualValues: true })"
+        style: secondary
+        start: 46
+        end: 90
+      - source: "({ ignoreEqualValues: true })"
+        style: secondary
+        start: 61
+        end: 90
+      - source: "{ ignoreEqualValues: true }"
+        style: secondary
+        start: 62
+        end: 89
+  "it.prop({ a: fc.string() }, { asyncReporter: report })(\"reports\", ({ a }) => {\n  expect(a).toBe(a);\n});\n":
+    labels:
+      - source: "asyncReporter: report"
+        style: primary
+        start: 30
+        end: 51
+      - source: asyncReporter
+        style: secondary
+        start: 30
+        end: 43
+      - source: |-
+          it.prop({ a: fc.string() }, { asyncReporter: report })("reports", ({ a }) => {
+            expect(a).toBe(a);
+          })
+        style: secondary
+        start: 0
+        end: 102
+      - source: it.prop
+        style: secondary
+        start: 0
+        end: 7
+      - source: "it.prop({ a: fc.string() }, { asyncReporter: report })"
+        style: secondary
+        start: 0
+        end: 54
+      - source: "({ a: fc.string() }, { asyncReporter: report })"
+        style: secondary
+        start: 7
+        end: 54
+      - source: "{ asyncReporter: report }"
+        style: secondary
+        start: 28
+        end: 53
+  "test.prop([fc.nat()], { timeout: 500 })(\"is cut\", async (n) => {\n  expect(await slow(n)).toBe(n);\n});\n":
+    labels:
+      - source: "timeout: 500"
+        style: primary
+        start: 24
+        end: 36
+      - source: timeout
+        style: secondary
+        start: 24
+        end: 31
+      - source: |-
+          test.prop([fc.nat()], { timeout: 500 })("is cut", async (n) => {
+            expect(await slow(n)).toBe(n);
+          })
+        style: secondary
+        start: 0
+        end: 100
+      - source: test.prop
+        style: secondary
+        start: 0
+        end: 9
+      - source: "test.prop([fc.nat()], { timeout: 500 })"
+        style: secondary
+        start: 0
+        end: 39
+      - source: "([fc.nat()], { timeout: 500 })"
+        style: secondary
+        start: 9
+        end: 39
+      - source: "{ timeout: 500 }"
+        style: secondary
+        start: 22
+        end: 38
