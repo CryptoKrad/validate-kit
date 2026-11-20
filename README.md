@@ -45,11 +45,22 @@ the project already had (an `esbuild: true`) is gone afterwards (recorded on 11.
 push, both with `--quiet`. A passing hook prints nothing; a failing one prints one line per finding
 and the exit code.
 
-On Windows the commands are the same, in PowerShell. The project needs Git for Windows: the hooks
-and the command gates run through its `sh`, which the kit finds by itself. `doctor` prints the
-install line a Windows machine can run: Scoop's where Scoop holds the tool (`scoop install
-shellcheck`), else the tool's own way, and for a tool with no Windows build it says so. The files
-`init` writes are the same on both systems.
+### A project, on Windows
+
+In PowerShell, after the kit is installed in the project as above:
+
+```powershell
+winget install Git.Git            # once per machine: the hooks run in its shell
+pnpm exec validate-kit init       # the same wizard as on macOS
+pnpm exec validate-kit doctor     # each tool the project needs, with the install line for Windows
+pnpm exec validate-kit check
+```
+
+There is one wizard, `init`, for both systems, and the files it writes are the same on both. On
+Windows the hooks and the command gates run through the `sh` of Git for Windows, which the kit
+finds by itself; when it finds none, `init` says so and prints `winget install Git.Git`. `doctor`
+prints the install line a Windows machine can run: Scoop's where Scoop holds the tool (`scoop
+install shellcheck`), else the tool's own way, and for a tool with no Windows build it says so.
 
 ## Work on this repository
 

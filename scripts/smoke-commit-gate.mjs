@@ -136,6 +136,17 @@ expect(
     commit("c5").command?.includes('"Verified: graded"'),
   `${commit("c4").command} / ${commit("c5").command}`,
 );
+// C4n: the last line is the verdict. A grading with a line after its
+// `satisfied` is not recorded: a rule that lets a note follow also lets a
+// fail follow (tasks/review-rounds.md, 2026-11-19).
+grader("c4n", "1 met: ...\nsatisfied\nLogs: logs/grader.txt");
+grader("c4o", "1 met: ...\nsatisfied\nCorrection: criterion 3 is not yet met.");
+expect(
+  "C4n a grading with a line after its verdict is not recorded",
+  commit("c4n").command?.includes("Verified: none") &&
+    commit("c4o").command?.includes("Verified: none"),
+  `${commit("c4n").command} / ${commit("c4o").command}`,
+);
 // C6: a chain is not a step: /ship and /go record nothing by being typed.
 for (const name of ["ship", "go"])
   hook("c6", { hook_event_name: "UserPromptExpansion", command_name: name });

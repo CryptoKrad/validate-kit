@@ -139,6 +139,19 @@ try {
     `exit ${shadowed.status}; marker ${existsSync(marker)}; stderr ${shadowed.stderr.trim().slice(0, 300)}`,
   );
 
+  // init on a machine with no Git for Windows says so, with the line to run:
+  // the hooks it writes run in that shell. --dry-run writes nothing.
+  const bare = run(process.execPath, [kitEntry, "init", "--dry-run"], {
+    PATH: dirname(process.execPath),
+  });
+  check(
+    "init with no Git for Windows names its install line",
+    /No shell of Git for Windows was found.*winget install Git\.Git/.test(
+      bare.stderr,
+    ),
+    `exit ${bare.status}; stderr ${bare.stderr.trim().slice(0, 300)}`,
+  );
+
   // The install line doctor prints is one a Windows machine can run: the
   // adapters write Homebrew's, and the registry turns each into Scoop's or
   // the tool's own way (packages/validate-kit/src/core/windows-install.ts).
@@ -240,8 +253,8 @@ async function projectSetup(project) {
     `missing ${written.join(", ")}; ${said(init)}`,
   );
   check(
-    "init finds the project's own kit (no 'not on PATH' warning)",
-    !/is not on PATH/.test(init.stderr),
+    "init finds the project's own kit and Git for Windows (no warning)",
+    !/is not on PATH|No shell of Git for Windows/.test(init.stderr),
     init.stderr.trim().slice(0, 300),
   );
 
